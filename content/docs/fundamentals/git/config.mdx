@@ -1,0 +1,342 @@
+---
+title: 'Git Configuration and Aliases'
+description: 'Learn how to customize Git with configuration options and time-saving aliases'
+---
+
+# Git Configuration and Aliases
+
+Git's behavior can be customized through configuration settings and aliases. This allows you to tailor Git to your workflow, save time with shortcuts, and enforce consistent settings across your team.
+
+## Git Configuration Levels
+
+Git has three levels of configuration:
+
+1. **System level** (`--system`): Applies to all users on the system
+
+   - Location: `/etc/gitconfig`
+
+2. **Global level** (`--global`): Applies to all repositories for the current user
+
+   - Location: `~/.gitconfig` or `~/.config/git/config`
+
+3. **Local level** (`--local`): Applies only to the current repository
+   - Location: `.git/config` in the repository
+
+Each level overrides the previous one, so local settings override global settings, which override system settings.
+
+## Basic Configuration
+
+### Viewing Configuration
+
+```bash
+# View all configuration
+git config --list
+
+# View configuration with origins
+git config --list --show-origin
+
+# View a specific setting
+git config user.name
+```
+
+### Setting User Information
+
+```bash
+# Set user name and email (required)
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+
+# Set different email for a specific repository
+git config --local user.email "work.email@company.com"
+```
+
+### Editor Configuration
+
+```bash
+# Set default editor
+git config --global core.editor "code --wait"  # VS Code
+git config --global core.editor "vim"          # Vim
+git config --global core.editor "nano"         # Nano
+```
+
+### Default Branch Name
+
+```bash
+# Set default branch name for new repositories
+git config --global init.defaultBranch main
+```
+
+## Common Configuration Options
+
+### Line Endings
+
+```bash
+# For Windows
+git config --global core.autocrlf true
+
+# For macOS/Linux
+git config --global core.autocrlf input
+```
+
+### Color Settings
+
+```bash
+# Enable color
+git config --global color.ui auto
+
+# Customize specific colors
+git config --global color.diff.meta "yellow bold"
+git config --global color.diff.frag "magenta bold"
+```
+
+### Credential Storage
+
+```bash
+# Cache credentials for 15 minutes
+git config --global credential.helper cache
+
+# Store credentials permanently
+git config --global credential.helper store
+
+# Use specific credential manager
+git config --global credential.helper osxkeychain  # macOS
+```
+
+### Push Behavior
+
+```bash
+# Push only the current branch
+git config --global push.default simple
+
+# Push all matching branches
+git config --global push.default matching
+
+# Push to the same branch name
+git config --global push.default current
+```
+
+### Pull Behavior
+
+```bash
+# Set default pull strategy to rebase
+git config --global pull.rebase true
+
+# Set default pull strategy to merge
+git config --global pull.rebase false
+```
+
+### Merge and Diff Tools
+
+```bash
+# Set merge tool
+git config --global merge.tool vscode
+git config --global mergetool.vscode.cmd 'code --wait $MERGED'
+
+# Set diff tool
+git config --global diff.tool vscode
+git config --global difftool.vscode.cmd 'code --wait --diff $LOCAL $REMOTE'
+```
+
+## Git Aliases
+
+Aliases are shortcuts for Git commands. They save typing and can combine multiple commands.
+
+### Creating Aliases
+
+```bash
+# Basic alias
+git config --global alias.co checkout
+git config --global alias.br branch
+git config --global alias.ci commit
+git config --global alias.st status
+```
+
+Now you can use `git co` instead of `git checkout`, etc.
+
+### Advanced Aliases
+
+```bash
+# Show a compact log
+git config --global alias.lg "log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit"
+
+# Show changes in a commit
+git config --global alias.show-changes "show --name-status"
+
+# Undo the last commit but keep changes
+git config --global alias.undo "reset HEAD~1 --soft"
+
+# List all aliases
+git config --global alias.aliases "config --get-regexp '^alias\.'"
+```
+
+### Aliases with External Commands
+
+You can create aliases that run external commands by prefixing with `!`:
+
+```bash
+# Show a summary of changes
+git config --global alias.summary "!git log --oneline --no-merges"
+
+# Clean up local branches that have been merged
+git config --global alias.cleanup "!git branch --merged | grep -v '*' | xargs git branch -d"
+
+# Create a new branch and switch to it
+git config --global alias.new "!f() { git checkout -b $1; }; f"
+```
+
+## Configuration Files
+
+You can also edit configuration files directly:
+
+### Global Config Example
+
+```ini
+# ~/.gitconfig
+[user]
+    name = Your Name
+    email = your.email@example.com
+[core]
+    editor = code --wait
+    autocrlf = input
+[alias]
+    co = checkout
+    br = branch
+    ci = commit
+    st = status
+    lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+[pull]
+    rebase = true
+[init]
+    defaultBranch = main
+```
+
+### Local Config Example
+
+```ini
+# .git/config
+[user]
+    email = work.email@company.com
+[remote "origin"]
+    url = https://github.com/username/repo.git
+    fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "main"]
+    remote = origin
+    merge = refs/heads/main
+```
+
+## Sharing Configuration
+
+### Using Git Templates
+
+Create a template directory with configuration:
+
+```bash
+# Create template directory
+mkdir -p ~/.git-templates
+
+# Configure Git to use this template
+git config --global init.templateDir ~/.git-templates
+
+# Add configuration to the template
+mkdir -p ~/.git-templates/hooks
+# Add hooks, etc.
+```
+
+### Project-Specific Configuration
+
+For team projects, you can include recommended Git settings:
+
+```bash
+# Create a setup script in your project
+echo '#!/bin/sh
+git config --local core.autocrlf input
+git config --local user.name "$(git config --global user.name)"
+git config --local user.email "$(git config --global user.email)"
+git config --local commit.template .github/commit-template.txt
+' > setup-git.sh
+chmod +x setup-git.sh
+```
+
+Team members run `./setup-git.sh` after cloning.
+
+## Practical Examples
+
+### Example 1: Developer Setup
+
+```bash
+# Basic identity
+git config --global user.name "Jane Developer"
+git config --global user.email "jane@example.com"
+
+# Editor and tools
+git config --global core.editor "code --wait"
+git config --global merge.tool vscode
+git config --global diff.tool vscode
+
+# Common aliases
+git config --global alias.co checkout
+git config --global alias.br branch
+git config --global alias.ci commit
+git config --global alias.st status
+git config --global alias.unstage "reset HEAD --"
+git config --global alias.last "log -1 HEAD"
+
+# Better log
+git config --global alias.lg "log --color --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit"
+
+# Default behaviors
+git config --global pull.rebase true
+git config --global push.default current
+git config --global init.defaultBranch main
+```
+
+### Example 2: Productivity Aliases
+
+```bash
+# Quick status
+git config --global alias.s "status -s"
+
+# Commit all changes
+git config --global alias.ca "commit -a"
+
+# Commit with message
+git config --global alias.cm "commit -m"
+
+# Amend last commit
+git config --global alias.amend "commit --amend"
+
+# Undo last commit
+git config --global alias.undo "reset HEAD~1 --soft"
+
+# Show what you're about to push
+git config --global alias.pushpreview "!git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit origin/main..HEAD"
+
+# Find commits by content
+git config --global alias.find "!f() { git log --pretty=format:'%C(yellow)%h %Cblue%ad %Creset%s%Cgreen [%cn] %Cred%d' --decorate --date=short -S$1; }; f"
+```
+
+### Example 3: Git Workflow Aliases
+
+```bash
+# Start a new feature
+git config --global alias.feature "!f() { git checkout -b feature/$1; }; f"
+
+# Start a new bugfix
+git config --global alias.bugfix "!f() { git checkout -b bugfix/$1; }; f"
+
+# Sync with main branch
+git config --global alias.sync "!f() { git fetch origin && git rebase origin/main; }; f"
+
+# Clean up merged branches
+git config --global alias.cleanup "!git fetch -p && git branch -vv | grep ': gone]' | awk '{print $1}' | xargs git branch -D"
+```
+
+## Best Practices
+
+1. **Set user information** correctly for each repository
+2. **Use consistent settings** across your development machines
+3. **Create aliases for common workflows** to save time
+4. **Document your team's recommended settings**
+5. **Review your configuration periodically** to optimize your workflow
+6. **Use different email addresses** for work and personal projects
+7. **Back up your global configuration** to quickly set up new machines

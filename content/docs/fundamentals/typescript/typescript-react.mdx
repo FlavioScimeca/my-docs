@@ -1,0 +1,751 @@
+---
+title: 'TypeScript with React'
+description: 'Learn how to use TypeScript in React applications for type-safe components'
+---
+
+# TypeScript with React
+
+TypeScript and React make a powerful combination, providing type safety for your components, props, state, and more. This guide covers how to effectively use TypeScript in React applications.
+
+## Setting Up a TypeScript React Project
+
+### Create React App with TypeScript
+
+The easiest way to start a new TypeScript React project is with Create React App:
+
+```bash
+# Create a new TypeScript React project
+npx create-react-app my-app --template typescript
+
+# Or add TypeScript to an existing Create React App project
+npm install --save typescript @types/node @types/react @types/react-dom @types/jest
+```
+
+### Manual Setup
+
+If you're setting up a project manually, you'll need these dependencies:
+
+```bash
+npm install --save react react-dom
+npm install --save-dev typescript @types/react @types/react-dom
+```
+
+And a basic `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "module": "esnext",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx"
+  },
+  "include": ["src"]
+}
+```
+
+## Typing Components
+
+### Function Components
+
+```tsx
+// Basic function component with props
+interface GreetingProps {
+  name: string;
+  age?: number; // Optional prop
+}
+
+const Greeting: React.FC<GreetingProps> = ({ name, age }) => {
+  return (
+    <div>
+      <h1>Hello, {name}!</h1>
+      {age !== undefined && <p>You are {age} years old.</p>}
+    </div>
+  );
+};
+
+// Alternative syntax without React.FC
+function Greeting({ name, age }: GreetingProps) {
+  return (
+    <div>
+      <h1>Hello, {name}!</h1>
+      {age !== undefined && <p>You are {age} years old.</p>}
+    </div>
+  );
+}
+
+// Usage
+<Greeting name='John' age={30} />;
+```
+
+### Class Components
+
+```tsx
+interface CounterProps {
+  initialCount: number;
+}
+
+interface CounterState {
+  count: number;
+}
+
+class Counter extends React.Component<CounterProps, CounterState> {
+  constructor(props: CounterProps) {
+    super(props);
+    this.state = {
+      count: props.initialCount,
+    };
+  }
+
+  increment = () => {
+    this.setState((prevState) => ({
+      count: prevState.count + 1,
+    }));
+  };
+
+  decrement = () => {
+    this.setState((prevState) => ({
+      count: prevState.count - 1,
+    }));
+  };
+
+  render() {
+    return (
+      <div>
+        <p>Count: {this.state.count}</p>
+        <button onClick={this.increment}>+</button>
+        <button onClick={this.decrement}>-</button>
+      </div>
+    );
+  }
+}
+
+// Usage
+<Counter initialCount={0} />;
+```
+
+## Hooks with TypeScript
+
+### useState
+
+```tsx
+// Basic useState
+const [count, setCount] = useState(0); // Type inferred as number
+
+// Explicit type
+const [count, setCount] = useState<number>(0);
+
+// With complex types
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+// Initial value is null, but state can be User or null
+const [user, setUser] = useState<User | null>(null);
+
+// With type assertion for complex initial state
+const [user, setUser] = useState<User>({
+  id: 1,
+  name: 'John',
+  email: 'john@example.com',
+});
+```
+
+### useEffect
+
+```tsx
+// Basic useEffect
+useEffect(() => {
+  document.title = `Count: ${count}`;
+}, [count]);
+
+// With cleanup function
+useEffect(() => {
+  const timer = setTimeout(() => {
+    console.log('This will run after 1 second');
+  }, 1000);
+
+  return () => {
+    clearTimeout(timer);
+  };
+}, []);
+```
+
+### useRef
+
+```tsx
+// Ref for DOM elements
+const inputRef = useRef<HTMLInputElement>(null);
+
+// Later in JSX
+<input ref={inputRef} />;
+
+// Accessing the DOM element
+const focusInput = () => {
+  inputRef.current?.focus();
+};
+
+// Ref for mutable values
+const countRef = useRef<number>(0);
+
+// Update the ref value (doesn't cause re-render)
+countRef.current = countRef.current + 1;
+```
+
+### useReducer
+
+```tsx
+// Define state and action types
+interface State {
+  count: number;
+  isLoading: boolean;
+}
+
+type Action =
+  | { type: 'increment' }
+  | { type: 'decrement' }
+  | { type: 'reset'; payload: number }
+  | { type: 'setLoading'; payload: boolean };
+
+// Create reducer function
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'increment':
+      return { ...state, count: state.count + 1 };
+    case 'decrement':
+      return { ...state, count: state.count - 1 };
+    case 'reset':
+      return { ...state, count: action.payload };
+    case 'setLoading':
+      return { ...state, isLoading: action.payload };
+    default:
+      return state;
+  }
+}
+
+// Use the reducer
+const [state, dispatch] = useReducer(reducer, {
+  count: 0,
+  isLoading: false,
+});
+
+// Dispatch actions
+dispatch({ type: 'increment' });
+dispatch({ type: 'reset', payload: 0 });
+dispatch({ type: 'setLoading', payload: true });
+```
+
+### useContext
+
+```tsx
+// Create a context with a default value
+interface ThemeContextType {
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+}
+
+const ThemeContext = React.createContext<ThemeContextType | undefined>(
+  undefined
+);
+
+// Create a provider
+const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  const toggleTheme = () => {
+    setTheme((prevTheme) => (prevTheme === 'light' ? 'dark' : 'light'));
+  };
+
+  return (
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+
+// Create a custom hook to use the context
+function useTheme() {
+  const context = useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error('useTheme must be used within a ThemeProvider');
+  }
+  return context;
+}
+
+// Use the context in a component
+function ThemedButton() {
+  const { theme, toggleTheme } = useTheme();
+  return (
+    <button
+      onClick={toggleTheme}
+      style={{
+        backgroundColor: theme === 'light' ? '#fff' : '#333',
+        color: theme === 'light' ? '#333' : '#fff',
+      }}
+    >
+      Toggle Theme
+    </button>
+  );
+}
+```
+
+## Custom Hooks
+
+```tsx
+// Custom hook with TypeScript
+function useLocalStorage<T>(key: string, initialValue: T) {
+  // State to store our value
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    try {
+      // Get from local storage by key
+      const item = window.localStorage.getItem(key);
+      // Parse stored json or if none return initialValue
+      return item ? JSON.parse(item) : initialValue;
+    } catch (error) {
+      console.log(error);
+      return initialValue;
+    }
+  });
+
+  // Return a wrapped version of useState's setter function that
+  // persists the new value to localStorage
+  const setValue = (value: T | ((val: T) => T)) => {
+    try {
+      // Allow value to be a function so we have same API as useState
+      const valueToStore =
+        value instanceof Function ? value(storedValue) : value;
+      // Save state
+      setStoredValue(valueToStore);
+      // Save to local storage
+      window.localStorage.setItem(key, JSON.stringify(valueToStore));
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  return [storedValue, setValue] as const;
+}
+
+// Usage
+function App() {
+  const [name, setName] = useLocalStorage<string>('name', 'Bob');
+
+  return (
+    <div>
+      <input
+        type='text'
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+    </div>
+  );
+}
+```
+
+## Event Handling
+
+```tsx
+// Button click event
+const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+  console.log('Button clicked', event.currentTarget.name);
+};
+
+<button name='submit-button' onClick={handleClick}>
+  Click Me
+</button>;
+
+// Input change event
+const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  console.log('Input value:', event.target.value);
+};
+
+<input type='text' onChange={handleChange} />;
+
+// Form submit event
+const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  event.preventDefault();
+  console.log('Form submitted');
+};
+
+<form onSubmit={handleSubmit}>
+  {/* form fields */}
+  <button type='submit'>Submit</button>
+</form>;
+
+// Keyboard event
+const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+  if (event.key === 'Enter') {
+    console.log('Enter key pressed');
+  }
+};
+
+<input type='text' onKeyDown={handleKeyDown} />;
+```
+
+## Typing Children Props
+
+```tsx
+// Basic children prop
+interface CardProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+const Card = ({ title, children }: CardProps) => {
+  return (
+    <div className='card'>
+      <h2>{title}</h2>
+      <div className='content'>{children}</div>
+    </div>
+  );
+};
+
+// Usage
+<Card title='Welcome'>
+  <p>This is the card content.</p>
+</Card>;
+
+// Function as a child
+interface CollapsibleProps {
+  children: (isOpen: boolean) => React.ReactNode;
+}
+
+const Collapsible = ({ children }: CollapsibleProps) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <div>
+      <button onClick={() => setIsOpen(!isOpen)}>Toggle</button>
+      {children(isOpen)}
+    </div>
+  );
+};
+
+// Usage
+<Collapsible>
+  {(isOpen) => <div>{isOpen ? 'Content is visible' : 'Content is hidden'}</div>}
+</Collapsible>;
+```
+
+## Typing Component Props with Default Values
+
+```tsx
+interface ButtonProps {
+  type?: 'button' | 'submit' | 'reset';
+  size?: 'small' | 'medium' | 'large';
+  variant?: 'primary' | 'secondary' | 'outline';
+  disabled?: boolean;
+  children: React.ReactNode;
+  onClick?: () => void;
+}
+
+const defaultProps = {
+  type: 'button' as const,
+  size: 'medium' as const,
+  variant: 'primary' as const,
+  disabled: false,
+};
+
+const Button = (props: ButtonProps) => {
+  const { type, size, variant, disabled, children, onClick } = {
+    ...defaultProps,
+    ...props,
+  };
+
+  return (
+    <button
+      type={type}
+      className={`btn btn-${size} btn-${variant}`}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {children}
+    </button>
+  );
+};
+
+// Usage
+<Button size='large' variant='secondary'>
+  Click Me
+</Button>;
+```
+
+## Working with Forms
+
+```tsx
+interface FormData {
+  username: string;
+  email: string;
+  password: string;
+}
+
+function SignupForm() {
+  const [formData, setFormData] = useState<FormData>({
+    username: '',
+    email: '',
+    password: '',
+  });
+
+  const [errors, setErrors] = useState<Partial<FormData>>({});
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const validate = (): boolean => {
+    const newErrors: Partial<FormData> = {};
+
+    if (!formData.username) {
+      newErrors.username = 'Username is required';
+    }
+
+    if (!formData.email) {
+      newErrors.email = 'Email is required';
+    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
+      newErrors.email = 'Email is invalid';
+    }
+
+    if (!formData.password) {
+      newErrors.password = 'Password is required';
+    } else if (formData.password.length < 6) {
+      newErrors.password = 'Password must be at least 6 characters';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    if (validate()) {
+      console.log('Form submitted:', formData);
+      // Submit to server
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div>
+        <label htmlFor='username'>Username</label>
+        <input
+          type='text'
+          id='username'
+          name='username'
+          value={formData.username}
+          onChange={handleChange}
+        />
+        {errors.username && <p className='error'>{errors.username}</p>}
+      </div>
+
+      <div>
+        <label htmlFor='email'>Email</label>
+        <input
+          type='email'
+          id='email'
+          name='email'
+          value={formData.email}
+          onChange={handleChange}
+        />
+        {errors.email && <p className='error'>{errors.email}</p>}
+      </div>
+
+      <div>
+        <label htmlFor='password'>Password</label>
+        <input
+          type='password'
+          id='password'
+          name='password'
+          value={formData.password}
+          onChange={handleChange}
+        />
+        {errors.password && <p className='error'>{errors.password}</p>}
+      </div>
+
+      <button type='submit'>Sign Up</button>
+    </form>
+  );
+}
+```
+
+## Typing API Calls
+
+```tsx
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+// Using fetch
+async function getUser(id: number): Promise<User> {
+  const response = await fetch(`/api/users/${id}`);
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
+  }
+  return (await response.json()) as User;
+}
+
+// Using axios
+import axios from 'axios';
+
+async function getUsers(): Promise<User[]> {
+  const response = await axios.get<User[]>('/api/users');
+  return response.data;
+}
+
+// Using in a component
+function UserProfile({ userId }: { userId: number }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        setLoading(true);
+        const userData = await getUser(userId);
+        setUser(userData);
+        setError(null);
+      } catch (err) {
+        setError(
+          err instanceof Error ? err.message : 'An unknown error occurred'
+        );
+        setUser(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUser();
+  }, [userId]);
+
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+  if (!user) return <div>No user found</div>;
+
+  return (
+    <div>
+      <h1>{user.name}</h1>
+      <p>Email: {user.email}</p>
+    </div>
+  );
+}
+```
+
+## Typing Higher-Order Components
+
+```tsx
+// Higher-order component with TypeScript
+interface WithLoadingProps {
+  loading: boolean;
+}
+
+function withLoading<P extends object>(
+  Component: React.ComponentType<P>
+): React.FC<P & WithLoadingProps> {
+  return ({ loading, ...props }: WithLoadingProps & P) => {
+    if (loading) return <div>Loading...</div>;
+    return <Component {...(props as P)} />;
+  };
+}
+
+// Usage
+interface UserListProps {
+  users: User[];
+}
+
+const UserList: React.FC<UserListProps> = ({ users }) => (
+  <ul>
+    {users.map((user) => (
+      <li key={user.id}>{user.name}</li>
+    ))}
+  </ul>
+);
+
+const UserListWithLoading = withLoading(UserList);
+
+// In another component
+<UserListWithLoading loading={isLoading} users={users} />;
+```
+
+## Typing React Router
+
+```tsx
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Link,
+  useParams,
+  useNavigate,
+} from 'react-router-dom';
+
+// Typing route parameters
+function UserDetail() {
+  const { userId } = useParams<{ userId: string }>();
+
+  return <div>User ID: {userId}</div>;
+}
+
+// Typing navigation
+function NavigationExample() {
+  const navigate = useNavigate();
+
+  const handleClick = () => {
+    navigate('/users/123');
+  };
+
+  return <button onClick={handleClick}>Go to User 123</button>;
+}
+
+// Typing route configuration
+function App() {
+  return (
+    <BrowserRouter>
+      <nav>
+        <Link to='/'>Home</Link>
+        <Link to='/users'>Users</Link>
+      </nav>
+
+      <Routes>
+        <Route path='/' element={<Home />} />
+        <Route path='/users' element={<UserList />} />
+        <Route path='/users/:userId' element={<UserDetail />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+```
+
+## Best Practices
+
+1. **Use TypeScript's built-in React types** from `@types/react`
+2. **Define explicit prop interfaces** for each component
+3. **Use React.FC sparingly** - it adds implicit children prop
+4. **Prefer function components** over class components
+5. **Use discriminated unions for complex state**
+6. **Create reusable type definitions** for common patterns
+7. **Use generics for flexible components** like lists, forms, etc.
+8. **Type event handlers properly** with React's event types
+9. **Use type inference where possible** to reduce verbosity
+10. **Document complex props** with JSDoc comments

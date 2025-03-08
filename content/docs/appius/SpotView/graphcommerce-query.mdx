@@ -1,0 +1,203 @@
+---
+title: GraphCommerce, Magento 2, and Next.js Integration Guide
+description: This document explains how GraphCommerce works with Magento 2 and Next.js, with a particular focus on GraphQL queries and data fetching. It provides insights into the architecture, query structure, and best practices for extending the default functionality.
+---
+
+# GraphCommerce, Magento 2, and Next.js Integration Guide
+
+## Overview
+
+This document explains how GraphCommerce works with Magento 2 and Next.js, with
+a particular focus on GraphQL queries and data fetching. It provides insights
+into the architecture, query structure, and best practices for extending the
+default functionality.
+
+## Architecture
+
+GraphCommerce is a headless commerce framework that combines:
+
+- **Next.js**: For the frontend React framework and server-side rendering
+- **GraphQL**: For efficient data fetching from Magento 2
+- **Magento 2**: As the backend e-commerce platform
+
+The architecture follows these principles:
+
+1. **Headless**: Completely separates the frontend from the backend
+2. **API-first**: All communication happens through GraphQL APIs
+3. **Composable**: Built with modular components that can be customized
+4. **Performance-focused**: Optimized for speed with SSR, ISR, and client-side
+   caching
+
+## GraphQL in GraphCommerce
+
+### Query Structure
+
+GraphCommerce uses a fragment-based approach to GraphQL queries:
+
+1. **Base Fragments**: Define the core fields needed for each entity type
+2. **Component Fragments**: Define the fields needed by specific UI components
+3. **Page Queries**: Combine fragments to fetch all data needed for a page
+
+Example of a typical query structure:
+
+```graphql
+query ProductPage2($urlKey: String!) {
+  products(filter: { url_key: { eq: $urlKey } }) {
+    ...ProductSpecs2
+    items {
+      __typename
+      uid
+      ...ProductPageItem
+      # Other fragments
+    }
+  }
+}
+```
+
+### Fragment Composition
+
+Fragments are composed hierarchically:
+
+- `ProductPageItem` might include `ProductShortDescription`
+- `ProductShortDescription` includes the `short_description` field
+- This creates a tree of dependencies that GraphCommerce resolves
+
+### Extending Queries
+
+To extend queries with additional fields:
+
+1. **Create a custom fragment** with a unique name (avoid overriding existing
+   fragments)
+2. **Include the fields** you need in your custom fragment
+3. **Add your fragment** to the existing query
+
+Example:
+
+```graphql
+# Custom fragment
+fragment CustomProductListItems on Products {
+  items {
+    __typename
+    uid
+    ...ProductListItem
+    short_description {
+      html
+    }
+  }
+}
+
+# Modified query
+query ProductList2(...) {
+  products(...) {
+    ...ProductListItems
+    ...CustomProductListItems  # Add your custom fragment
+  }
+}
+```
+
+## Data Flow in GraphCommerce
+
+### Server-Side Rendering (SSR)
+
+1. **getStaticProps/getServerSideProps**: Fetch data on the server
+2. **graphqlSsrClient**: Client configured for server-side requests
+3. **Data Hydration**: Initial data is sent to the client with the HTML
+
+### Client-Side Data Fetching
+
+1. **useQuery/useLazyQuery**: Apollo hooks for client-side data fetching
+2. **Caching**: Results are cached in Apollo Client's store
+3. **Optimistic Updates**: UI updates before server confirmation
+
+## TypeScript Integration
+
+GraphCommerce generates TypeScript types from GraphQL schemas:
+
+1. **Codegen**: Automatically generates types from GraphQL schemas and
+   operations
+2. **Type Safety**: Components receive strongly-typed props based on GraphQL
+   fragments
+3. **Fragment Masking**: Ensures components only access fields they explicitly
+   request
+
+## Common Customization Patterns
+
+### Adding Fields to Queries
+
+As demonstrated with the product description:
+
+1. Create a custom fragment with the additional fields
+2. Add the fragment to the existing query
+3. Use TypeScript annotations if needed (`@ts-expect-error`) when types aren't
+   automatically updated
+
+### Creating Custom Components
+
+1. Create a component that accepts the data structure from your custom fragment
+2. Use the data in your component with proper TypeScript typing
+3. Replace or extend existing components in the page structure
+
+### Modifying Existing Components
+
+1. Import and extend the original component
+2. Override specific methods or properties
+3. Use the modified component in place of the original
+
+## Best Practices
+
+1. **Never modify core fragments**: Create custom fragments instead
+2. **Use meaningful fragment names**: Avoid conflicts with existing fragments
+3. **Keep fragments focused**: Each fragment should serve a specific purpose
+4. **Minimize query duplication**: Reuse fragments across queries
+5. **Consider performance**: Only request the fields you need
+6. **Run codegen after changes**: Keep TypeScript types in sync with GraphQL
+   schema
+
+## Debugging Tips
+
+1. **Apollo DevTools**: Inspect queries, cache, and responses
+2. **GraphQL Playground**: Test queries against your Magento instance
+3. **TypeScript Errors**: Often indicate mismatches between queries and
+   components
+4. **Network Tab**: Check actual GraphQL requests and responses
+
+## Common Issues and Solutions
+
+### Multiple Fragment Definitions
+
+**Problem**: Error "Multiple definitions of the same fragment found"
+
+**Solution**:
+
+- Rename your custom fragment to avoid conflicts
+- Use a unique prefix for your project's fragments
+
+### Missing Fields in TypeScript
+
+**Problem**: TypeScript errors about missing fields that you added in GraphQL
+
+**Solution**:
+
+- Run `yarn codegen` to update TypeScript types
+- Use `@ts-expect-error` as a temporary solution
+- Ensure your fragment is included in the query
+
+### Performance Issues
+
+**Problem**: Slow page loads due to large queries
+
+**Solution**:
+
+- Only request fields you need
+- Use pagination for large collections
+- Implement proper caching strategies
+
+## Conclusion
+
+GraphCommerce provides a powerful framework for building high-performance
+e-commerce storefronts with Magento 2 and Next.js. Understanding the GraphQL
+query structure and fragment composition is key to successfully extending and
+customizing your implementation.
+
+By following the patterns and best practices outlined in this document, you can
+efficiently add new features while maintaining type safety and performance.

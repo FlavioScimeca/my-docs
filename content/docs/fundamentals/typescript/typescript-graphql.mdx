@@ -1,0 +1,1054 @@
+---
+title: 'TypeScript with GraphQL'
+description: 'Learn how to build type-safe GraphQL APIs and clients with TypeScript'
+---
+
+# TypeScript with GraphQL
+
+TypeScript and GraphQL are a perfect match, as both are strongly typed systems. When used together, they provide end-to-end type safety from your API to your client applications. This guide covers how to use TypeScript with GraphQL for both server and client development.
+
+## Setting Up a GraphQL Server with TypeScript
+
+### Basic Setup with Apollo Server
+
+```bash
+# Create a new project
+mkdir graphql-typescript-server
+cd graphql-typescript-server
+
+# Initialize npm
+npm init -y
+
+# Install dependencies
+npm install apollo-server graphql
+npm install --save-dev typescript ts-node @types/node
+
+# Initialize TypeScript
+npx tsc --init
+```
+
+Configure `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"]
+}
+```
+
+### Basic GraphQL Server
+
+```typescript
+// src/index.ts
+import { ApolloServer, gql } from 'apollo-server';
+
+// Define GraphQL schema
+const typeDefs = gql`
+  type Book {
+    id: ID!
+    title: String!
+    author: String!
+    publishedYear: Int
+  }
+
+  type Query {
+    books: [Book!]!
+    book(id: ID!): Book
+  }
+`;
+
+// Sample data
+const books = [
+  {
+    id: '1',
+    title: 'The Awakening',
+    author: 'Kate Chopin',
+    publishedYear: 1899,
+  },
+  {
+    id: '2',
+    title: 'City of Glass',
+    author: 'Paul Auster',
+    publishedYear: 1985,
+  },
+];
+
+// Define resolvers
+const resolvers = {
+  Query: {
+    books: () => books,
+    book: (_: any, { id }: { id: string }) => {
+      return books.find((book) => book.id === id);
+    },
+  },
+};
+
+// Create Apollo Server
+const server = new ApolloServer({ typeDefs, resolvers });
+
+// Start the server
+server.listen().then(({ url }) => {
+  console.log(`🚀 Server ready at ${url}`);
+});
+```
+
+## Type-Safe GraphQL with TypeGraphQL
+
+TypeGraphQL allows you to define GraphQL schemas using TypeScript classes and decorators.
+
+```bash
+# Install TypeGraphQL and its dependencies
+npm install type-graphql reflect-metadata class-validator
+```
+
+Update `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["src/**/*"]
+}
+```
+
+### TypeGraphQL Example
+
+```typescript
+// src/index.ts
+import 'reflect-metadata';
+import { ApolloServer } from 'apollo-server';
+import { buildSchema } from 'type-graphql';
+import { BookResolver } from './resolvers/BookResolver';
+
+async function bootstrap() {
+  // Build TypeGraphQL schema
+  const schema = await buildSchema({
+    resolvers: [BookResolver],
+    emitSchemaFile: true,
+  });
+
+  // Create Apollo Server
+  const server = new ApolloServer({ schema });
+
+  // Start the server
+  const { url } = await server.listen();
+  console.log(`🚀 Server ready at ${url}`);
+}
+
+bootstrap().catch(console.error);
+```
+
+```typescript
+// src/models/Book.ts
+import { Field, ID, Int, ObjectType } from 'type-graphql';
+
+@ObjectType()
+export class Book {
+  @Field(() => ID)
+  id: string;
+
+  @Field()
+  title: string;
+
+  @Field()
+  author: string;
+
+  @Field(() => Int, { nullable: true })
+  publishedYear?: number;
+}
+```
+
+```typescript
+// src/resolvers/BookResolver.ts
+import { Arg, Query, Resolver } from 'type-graphql';
+import { Book } from '../models/Book';
+
+// Sample data
+const books: Book[] = [
+  {
+    id: '1',
+    title: 'The Awakening',
+    author: 'Kate Chopin',
+    publishedYear: 1899,
+  },
+  {
+    id: '2',
+    title: 'City of Glass',
+    author: 'Paul Auster',
+    publishedYear: 1985,
+  },
+];
+
+@Resolver((of) => Book)
+export class BookResolver {
+  @Query(() => [Book])
+  books(): Book[] {
+    return books;
+  }
+
+  @Query(() => Book, { nullable: true })
+  book(@Arg('id') id: string): Book | undefined {
+    return books.find((book) => book.id === id);
+  }
+}
+```
+
+## GraphQL Code Generator
+
+GraphQL Code Generator automatically generates TypeScript types from your GraphQL schema.
+
+```bash
+# Install GraphQL Code Generator
+npm install --save-dev @graphql-codegen/cli @graphql-codegen/typescript @graphql-codegen/typescript-resolvers
+```
+
+Create a configuration file `codegen.yml`:
+
+```yaml
+overwrite: true
+schema: './schema.graphql'
+generates:
+  src/generated/graphql.ts:
+    plugins:
+      - 'typescript'
+      - 'typescript-resolvers'
+    config:
+      contextType: '../context#MyContext'
+      mappers:
+        Book: '../models/Book#BookModel'
+```
+
+Add a script to `package.json`:
+
+```json
+{
+  "scripts": {
+    "generate": "graphql-codegen --config codegen.yml"
+  }
+}
+```
+
+### Using Generated Types
+
+```typescript
+// src/models/Book.ts
+export interface BookModel {
+  id: string;
+  title: string;
+  author: string;
+  publishedYear?: number;
+}
+```
+
+```typescript
+// src/context.ts
+export interface MyContext {
+  dataSources: {
+    books: BookDataSource;
+  };
+}
+```
+
+```typescript
+// src/resolvers/bookResolvers.ts
+import { Resolvers } from '../generated/graphql';
+
+const resolvers: Resolvers = {
+  Query: {
+    books: (_, __, { dataSources }) => {
+      return dataSources.books.getAll();
+    },
+    book: (_, { id }, { dataSources }) => {
+      return dataSources.books.getById(id);
+    },
+  },
+};
+
+export default resolvers;
+```
+
+## Apollo Server with Express and TypeScript
+
+```bash
+# Install dependencies
+npm install apollo-server-express express
+npm install --save-dev @types/express
+```
+
+```typescript
+// src/index.ts
+import express from 'express';
+import { ApolloServer } from 'apollo-server-express';
+import { buildSchema } from 'type-graphql';
+import { BookResolver } from './resolvers/BookResolver';
+
+async function bootstrap() {
+  // Create Express app
+  const app = express();
+
+  // Build TypeGraphQL schema
+  const schema = await buildSchema({
+    resolvers: [BookResolver],
+    emitSchemaFile: true,
+  });
+
+  // Create Apollo Server
+  const server = new ApolloServer({
+    schema,
+    context: ({ req, res }) => ({ req, res }),
+  });
+
+  // Start Apollo Server
+  await server.start();
+
+  // Apply middleware to Express
+  server.applyMiddleware({ app });
+
+  // Start Express server
+  const PORT = process.env.PORT || 4000;
+  app.listen(PORT, () => {
+    console.log(
+      `🚀 Server ready at http://localhost:${PORT}${server.graphqlPath}`
+    );
+  });
+}
+
+bootstrap().catch(console.error);
+```
+
+## GraphQL Mutations with TypeScript
+
+```typescript
+// src/models/Book.ts
+import { Field, ID, Int, InputType, ObjectType } from 'type-graphql';
+
+@ObjectType()
+export class Book {
+  @Field(() => ID)
+  id: string;
+
+  @Field()
+  title: string;
+
+  @Field()
+  author: string;
+
+  @Field(() => Int, { nullable: true })
+  publishedYear?: number;
+}
+
+@InputType()
+export class CreateBookInput {
+  @Field()
+  title: string;
+
+  @Field()
+  author: string;
+
+  @Field(() => Int, { nullable: true })
+  publishedYear?: number;
+}
+
+@InputType()
+export class UpdateBookInput {
+  @Field({ nullable: true })
+  title?: string;
+
+  @Field({ nullable: true })
+  author?: string;
+
+  @Field(() => Int, { nullable: true })
+  publishedYear?: number;
+}
+```
+
+```typescript
+// src/resolvers/BookResolver.ts
+import { Arg, Mutation, Query, Resolver } from 'type-graphql';
+import { Book, CreateBookInput, UpdateBookInput } from '../models/Book';
+import { v4 as uuidv4 } from 'uuid';
+
+// Sample data
+let books: Book[] = [
+  {
+    id: '1',
+    title: 'The Awakening',
+    author: 'Kate Chopin',
+    publishedYear: 1899,
+  },
+  {
+    id: '2',
+    title: 'City of Glass',
+    author: 'Paul Auster',
+    publishedYear: 1985,
+  },
+];
+
+@Resolver((of) => Book)
+export class BookResolver {
+  @Query(() => [Book])
+  books(): Book[] {
+    return books;
+  }
+
+  @Query(() => Book, { nullable: true })
+  book(@Arg('id') id: string): Book | undefined {
+    return books.find((book) => book.id === id);
+  }
+
+  @Mutation(() => Book)
+  createBook(@Arg('data') data: CreateBookInput): Book {
+    const book: Book = {
+      id: uuidv4(),
+      ...data,
+    };
+    books.push(book);
+    return book;
+  }
+
+  @Mutation(() => Book, { nullable: true })
+  updateBook(
+    @Arg('id') id: string,
+    @Arg('data') data: UpdateBookInput
+  ): Book | undefined {
+    const bookIndex = books.findIndex((book) => book.id === id);
+    if (bookIndex === -1) return undefined;
+
+    const book = books[bookIndex];
+    const updatedBook = { ...book, ...data };
+    books[bookIndex] = updatedBook;
+
+    return updatedBook;
+  }
+
+  @Mutation(() => Boolean)
+  deleteBook(@Arg('id') id: string): boolean {
+    const initialLength = books.length;
+    books = books.filter((book) => book.id !== id);
+    return books.length < initialLength;
+  }
+}
+```
+
+## Authentication and Authorization
+
+```typescript
+// src/auth/authChecker.ts
+import { AuthChecker } from 'type-graphql';
+import { MyContext } from '../context';
+
+export const customAuthChecker: AuthChecker<MyContext> = (
+  { context },
+  roles
+) => {
+  // Check if user is authenticated
+  if (!context.user) {
+    return false;
+  }
+
+  // If no roles are required, just check if user is authenticated
+  if (roles.length === 0) {
+    return true;
+  }
+
+  // Check if user has required roles
+  return roles.some((role) => context.user.roles.includes(role));
+};
+```
+
+```typescript
+// src/index.ts
+import { buildSchema } from 'type-graphql';
+import { customAuthChecker } from './auth/authChecker';
+
+const schema = await buildSchema({
+  resolvers: [BookResolver, UserResolver],
+  authChecker: customAuthChecker,
+  emitSchemaFile: true,
+});
+```
+
+```typescript
+// src/resolvers/BookResolver.ts
+import { Arg, Authorized, Mutation, Query, Resolver } from 'type-graphql';
+
+@Resolver((of) => Book)
+export class BookResolver {
+  @Query(() => [Book])
+  books(): Book[] {
+    return books;
+  }
+
+  @Query(() => Book, { nullable: true })
+  book(@Arg('id') id: string): Book | undefined {
+    return books.find((book) => book.id === id);
+  }
+
+  @Authorized() // Requires authentication
+  @Mutation(() => Book)
+  createBook(@Arg('data') data: CreateBookInput): Book {
+    // Implementation
+  }
+
+  @Authorized('ADMIN') // Requires ADMIN role
+  @Mutation(() => Book, { nullable: true })
+  updateBook(
+    @Arg('id') id: string,
+    @Arg('data') data: UpdateBookInput
+  ): Book | undefined {
+    // Implementation
+  }
+
+  @Authorized(['ADMIN', 'MODERATOR']) // Requires ADMIN or MODERATOR role
+  @Mutation(() => Boolean)
+  deleteBook(@Arg('id') id: string): boolean {
+    // Implementation
+  }
+}
+```
+
+## GraphQL Subscriptions
+
+```bash
+# Install dependencies
+npm install graphql-subscriptions subscriptions-transport-ws
+```
+
+```typescript
+// src/index.ts
+import { ApolloServer } from 'apollo-server-express';
+import { createServer } from 'http';
+import express from 'express';
+import { execute, subscribe } from 'graphql';
+import { SubscriptionServer } from 'subscriptions-transport-ws';
+import { buildSchema } from 'type-graphql';
+import { BookResolver } from './resolvers/BookResolver';
+import { PubSub } from 'graphql-subscriptions';
+
+async function bootstrap() {
+  // Create Express app
+  const app = express();
+
+  // Create HTTP server
+  const httpServer = createServer(app);
+
+  // Create PubSub instance
+  const pubSub = new PubSub();
+
+  // Build TypeGraphQL schema
+  const schema = await buildSchema({
+    resolvers: [BookResolver],
+    pubSub,
+    emitSchemaFile: true,
+  });
+
+  // Create Apollo Server
+  const server = new ApolloServer({
+    schema,
+    context: ({ req, res }) => ({ req, res, pubSub }),
+  });
+
+  // Start Apollo Server
+  await server.start();
+
+  // Apply middleware to Express
+  server.applyMiddleware({ app });
+
+  // Create Subscription server
+  SubscriptionServer.create(
+    { schema, execute, subscribe },
+    { server: httpServer, path: server.graphqlPath }
+  );
+
+  // Start HTTP server
+  const PORT = process.env.PORT || 4000;
+  httpServer.listen(PORT, () => {
+    console.log(
+      `🚀 Server ready at http://localhost:${PORT}${server.graphqlPath}`
+    );
+    console.log(
+      `🚀 Subscriptions ready at ws://localhost:${PORT}${server.graphqlPath}`
+    );
+  });
+}
+
+bootstrap().catch(console.error);
+```
+
+```typescript
+// src/resolvers/BookResolver.ts
+import {
+  Arg,
+  Mutation,
+  PubSub,
+  PubSubEngine,
+  Query,
+  Resolver,
+  Root,
+  Subscription,
+} from 'type-graphql';
+import { Book, CreateBookInput } from '../models/Book';
+
+const BOOK_ADDED = 'BOOK_ADDED';
+
+@Resolver((of) => Book)
+export class BookResolver {
+  // Queries and mutations...
+
+  @Mutation(() => Book)
+  async createBook(
+    @Arg('data') data: CreateBookInput,
+    @PubSub() pubSub: PubSubEngine
+  ): Promise<Book> {
+    const book: Book = {
+      id: uuidv4(),
+      ...data,
+    };
+    books.push(book);
+
+    // Publish event
+    await pubSub.publish(BOOK_ADDED, book);
+
+    return book;
+  }
+
+  @Subscription(() => Book, {
+    topics: BOOK_ADDED,
+  })
+  bookAdded(@Root() book: Book): Book {
+    return book;
+  }
+}
+```
+
+## GraphQL Client with TypeScript
+
+### Apollo Client Setup
+
+```bash
+# Install dependencies
+npm install @apollo/client graphql
+```
+
+```typescript
+// src/apollo-client.ts
+import { ApolloClient, InMemoryCache, HttpLink } from '@apollo/client';
+
+const httpLink = new HttpLink({
+  uri: 'http://localhost:4000/graphql',
+});
+
+const client = new ApolloClient({
+  link: httpLink,
+  cache: new InMemoryCache(),
+});
+
+export default client;
+```
+
+### Type-Safe Queries with GraphQL Code Generator
+
+```bash
+# Install dependencies
+npm install --save-dev @graphql-codegen/cli @graphql-codegen/typescript @graphql-codegen/typescript-operations @graphql-codegen/typescript-react-apollo
+```
+
+Create a configuration file `codegen.yml`:
+
+```yaml
+overwrite: true
+schema: 'http://localhost:4000/graphql'
+documents: 'src/**/*.graphql'
+generates:
+  src/generated/graphql.tsx:
+    plugins:
+      - 'typescript'
+      - 'typescript-operations'
+      - 'typescript-react-apollo'
+    config:
+      withHooks: true
+```
+
+Create a GraphQL query file:
+
+```graphql
+# src/graphql/books.graphql
+query GetBooks {
+  books {
+    id
+    title
+    author
+    publishedYear
+  }
+}
+
+query GetBook($id: ID!) {
+  book(id: $id) {
+    id
+    title
+    author
+    publishedYear
+  }
+}
+
+mutation CreateBook($data: CreateBookInput!) {
+  createBook(data: $data) {
+    id
+    title
+    author
+    publishedYear
+  }
+}
+```
+
+Generate types:
+
+```bash
+npm run generate
+```
+
+### Using Generated Hooks
+
+```tsx
+// src/components/BookList.tsx
+import React from 'react';
+import { useGetBooksQuery } from '../generated/graphql';
+
+const BookList: React.FC = () => {
+  const { loading, error, data } = useGetBooksQuery();
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error.message}</p>;
+
+  return (
+    <div>
+      <h1>Books</h1>
+      <ul>
+        {data?.books.map((book) => (
+          <li key={book.id}>
+            <strong>{book.title}</strong> by {book.author}
+            {book.publishedYear && ` (${book.publishedYear})`}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+export default BookList;
+```
+
+```tsx
+// src/components/BookDetail.tsx
+import React from 'react';
+import { useGetBookQuery } from '../generated/graphql';
+
+interface BookDetailProps {
+  id: string;
+}
+
+const BookDetail: React.FC<BookDetailProps> = ({ id }) => {
+  const { loading, error, data } = useGetBookQuery({
+    variables: { id },
+  });
+
+  if (loading) return <p>Loading...</p>;
+  if (error) return <p>Error: {error.message}</p>;
+  if (!data?.book) return <p>Book not found</p>;
+
+  const { title, author, publishedYear } = data.book;
+
+  return (
+    <div>
+      <h1>{title}</h1>
+      <p>By {author}</p>
+      {publishedYear && <p>Published in {publishedYear}</p>}
+    </div>
+  );
+};
+
+export default BookDetail;
+```
+
+```tsx
+// src/components/CreateBookForm.tsx
+import React, { useState } from 'react';
+import { useCreateBookMutation } from '../generated/graphql';
+
+const CreateBookForm: React.FC = () => {
+  const [title, setTitle] = useState('');
+  const [author, setAuthor] = useState('');
+  const [publishedYear, setPublishedYear] = useState<number | undefined>();
+
+  const [createBook, { loading, error }] = useCreateBookMutation();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    try {
+      await createBook({
+        variables: {
+          data: {
+            title,
+            author,
+            publishedYear: publishedYear || null,
+          },
+        },
+        refetchQueries: ['GetBooks'],
+      });
+
+      // Reset form
+      setTitle('');
+      setAuthor('');
+      setPublishedYear(undefined);
+    } catch (err) {
+      console.error('Error creating book:', err);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <h2>Add New Book</h2>
+
+      {error && <p className='error'>Error: {error.message}</p>}
+
+      <div>
+        <label htmlFor='title'>Title:</label>
+        <input
+          id='title'
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+        />
+      </div>
+
+      <div>
+        <label htmlFor='author'>Author:</label>
+        <input
+          id='author'
+          value={author}
+          onChange={(e) => setAuthor(e.target.value)}
+          required
+        />
+      </div>
+
+      <div>
+        <label htmlFor='publishedYear'>Published Year:</label>
+        <input
+          id='publishedYear'
+          type='number'
+          value={publishedYear || ''}
+          onChange={(e) =>
+            setPublishedYear(
+              e.target.value ? parseInt(e.target.value) : undefined
+            )
+          }
+        />
+      </div>
+
+      <button type='submit' disabled={loading}>
+        {loading ? 'Adding...' : 'Add Book'}
+      </button>
+    </form>
+  );
+};
+
+export default CreateBookForm;
+```
+
+## NestJS with GraphQL and TypeScript
+
+NestJS provides a robust framework for building GraphQL APIs with TypeScript.
+
+```bash
+# Install NestJS CLI
+npm install -g @nestjs/cli
+
+# Create a new NestJS project
+nest new graphql-nestjs-api
+
+# Install GraphQL dependencies
+cd graphql-nestjs-api
+npm install @nestjs/graphql @nestjs/apollo graphql apollo-server-express
+```
+
+### NestJS GraphQL Module Setup
+
+```typescript
+// src/app.module.ts
+import { Module } from '@nestjs/common';
+import { GraphQLModule } from '@nestjs/graphql';
+import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
+import { join } from 'path';
+import { BooksModule } from './books/books.module';
+
+@Module({
+  imports: [
+    GraphQLModule.forRoot<ApolloDriverConfig>({
+      driver: ApolloDriver,
+      autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
+      sortSchema: true,
+    }),
+    BooksModule,
+  ],
+})
+export class AppModule {}
+```
+
+### NestJS GraphQL Resolvers
+
+```typescript
+// src/books/models/book.model.ts
+import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
+
+@ObjectType()
+export class Book {
+  @Field(() => ID)
+  id: string;
+
+  @Field()
+  title: string;
+
+  @Field()
+  author: string;
+
+  @Field(() => Int, { nullable: true })
+  publishedYear?: number;
+}
+```
+
+```typescript
+// src/books/dto/create-book.input.ts
+import { Field, InputType, Int } from '@nestjs/graphql';
+
+@InputType()
+export class CreateBookInput {
+  @Field()
+  title: string;
+
+  @Field()
+  author: string;
+
+  @Field(() => Int, { nullable: true })
+  publishedYear?: number;
+}
+```
+
+```typescript
+// src/books/books.service.ts
+import { Injectable } from '@nestjs/common';
+import { v4 as uuidv4 } from 'uuid';
+import { Book } from './models/book.model';
+import { CreateBookInput } from './dto/create-book.input';
+
+@Injectable()
+export class BooksService {
+  private books: Book[] = [
+    {
+      id: '1',
+      title: 'The Awakening',
+      author: 'Kate Chopin',
+      publishedYear: 1899,
+    },
+    {
+      id: '2',
+      title: 'City of Glass',
+      author: 'Paul Auster',
+      publishedYear: 1985,
+    },
+  ];
+
+  findAll(): Book[] {
+    return this.books;
+  }
+
+  findOne(id: string): Book | undefined {
+    return this.books.find((book) => book.id === id);
+  }
+
+  create(createBookInput: CreateBookInput): Book {
+    const book: Book = {
+      id: uuidv4(),
+      ...createBookInput,
+    };
+    this.books.push(book);
+    return book;
+  }
+}
+```
+
+```typescript
+// src/books/books.resolver.ts
+import { Args, ID, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { BooksService } from './books.service';
+import { Book } from './models/book.model';
+import { CreateBookInput } from './dto/create-book.input';
+
+@Resolver(() => Book)
+export class BooksResolver {
+  constructor(private booksService: BooksService) {}
+
+  @Query(() => [Book])
+  books(): Book[] {
+    return this.booksService.findAll();
+  }
+
+  @Query(() => Book, { nullable: true })
+  book(@Args('id', { type: () => ID }) id: string): Book | undefined {
+    return this.booksService.findOne(id);
+  }
+
+  @Mutation(() => Book)
+  createBook(@Args('data') createBookInput: CreateBookInput): Book {
+    return this.booksService.create(createBookInput);
+  }
+}
+```
+
+```typescript
+// src/books/books.module.ts
+import { Module } from '@nestjs/common';
+import { BooksService } from './books.service';
+import { BooksResolver } from './books.resolver';
+
+@Module({
+  providers: [BooksService, BooksResolver],
+})
+export class BooksModule {}
+```
+
+## Best Practices
+
+1. **Define clear interfaces** for all GraphQL types
+2. **Use code generation** to ensure type safety between schema and code
+3. **Implement proper error handling** with custom error classes
+4. **Use dataloaders** for efficient data fetching and avoiding N+1 queries
+5. **Implement proper authentication and authorization**
+6. **Structure your schema** with a clear domain model
+7. **Use input types** for mutations to make them more flexible
+8. **Document your schema** with descriptions
+9. **Write tests** for your GraphQL API
+10. **Use fragments** for reusable query parts
+11. **Implement proper pagination** for lists
+12. **Consider using federation** for large schemas
+13. **Monitor performance** with Apollo tracing
+14. **Use subscriptions** for real-time updates

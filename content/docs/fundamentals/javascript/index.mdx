@@ -1,0 +1,634 @@
+---
+title: 'JavaScript Fundamentals'
+description: 'Learn the essential concepts and features of modern JavaScript'
+---
+
+# JavaScript
+
+JavaScript is a versatile, high-level programming language that powers the interactive web. Originally designed as a scripting language for browsers, it has evolved into a robust language for both frontend and backend development.
+
+## What is JavaScript?
+
+JavaScript is a dynamic, interpreted language that conforms to the ECMAScript specification. It's a multi-paradigm language that supports:
+
+- Object-oriented programming
+- Functional programming
+- Event-driven programming
+- Imperative programming
+
+JavaScript runs in browsers, on servers (via Node.js), in mobile applications, IoT devices, and more.
+
+## JavaScript Evolution
+
+JavaScript has evolved significantly since its creation:
+
+- **ES5 (ECMAScript 5)**: Released in 2009, introduced strict mode, JSON support, and array methods
+- **ES6/ES2015**: Major update with arrow functions, classes, modules, promises, and more
+- **ES2016-ES2023**: Annual releases with incremental improvements and new features
+
+## Basic Syntax
+
+### Variables and Data Types
+
+```javascript
+// Variables
+let name = 'John'; // Block-scoped variable
+const age = 30; // Constant (cannot be reassigned)
+var isActive = true; // Function-scoped variable (avoid using)
+
+// Primitive data types
+let string = 'Hello, world!';
+let number = 42;
+let boolean = true;
+let nullValue = null;
+let undefinedValue = undefined;
+let symbolValue = Symbol('unique');
+let bigIntValue = 9007199254740991n;
+
+// Complex data types
+let array = [1, 2, 3, 'four', { five: 5 }];
+let object = { name: 'John', age: 30 };
+```
+
+### Operators
+
+```javascript
+// Arithmetic operators
+let sum = 5 + 3;
+let difference = 10 - 5;
+let product = 4 * 2;
+let quotient = 20 / 5;
+let remainder = 10 % 3;
+let exponent = 2 ** 3; // 2³ = 8
+
+// Comparison operators
+let equal = 5 == '5'; // true (loose equality)
+let strictEqual = 5 === '5'; // false (strict equality)
+let notEqual = 5 != '5'; // false
+let strictNotEqual = 5 !== '5'; // true
+let greaterThan = 10 > 5;
+let lessThan = 5 < 10;
+
+// Logical operators
+let and = true && false; // false
+let or = true || false; // true
+let not = !true; // false
+
+// Assignment operators
+let x = 10;
+x += 5; // x = x + 5
+x -= 3; // x = x - 3
+x *= 2; // x = x * 2
+x /= 4; // x = x / 4
+```
+
+### Control Flow
+
+```javascript
+// Conditional statements
+if (age >= 18) {
+  console.log('Adult');
+} else if (age >= 13) {
+  console.log('Teenager');
+} else {
+  console.log('Child');
+}
+
+// Switch statement
+switch (day) {
+  case 'Monday':
+    console.log('Start of the week');
+    break;
+  case 'Friday':
+    console.log('End of the work week');
+    break;
+  default:
+    console.log('Another day');
+}
+
+// Ternary operator
+let status = age >= 18 ? 'Adult' : 'Minor';
+
+// Loops
+for (let i = 0; i < 5; i++) {
+  console.log(i);
+}
+
+let fruits = ['apple', 'banana', 'orange'];
+for (let fruit of fruits) {
+  console.log(fruit);
+}
+
+for (let index in fruits) {
+  console.log(index, fruits[index]);
+}
+
+let counter = 0;
+while (counter < 5) {
+  console.log(counter);
+  counter++;
+}
+
+let i = 0;
+do {
+  console.log(i);
+  i++;
+} while (i < 5);
+```
+
+## Functions
+
+### Function Declarations
+
+```javascript
+// Function declaration
+function greet(name) {
+  return `Hello, ${name}!`;
+}
+
+// Function expression
+const sayHello = function (name) {
+  return `Hello, ${name}!`;
+};
+
+// Arrow function
+const welcome = (name) => `Welcome, ${name}!`;
+
+// Default parameters
+function greetWithDefault(name = 'Guest') {
+  return `Hello, ${name}!`;
+}
+
+// Rest parameters
+function sum(...numbers) {
+  return numbers.reduce((total, num) => total + num, 0);
+}
+
+// Immediately Invoked Function Expression (IIFE)
+(function () {
+  console.log('This runs immediately!');
+})();
+```
+
+### Function Scope and Closures
+
+```javascript
+// Scope example
+function outer() {
+  let outerVar = 'I am outside!';
+
+  function inner() {
+    let innerVar = 'I am inside!';
+    console.log(outerVar); // Can access outer variable
+  }
+
+  inner();
+  // console.log(innerVar); // Error: innerVar is not defined
+}
+
+// Closure example
+function createCounter() {
+  let count = 0;
+
+  return function () {
+    count++;
+    return count;
+  };
+}
+
+const counter = createCounter();
+console.log(counter()); // 1
+console.log(counter()); // 2
+```
+
+## Objects and Arrays
+
+### Object Basics
+
+```javascript
+// Object literal
+const person = {
+  firstName: 'John',
+  lastName: 'Doe',
+  age: 30,
+  greet() {
+    return `Hello, I'm ${this.firstName}`;
+  },
+};
+
+// Accessing properties
+console.log(person.firstName); // Dot notation
+console.log(person['lastName']); // Bracket notation
+
+// Adding and modifying properties
+person.email = 'john@example.com';
+person.age = 31;
+
+// Deleting properties
+delete person.age;
+
+// Object methods
+const keys = Object.keys(person);
+const values = Object.values(person);
+const entries = Object.entries(person);
+const hasProp = Object.hasOwn(person, 'email');
+
+// Spread operator with objects
+const personWithAddress = {
+  ...person,
+  address: '123 Main St',
+};
+```
+
+### Arrays
+
+```javascript
+// Array creation
+const numbers = [1, 2, 3, 4, 5];
+const mixed = [1, 'two', { three: 3 }, [4]];
+const newArray = new Array(3); // Creates array with length 3
+
+// Accessing elements
+const first = numbers[0];
+const last = numbers[numbers.length - 1];
+
+// Modifying arrays
+numbers.push(6); // Add to end
+numbers.unshift(0); // Add to beginning
+const lastItem = numbers.pop(); // Remove from end
+const firstItem = numbers.shift(); // Remove from beginning
+numbers.splice(2, 1, 'three'); // Remove 1 item at index 2 and insert 'three'
+
+// Array methods
+const doubled = numbers.map((num) => num * 2);
+const evens = numbers.filter((num) => num % 2 === 0);
+const sum = numbers.reduce((total, num) => total + num, 0);
+const allPositive = numbers.every((num) => num > 0);
+const hasNegative = numbers.some((num) => num < 0);
+const foundItem = numbers.find((num) => num > 3);
+const foundIndex = numbers.findIndex((num) => num > 3);
+
+// Spread operator with arrays
+const combined = [...numbers, ...mixed];
+```
+
+## Classes and Prototypes
+
+### Prototypal Inheritance
+
+```javascript
+// Constructor function
+function Person(firstName, lastName) {
+  this.firstName = firstName;
+  this.lastName = lastName;
+}
+
+// Adding methods to prototype
+Person.prototype.getFullName = function () {
+  return `${this.firstName} ${this.lastName}`;
+};
+
+const john = new Person('John', 'Doe');
+console.log(john.getFullName()); // "John Doe"
+
+// Inheritance with prototypes
+function Employee(firstName, lastName, position) {
+  Person.call(this, firstName, lastName);
+  this.position = position;
+}
+
+Employee.prototype = Object.create(Person.prototype);
+Employee.prototype.constructor = Employee;
+
+Employee.prototype.getDetails = function () {
+  return `${this.getFullName()}, ${this.position}`;
+};
+```
+
+### ES6 Classes
+
+```javascript
+// Class declaration
+class Person {
+  constructor(firstName, lastName) {
+    this.firstName = firstName;
+    this.lastName = lastName;
+  }
+
+  getFullName() {
+    return `${this.firstName} ${this.lastName}`;
+  }
+
+  // Static method
+  static createAnonymous() {
+    return new Person('Anonymous', 'User');
+  }
+}
+
+// Inheritance with classes
+class Employee extends Person {
+  constructor(firstName, lastName, position) {
+    super(firstName, lastName);
+    this.position = position;
+  }
+
+  getDetails() {
+    return `${this.getFullName()}, ${this.position}`;
+  }
+}
+
+const jane = new Employee('Jane', 'Smith', 'Developer');
+console.log(jane.getDetails()); // "Jane Smith, Developer"
+```
+
+## Asynchronous JavaScript
+
+### Callbacks
+
+```javascript
+function fetchData(callback) {
+  setTimeout(() => {
+    const data = { id: 1, name: 'Product' };
+    callback(null, data);
+  }, 1000);
+}
+
+fetchData((error, data) => {
+  if (error) {
+    console.error('Error:', error);
+  } else {
+    console.log('Data:', data);
+  }
+});
+```
+
+### Promises
+
+```javascript
+function fetchData() {
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      const success = true;
+      if (success) {
+        resolve({ id: 1, name: 'Product' });
+      } else {
+        reject(new Error('Failed to fetch data'));
+      }
+    }, 1000);
+  });
+}
+
+fetchData()
+  .then((data) => {
+    console.log('Data:', data);
+    return processData(data);
+  })
+  .then((result) => {
+    console.log('Result:', result);
+  })
+  .catch((error) => {
+    console.error('Error:', error);
+  })
+  .finally(() => {
+    console.log('Operation completed');
+  });
+
+// Promise combinators
+Promise.all([fetchUsers(), fetchProducts()]).then(([users, products]) => {
+  // Both promises resolved
+});
+
+Promise.race([fetchFast(), fetchSlow()]).then((result) => {
+  // First resolved promise
+});
+
+Promise.allSettled([fetchUsers(), fetchProducts()]).then((results) => {
+  // All promises settled (resolved or rejected)
+});
+
+Promise.any([fetchA(), fetchB(), fetchC()]).then((result) => {
+  // First successfully resolved promise
+});
+```
+
+### Async/Await
+
+```javascript
+async function getData() {
+  try {
+    const data = await fetchData();
+    console.log('Data:', data);
+
+    const result = await processData(data);
+    console.log('Result:', result);
+
+    return result;
+  } catch (error) {
+    console.error('Error:', error);
+    throw error;
+  } finally {
+    console.log('Operation completed');
+  }
+}
+
+// Parallel execution with async/await
+async function getMultipleData() {
+  const [users, products] = await Promise.all([fetchUsers(), fetchProducts()]);
+
+  return { users, products };
+}
+```
+
+## Modules
+
+### ES Modules
+
+```javascript
+// Exporting
+// math.js
+export const PI = 3.14159;
+
+export function add(a, b) {
+  return a + b;
+}
+
+export function subtract(a, b) {
+  return a - b;
+}
+
+export default class Calculator {
+  // Class implementation
+}
+
+// Importing
+// app.js
+import Calculator, { add, subtract, PI } from './math.js';
+import * as math from './math.js';
+
+console.log(add(2, 3));
+console.log(math.subtract(5, 2));
+```
+
+### CommonJS Modules (Node.js)
+
+```javascript
+// Exporting
+// math.js
+const PI = 3.14159;
+
+function add(a, b) {
+  return a + b;
+}
+
+function subtract(a, b) {
+  return a - b;
+}
+
+class Calculator {
+  // Class implementation
+}
+
+module.exports = {
+  PI,
+  add,
+  subtract,
+  Calculator,
+};
+
+// Or export a single value
+module.exports = Calculator;
+
+// Importing
+// app.js
+const math = require('./math.js');
+const { add, subtract } = require('./math.js');
+
+console.log(math.add(2, 3));
+console.log(subtract(5, 2));
+```
+
+## Error Handling
+
+```javascript
+// Try-catch block
+try {
+  // Code that might throw an error
+  const result = riskyOperation();
+  console.log(result);
+} catch (error) {
+  // Handle the error
+  console.error('An error occurred:', error.message);
+} finally {
+  // Always executes, regardless of error
+  console.log('Cleanup operations');
+}
+
+// Custom errors
+class ValidationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+function validateUser(user) {
+  if (!user.name) {
+    throw new ValidationError('Name is required');
+  }
+  if (!user.email) {
+    throw new ValidationError('Email is required');
+  }
+}
+
+try {
+  validateUser({ name: 'John' });
+} catch (error) {
+  if (error instanceof ValidationError) {
+    console.error('Validation error:', error.message);
+  } else {
+    console.error('Unknown error:', error);
+  }
+}
+```
+
+## Modern JavaScript Features
+
+### Destructuring
+
+```javascript
+// Array destructuring
+const [first, second, ...rest] = [1, 2, 3, 4, 5];
+
+// Object destructuring
+const { name, age, address: { city } = {} } = person;
+
+// Function parameter destructuring
+function printPerson({ name, age }) {
+  console.log(`${name}, ${age} years old`);
+}
+```
+
+### Spread and Rest Operators
+
+```javascript
+// Spread operator
+const newArray = [...oldArray, newItem];
+const newObject = { ...oldObject, newProp: value };
+
+// Rest operator in functions
+function sum(...numbers) {
+  return numbers.reduce((total, num) => total + num, 0);
+}
+```
+
+### Optional Chaining
+
+```javascript
+// Without optional chaining
+const city = user && user.address && user.address.city;
+
+// With optional chaining
+const city = user?.address?.city;
+
+// With method calls
+const result = obj.method?.();
+
+// With array elements
+const item = arr?.[0];
+```
+
+### Nullish Coalescing
+
+```javascript
+// Using logical OR (falls back if value is falsy)
+const name = user.name || 'Anonymous';
+
+// Using nullish coalescing (falls back only if value is null or undefined)
+const name = user.name ?? 'Anonymous';
+```
+
+### Template Literals
+
+```javascript
+const name = 'John';
+const greeting = `Hello, ${name}!`;
+
+// Tagged templates
+function highlight(strings, ...values) {
+  return strings.reduce((result, str, i) => {
+    return `${result}${str}${values[i] ? `<em>${values[i]}</em>` : ''}`;
+  }, '');
+}
+
+const highlighted = highlight`Hello, ${name}! Today is ${new Date().toLocaleDateString()}.`;
+```
+
+## Next Steps
+
+Explore the following topics to deepen your JavaScript knowledge:
+
+- [Advanced JavaScript Concepts](./advanced-concepts) - Closures, this keyword, prototypes, and more
+- [JavaScript in the Browser](./browser-javascript) - DOM manipulation, events, and web APIs
+- [JavaScript for Node.js](./node-javascript) - Server-side JavaScript with Node.js
+- [Modern JavaScript Patterns](./modern-patterns) - Common patterns and best practices
+- [JavaScript Testing](./testing) - Unit testing, integration testing, and test frameworks

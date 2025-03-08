@@ -1,0 +1,195 @@
+---
+title: 'Git Stash'
+description: 'Learn how to temporarily store changes using Git stash'
+---
+
+# Git Stash
+
+Git stash allows you to temporarily save changes you've made to your working directory without committing them. This is useful when you need to switch branches or pull updates but aren't ready to commit your current work.
+
+## Basic Stashing
+
+```bash
+# Stash your changes
+git stash
+
+# Same as above but with a custom message
+git stash save "Work in progress for feature X"
+```
+
+When you run `git stash`, Git:
+
+1. Takes all modified tracked files
+2. Saves them on a stack of unfinished changes
+3. Reverts the working directory to match the HEAD commit
+
+## Viewing Stashes
+
+```bash
+# List all stashes
+git stash list
+
+# Example output:
+# stash@{0}: WIP on feature-branch: abc1234 Add login form
+# stash@{1}: On main: Work in progress for feature X
+```
+
+## Applying Stashes
+
+```bash
+# Apply the most recent stash (stash@{0})
+git stash apply
+
+# Apply a specific stash
+git stash apply stash@{2}
+
+# Apply the most recent stash and remove it from the stash list
+git stash pop
+
+# Apply a specific stash and remove it
+git stash pop stash@{2}
+```
+
+## Viewing Stash Contents
+
+```bash
+# Show the changes in the most recent stash
+git stash show
+
+# Show the changes with diff details
+git stash show -p
+
+# Show changes in a specific stash
+git stash show stash@{1}
+git stash show -p stash@{1}
+```
+
+## Managing Stashes
+
+```bash
+# Remove the most recent stash
+git stash drop
+
+# Remove a specific stash
+git stash drop stash@{2}
+
+# Clear all stashes
+git stash clear
+```
+
+## Partial Stashing
+
+You can stash specific files or changes:
+
+```bash
+# Stash only specific files
+git stash push path/to/file1.js path/to/file2.js
+
+# Stash with interactive selection of hunks
+git stash -p
+```
+
+## Creating a Branch from a Stash
+
+If you want to apply a stash to a new branch:
+
+```bash
+# Create a new branch from a stash and apply the stash to it
+git stash branch new-branch-name stash@{1}
+```
+
+This:
+
+1. Creates a new branch
+2. Checks out the commit you were on when you stashed
+3. Applies the stash changes
+4. Drops the stash if successful
+
+## Stashing Untracked Files
+
+By default, `git stash` only stashes tracked files that have been modified. To include untracked files:
+
+```bash
+# Stash including untracked files
+git stash -u
+# or
+git stash --include-untracked
+
+# Stash including both untracked and ignored files
+git stash -a
+# or
+git stash --all
+```
+
+## Practical Examples
+
+### Example 1: Switching branches with uncommitted work
+
+```bash
+# You're working on feature-branch but need to fix something on main
+# Stash your current changes
+git stash save "WIP: Feature branch implementation"
+
+# Switch to main
+git checkout main
+
+# Make your fix
+git add fixed-file.js
+git commit -m "Fix critical bug"
+
+# Return to your feature branch
+git checkout feature-branch
+
+# Apply your stashed changes
+git stash pop
+```
+
+### Example 2: Pulling updates without committing current work
+
+```bash
+# You have local changes but need to pull latest updates
+git stash
+git pull
+git stash pop
+```
+
+### Example 3: Selectively stashing and applying changes
+
+```bash
+# Interactively choose which changes to stash
+git stash -p
+
+# Later, apply the stash and see what's in it
+git stash show -p
+git stash pop
+```
+
+### Example 4: Managing multiple stashes for different features
+
+```bash
+# Working on feature A
+git stash save "Feature A: Implemented user authentication"
+
+# Working on feature B
+git stash save "Feature B: Added payment processing"
+
+# List stashes
+git stash list
+# stash@{0}: On feature-b: Feature B: Added payment processing
+# stash@{1}: On feature-a: Feature A: Implemented user authentication
+
+# Apply feature A stash to continue working on it
+git checkout feature-a
+git stash apply stash@{1}
+```
+
+### Example 5: Creating a branch for a complex stashed change
+
+```bash
+# You stashed some complex changes but now want to work on them in isolation
+git stash list
+# stash@{0}: WIP on main: Complex refactoring of auth system
+
+# Create a dedicated branch for this work
+git stash branch auth-refactoring stash@{0}
+```

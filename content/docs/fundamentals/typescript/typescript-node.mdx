@@ -1,0 +1,1056 @@
+---
+title: 'TypeScript with Node.js'
+description: 'Learn how to build type-safe Node.js applications with TypeScript'
+---
+
+# TypeScript with Node.js
+
+TypeScript brings static typing to Node.js development, helping you catch errors earlier, improve code quality, and enhance developer productivity. This guide covers how to set up and use TypeScript in Node.js applications.
+
+## Setting Up a TypeScript Node.js Project
+
+### Basic Setup
+
+```bash
+# Create a new directory for your project
+mkdir my-ts-node-app
+cd my-ts-node-app
+
+# Initialize a new npm project
+npm init -y
+
+# Install TypeScript and Node.js type definitions
+npm install --save-dev typescript @types/node
+
+# Initialize TypeScript configuration
+npx tsc --init
+```
+
+### Configure TypeScript for Node.js
+
+Edit your `tsconfig.json` file:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "**/*.test.ts"]
+}
+```
+
+### Project Structure
+
+A typical TypeScript Node.js project structure:
+
+```
+my-ts-node-app/
+├── src/
+│   ├── index.ts
+│   ├── controllers/
+│   ├── models/
+│   ├── routes/
+│   └── utils/
+├── dist/
+├── node_modules/
+├── package.json
+├── package-lock.json
+└── tsconfig.json
+```
+
+### Add Scripts to package.json
+
+```json
+{
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "watch": "tsc -w"
+  }
+}
+```
+
+### Install Development Tools
+
+```bash
+# Install ts-node for development
+npm install --save-dev ts-node
+
+# Install nodemon for auto-restarting
+npm install --save-dev nodemon
+
+# Add nodemon configuration to package.json
+```
+
+```json
+{
+  "nodemonConfig": {
+    "watch": ["src"],
+    "ext": "ts",
+    "exec": "ts-node src/index.ts"
+  },
+  "scripts": {
+    "dev:watch": "nodemon"
+  }
+}
+```
+
+## Creating a Basic TypeScript Node.js Application
+
+### Hello World Example
+
+```typescript
+// src/index.ts
+import { createServer, IncomingMessage, ServerResponse } from 'http';
+
+const port = process.env.PORT || 3000;
+
+const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'text/plain');
+  res.end('Hello, TypeScript Node.js!');
+});
+
+server.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}/`);
+});
+```
+
+### Using Environment Variables
+
+```typescript
+// src/config.ts
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load environment variables from .env file
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+interface Config {
+  port: number;
+  databaseUrl: string;
+  jwtSecret: string;
+  environment: 'development' | 'production' | 'test';
+}
+
+export const config: Config = {
+  port: parseInt(process.env.PORT || '3000', 10),
+  databaseUrl: process.env.DATABASE_URL || 'mongodb://localhost:27017/myapp',
+  jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
+  environment: (process.env.NODE_ENV as Config['environment']) || 'development',
+};
+```
+
+## Express with TypeScript
+
+### Setting Up Express
+
+```bash
+# Install Express and its type definitions
+npm install express
+npm install --save-dev @types/express
+```
+
+### Basic Express Application
+
+```typescript
+// src/index.ts
+import express, { Request, Response, NextFunction } from 'express';
+import { config } from './config';
+
+const app = express();
+
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Routes
+app.get('/', (req: Request, res: Response) => {
+  res.send('Hello, TypeScript Express!');
+});
+
+// Error handling middleware
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error(err.stack);
+  res.status(500).send('Something broke!');
+});
+
+// Start server
+app.listen(config.port, () => {
+  console.log(`Server running at http://localhost:${config.port}/`);
+});
+```
+
+### Type-Safe Request and Response
+
+```typescript
+// src/types/express.d.ts
+import { Express } from 'express-serve-static-core';
+
+// Extend Express Request interface
+declare module 'express-serve-static-core' {
+  interface Request {
+    user?: {
+      id: string;
+      email: string;
+      roles: string[];
+    };
+  }
+}
+```
+
+### Route Controllers
+
+```typescript
+// src/controllers/userController.ts
+import { Request, Response } from 'express';
+import { User, UserInput } from '../models/User';
+
+export const getUsers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const users = await User.find();
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching users', error });
+  }
+};
+
+export const createUser = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
+  try {
+    const userData: UserInput = req.body;
+    const newUser = await User.create(userData);
+    res.status(201).json(newUser);
+  } catch (error) {
+    res.status(400).json({ message: 'Error creating user', error });
+  }
+};
+```
+
+### Typed Middleware
+
+```typescript
+// src/middleware/auth.ts
+import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
+import { config } from '../config';
+
+interface TokenPayload {
+  userId: string;
+  email: string;
+  roles: string[];
+}
+
+export const authenticate = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+
+    if (!token) {
+      res.status(401).json({ message: 'Authentication required' });
+      return;
+    }
+
+    const decoded = jwt.verify(token, config.jwtSecret) as TokenPayload;
+
+    req.user = {
+      id: decoded.userId,
+      email: decoded.email,
+      roles: decoded.roles,
+    };
+
+    next();
+  } catch (error) {
+    res.status(401).json({ message: 'Invalid or expired token' });
+  }
+};
+
+export const authorize = (roles: string[]) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ message: 'Authentication required' });
+      return;
+    }
+
+    const hasRole = req.user.roles.some((role) => roles.includes(role));
+
+    if (!hasRole) {
+      res.status(403).json({ message: 'Insufficient permissions' });
+      return;
+    }
+
+    next();
+  };
+};
+```
+
+### Typed Routes
+
+```typescript
+// src/routes/userRoutes.ts
+import { Router } from 'express';
+import * as userController from '../controllers/userController';
+import { authenticate, authorize } from '../middleware/auth';
+
+const router = Router();
+
+router.get('/', authenticate, authorize(['admin']), userController.getUsers);
+router.post('/', authenticate, userController.createUser);
+router.get('/:id', authenticate, userController.getUserById);
+router.put('/:id', authenticate, userController.updateUser);
+router.delete(
+  '/:id',
+  authenticate,
+  authorize(['admin']),
+  userController.deleteUser
+);
+
+export default router;
+```
+
+## Database Integration
+
+### MongoDB with Mongoose
+
+```bash
+# Install Mongoose
+npm install mongoose
+```
+
+```typescript
+// src/models/User.ts
+import mongoose, { Document, Schema } from 'mongoose';
+
+export interface UserInput {
+  name: string;
+  email: string;
+  password: string;
+  age?: number;
+  roles: string[];
+}
+
+export interface UserDocument extends UserInput, Document {
+  createdAt: Date;
+  updatedAt: Date;
+  comparePassword(candidatePassword: string): Promise<boolean>;
+}
+
+const userSchema = new Schema<UserDocument>(
+  {
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    age: { type: Number },
+    roles: { type: [String], default: ['user'] },
+  },
+  { timestamps: true }
+);
+
+userSchema.methods.comparePassword = async function (
+  candidatePassword: string
+): Promise<boolean> {
+  // Implementation of password comparison logic
+  return candidatePassword === this.password; // This is just a placeholder
+};
+
+export const User = mongoose.model<UserDocument>('User', userSchema);
+```
+
+### Database Connection
+
+```typescript
+// src/db.ts
+import mongoose from 'mongoose';
+import { config } from './config';
+
+export const connectDB = async (): Promise<void> => {
+  try {
+    await mongoose.connect(config.databaseUrl);
+    console.log('MongoDB connected');
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
+    process.exit(1);
+  }
+};
+```
+
+### PostgreSQL with TypeORM
+
+```bash
+# Install TypeORM and PostgreSQL driver
+npm install typeorm pg
+```
+
+```typescript
+// src/entity/User.ts
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+
+@Entity()
+export class User {
+  @PrimaryGeneratedColumn('uuid')
+  id: string;
+
+  @Column()
+  name: string;
+
+  @Column({ unique: true })
+  email: string;
+
+  @Column()
+  password: string;
+
+  @Column({ nullable: true })
+  age: number;
+
+  @Column('simple-array')
+  roles: string[];
+
+  @CreateDateColumn()
+  createdAt: Date;
+
+  @UpdateDateColumn()
+  updatedAt: Date;
+}
+```
+
+```typescript
+// src/db.ts
+import { DataSource } from 'typeorm';
+import { config } from './config';
+import { User } from './entity/User';
+
+export const AppDataSource = new DataSource({
+  type: 'postgres',
+  url: config.databaseUrl,
+  synchronize: config.environment === 'development',
+  logging: config.environment === 'development',
+  entities: [User],
+  migrations: ['src/migration/**/*.ts'],
+  subscribers: ['src/subscriber/**/*.ts'],
+});
+
+export const connectDB = async (): Promise<void> => {
+  try {
+    await AppDataSource.initialize();
+    console.log('Database connected');
+  } catch (error) {
+    console.error('Database connection error:', error);
+    process.exit(1);
+  }
+};
+```
+
+## Error Handling
+
+### Custom Error Classes
+
+```typescript
+// src/utils/errors.ts
+export class AppError extends Error {
+  statusCode: number;
+  isOperational: boolean;
+
+  constructor(message: string, statusCode: number) {
+    super(message);
+    this.statusCode = statusCode;
+    this.isOperational = true;
+
+    Error.captureStackTrace(this, this.constructor);
+  }
+}
+
+export class NotFoundError extends AppError {
+  constructor(message = 'Resource not found') {
+    super(message, 404);
+  }
+}
+
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Unauthorized') {
+    super(message, 401);
+  }
+}
+
+export class ForbiddenError extends AppError {
+  constructor(message = 'Forbidden') {
+    super(message, 403);
+  }
+}
+
+export class ValidationError extends AppError {
+  errors: Record<string, string>;
+
+  constructor(
+    message = 'Validation error',
+    errors: Record<string, string> = {}
+  ) {
+    super(message, 400);
+    this.errors = errors;
+  }
+}
+```
+
+### Global Error Handler
+
+```typescript
+// src/middleware/errorHandler.ts
+import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../utils/errors';
+import { config } from '../config';
+
+export const errorHandler = (
+  err: Error,
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  console.error(err);
+
+  if (err instanceof AppError) {
+    res.status(err.statusCode).json({
+      status: 'error',
+      message: err.message,
+      ...(err.errors && { errors: err.errors }),
+      ...(config.environment === 'development' && { stack: err.stack }),
+    });
+    return;
+  }
+
+  // Handle unexpected errors
+  res.status(500).json({
+    status: 'error',
+    message: 'Something went wrong',
+    ...(config.environment === 'development' && {
+      actualError: err.message,
+      stack: err.stack,
+    }),
+  });
+};
+
+// Catch unhandled promise rejections
+export const setupUnhandledRejection = (): void => {
+  process.on('unhandledRejection', (reason: Error) => {
+    console.error('Unhandled Rejection:', reason);
+    // In production, you might want to exit and let your process manager restart the app
+    // process.exit(1);
+  });
+};
+```
+
+## Testing with TypeScript
+
+### Setting Up Jest
+
+```bash
+# Install Jest and related packages
+npm install --save-dev jest ts-jest @types/jest
+```
+
+Create a `jest.config.js` file:
+
+```javascript
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  roots: ['<rootDir>/src'],
+  testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
+  transform: {
+    '^.+\\.ts$': 'ts-jest',
+  },
+  collectCoverageFrom: [
+    'src/**/*.ts',
+    '!src/**/*.d.ts',
+    '!src/**/__tests__/**',
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov'],
+};
+```
+
+Add test scripts to `package.json`:
+
+```json
+{
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  }
+}
+```
+
+### Writing Tests
+
+```typescript
+// src/utils/__tests__/math.test.ts
+import { add, subtract, multiply } from '../math';
+
+describe('Math utilities', () => {
+  describe('add function', () => {
+    it('should add two numbers correctly', () => {
+      expect(add(1, 2)).toBe(3);
+      expect(add(-1, 1)).toBe(0);
+      expect(add(0, 0)).toBe(0);
+    });
+  });
+
+  describe('subtract function', () => {
+    it('should subtract two numbers correctly', () => {
+      expect(subtract(3, 2)).toBe(1);
+      expect(subtract(1, 1)).toBe(0);
+      expect(subtract(0, 5)).toBe(-5);
+    });
+  });
+
+  describe('multiply function', () => {
+    it('should multiply two numbers correctly', () => {
+      expect(multiply(2, 3)).toBe(6);
+      expect(multiply(-2, 3)).toBe(-6);
+      expect(multiply(0, 5)).toBe(0);
+    });
+  });
+});
+```
+
+### Testing Express Routes
+
+```typescript
+// src/routes/__tests__/userRoutes.test.ts
+import request from 'supertest';
+import express from 'express';
+import userRoutes from '../userRoutes';
+import { connectDB, disconnectDB } from '../../db';
+import { User } from '../../models/User';
+
+const app = express();
+app.use(express.json());
+app.use('/api/users', userRoutes);
+
+beforeAll(async () => {
+  await connectDB();
+});
+
+afterAll(async () => {
+  await disconnectDB();
+});
+
+beforeEach(async () => {
+  await User.deleteMany({});
+});
+
+describe('User Routes', () => {
+  describe('GET /api/users', () => {
+    it('should return all users', async () => {
+      // Create test users
+      await User.create([
+        {
+          name: 'User 1',
+          email: 'user1@example.com',
+          password: 'password1',
+          roles: ['user'],
+        },
+        {
+          name: 'User 2',
+          email: 'user2@example.com',
+          password: 'password2',
+          roles: ['admin'],
+        },
+      ]);
+
+      const response = await request(app).get('/api/users');
+
+      expect(response.status).toBe(200);
+      expect(response.body.length).toBe(2);
+      expect(response.body[0]).toHaveProperty('name', 'User 1');
+      expect(response.body[1]).toHaveProperty('name', 'User 2');
+    });
+  });
+
+  describe('POST /api/users', () => {
+    it('should create a new user', async () => {
+      const userData = {
+        name: 'New User',
+        email: 'newuser@example.com',
+        password: 'password',
+        roles: ['user'],
+      };
+
+      const response = await request(app).post('/api/users').send(userData);
+
+      expect(response.status).toBe(201);
+      expect(response.body).toHaveProperty('name', userData.name);
+      expect(response.body).toHaveProperty('email', userData.email);
+
+      // Check if user was actually saved to the database
+      const savedUser = await User.findOne({ email: userData.email });
+      expect(savedUser).not.toBeNull();
+      expect(savedUser?.name).toBe(userData.name);
+    });
+
+    it('should return 400 for invalid data', async () => {
+      const invalidData = {
+        name: 'New User',
+        // Missing required email
+        password: 'password',
+        roles: ['user'],
+      };
+
+      const response = await request(app).post('/api/users').send(invalidData);
+
+      expect(response.status).toBe(400);
+    });
+  });
+});
+```
+
+## Logging
+
+### Setting Up a Logger
+
+```bash
+# Install Winston
+npm install winston
+```
+
+```typescript
+// src/utils/logger.ts
+import winston from 'winston';
+import { config } from '../config';
+
+const levels = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  http: 3,
+  debug: 4,
+};
+
+const level = () => {
+  return config.environment === 'development' ? 'debug' : 'warn';
+};
+
+const colors = {
+  error: 'red',
+  warn: 'yellow',
+  info: 'green',
+  http: 'magenta',
+  debug: 'white',
+};
+
+winston.addColors(colors);
+
+const format = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss:ms' }),
+  winston.format.colorize({ all: true }),
+  winston.format.printf(
+    (info) => `${info.timestamp} ${info.level}: ${info.message}`
+  )
+);
+
+const transports = [
+  new winston.transports.Console(),
+  new winston.transports.File({
+    filename: 'logs/error.log',
+    level: 'error',
+  }),
+  new winston.transports.File({ filename: 'logs/all.log' }),
+];
+
+export const logger = winston.createLogger({
+  level: level(),
+  levels,
+  format,
+  transports,
+});
+```
+
+### HTTP Request Logging Middleware
+
+```typescript
+// src/middleware/requestLogger.ts
+import { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger';
+
+export const requestLogger = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
+  const start = Date.now();
+
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const message = `${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`;
+
+    if (res.statusCode >= 500) {
+      logger.error(message);
+    } else if (res.statusCode >= 400) {
+      logger.warn(message);
+    } else {
+      logger.info(message);
+    }
+  });
+
+  next();
+};
+```
+
+## API Documentation
+
+### Using Swagger with TypeScript
+
+```bash
+# Install Swagger UI Express and JSDoc
+npm install swagger-ui-express
+npm install --save-dev @types/swagger-ui-express
+```
+
+```typescript
+// src/utils/swagger.ts
+import swaggerUi from 'swagger-ui-express';
+import { Express } from 'express';
+
+const swaggerDocument = {
+  openapi: '3.0.0',
+  info: {
+    title: 'Node.js TypeScript API',
+    version: '1.0.0',
+    description: 'API documentation for Node.js TypeScript application',
+  },
+  servers: [
+    {
+      url: 'http://localhost:3000',
+      description: 'Development server',
+    },
+  ],
+  paths: {
+    '/api/users': {
+      get: {
+        summary: 'Get all users',
+        responses: {
+          '200': {
+            description: 'A list of users',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: {
+                    $ref: '#/components/schemas/User',
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      post: {
+        summary: 'Create a new user',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                $ref: '#/components/schemas/UserInput',
+              },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description: 'User created successfully',
+            content: {
+              'application/json': {
+                schema: {
+                  $ref: '#/components/schemas/User',
+                },
+              },
+            },
+          },
+          '400': {
+            description: 'Invalid input',
+          },
+        },
+      },
+    },
+  },
+  components: {
+    schemas: {
+      User: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            format: 'uuid',
+          },
+          name: {
+            type: 'string',
+          },
+          email: {
+            type: 'string',
+            format: 'email',
+          },
+          age: {
+            type: 'integer',
+            nullable: true,
+          },
+          roles: {
+            type: 'array',
+            items: {
+              type: 'string',
+            },
+          },
+          createdAt: {
+            type: 'string',
+            format: 'date-time',
+          },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+          },
+        },
+      },
+      UserInput: {
+        type: 'object',
+        required: ['name', 'email', 'password'],
+        properties: {
+          name: {
+            type: 'string',
+          },
+          email: {
+            type: 'string',
+            format: 'email',
+          },
+          password: {
+            type: 'string',
+            minLength: 6,
+          },
+          age: {
+            type: 'integer',
+            nullable: true,
+          },
+          roles: {
+            type: 'array',
+            items: {
+              type: 'string',
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+export const setupSwagger = (app: Express): void => {
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+};
+```
+
+## Deployment
+
+### Building for Production
+
+```bash
+# Build TypeScript to JavaScript
+npm run build
+
+# Start production server
+npm start
+```
+
+### Docker Setup
+
+Create a `Dockerfile`:
+
+```dockerfile
+FROM node:16-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+
+RUN npm ci --only=production
+
+COPY dist/ ./dist/
+
+EXPOSE 3000
+
+CMD ["node", "dist/index.js"]
+```
+
+Create a `.dockerignore` file:
+
+```
+node_modules
+npm-debug.log
+src
+.git
+.gitignore
+.env
+```
+
+Create a `docker-compose.yml` file:
+
+```yaml
+version: '3'
+
+services:
+  app:
+    build: .
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=mongodb://mongo:27017/myapp
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  mongo:
+    image: mongo:4.4
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - '27017:27017'
+
+volumes:
+  mongo-data:
+```
+
+## Best Practices
+
+1. **Use strict TypeScript configuration** to catch more errors
+2. **Create interfaces for all data structures** including API requests/responses
+3. **Leverage TypeScript's type inference** where appropriate
+4. **Use enums for constants** instead of string literals
+5. **Create utility types** for common patterns
+6. **Document your code** with JSDoc comments
+7. **Use async/await** instead of callbacks or raw promises
+8. **Implement proper error handling** with custom error classes
+9. **Write unit and integration tests** for your code
+10. **Use dependency injection** for better testability
+11. **Keep controllers thin** and move business logic to services
+12. **Use environment variables** for configuration
+13. **Implement proper logging** for debugging and monitoring
+14. **Use TypeScript path aliases** for cleaner imports

@@ -1,0 +1,376 @@
+---
+title: Neri Headless E-commerce Project Documentation
+description: This is a headless e-commerce project built with GraphCommerce, Next.js, and Magento. The project uses a modern tech stack with TypeScript and follows a component-based architecture.
+---
+
+# Neri Headless E-commerce Project Documentation
+
+## Project Overview
+
+This is a headless e-commerce project built with GraphCommerce, Next.js, and
+Magento. The project uses a modern tech stack with TypeScript and follows a
+component-based architecture.
+
+## Tech Stack
+
+- **Framework**: Next.js 15.1.0
+- **E-commerce Platform**: GraphCommerce 9.0.3
+- **Backend**: Magento (API Endpoint: neri-be-uat.spotview.dev)
+- **Language**: TypeScript
+- **State Management**: Apollo Client
+- **UI Framework**: Material-UI (MUI) v5
+- **Styling**: Emotion (CSS-in-JS)
+- **Internationalization**: Lingui
+- **Package Manager**: Yarn 1.22.22
+
+## Project Structure
+
+### Core Directories
+
+- `/components`: UI components organized by functionality
+- `/pages`: Next.js pages and routing
+- `/public`: Static assets
+- `/graphql`: GraphQL queries and mutations
+- `/types`: TypeScript type definitions
+- `/utils`: Utility functions
+- `/lib`: Core library code
+- `/plugins`: Custom plugins
+- `/locales`: Internationalization files
+
+### Key Components
+
+The project includes several key component categories:
+
+#### Layout Components
+
+- `Layout/`: Main layout components
+- `Footer/`: Footer components
+- `Preheader/`: Pre-header components
+- `Container/`: Container wrapper components
+
+#### Product Related
+
+- `ProductCard/`: Individual product display
+- `ProductCarousel/`: Product slider/carousel
+- `ProductView/`: Detailed product view
+- `ProductListLayout/`: Product listing pages
+- `ProductListItems/`: Product list components
+
+#### User Interface
+
+- `Hero/`: Hero section components
+- `HeroHomepage/`: Homepage-specific hero components
+- `Typography/`: Text styling components
+- `FormFields/`: Form input components
+- `Accordion/`: Expandable sections
+- `SearchField/`: Search functionality
+- `Pagination/`: Page navigation
+- `Breadcrumbs/`: Navigation breadcrumbs
+
+#### E-commerce Features
+
+- `AccountMenuHeaderItem/`: Account menu in header
+- `AccountMenuItem/`: Account navigation items
+- `AccountSignInUpForm/`: Authentication forms
+- `Filter/`: Product filtering system
+- `Cart/`: Shopping cart functionality
+- `Wishlist/`: Wishlist features
+
+### Pages Structure
+
+The application includes several key page types:
+
+- `/`: Homepage
+- `/cart`: Shopping cart
+- `/account/*`: User account pages
+- `/p/*`: Product pages
+- `/c/*`: Category pages
+- `/checkout/*`: Checkout process
+- `/search`: Search results
+- `/wishlist`: Wishlist page
+- `/customer/*`: Customer-specific pages
+- `/service/*`: Service pages
+- `/about-us/*`: Company information
+
+### Configuration
+
+#### GraphCommerce Configuration
+
+The project uses GraphCommerce with the following key configurations:
+
+- Magento endpoint: https://neri-be-uat.spotview.dev/graphql
+- Magento version: 2.4.7
+- Default locale: Italian (it)
+- Features enabled:
+  - Recently viewed products
+  - Product filters pro
+  - Product filters layout: DEFAULT
+
+#### Build and Development
+
+The project includes several key scripts:
+
+- `yarn dev`: Development server with concurrent codegen
+- `yarn build`: Production build
+- `yarn start`: Start production server
+- `yarn codegen`: Generate GraphQL code
+- `yarn lingui`: Extract internationalization strings
+
+## Dependencies
+
+### Core Dependencies
+
+- GraphCommerce ecosystem packages (v9.0.3)
+- Apollo Client for GraphQL
+- Material-UI components
+- Framer Motion for animations
+- React Hook Form for form handling
+- Sharp for image optimization
+
+### Development Dependencies
+
+- ESLint for code linting
+- Prettier for code formatting
+- TypeScript for type checking
+- Playwright for testing
+- Lingui for internationalization
+
+## Browser Support
+
+The project targets modern browsers with the following criteria:
+
+- \> 1% market share in EU
+- No IE11 support
+
+## Development Guidelines
+
+1. The project uses TypeScript for type safety
+2. ESLint and Prettier are configured for code quality
+3. Components follow Material-UI design system
+4. GraphQL operations are generated using codegen
+5. Internationalization is handled through Lingui
+6. The project follows Next.js best practices for routing and SSR/SSG
+
+## Performance Considerations
+
+- Uses Next.js for optimal performance
+- Implements image optimization with Sharp
+- Includes service worker support
+- Implements proper code splitting
+- Uses GraphQL for efficient data fetching
+
+## Security
+
+- Implements reCAPTCHA (when configured)
+- Supports secure checkout process
+- Includes proper authentication flows
+- Uses environment variables for sensitive data
+
+## GraphCommerce Implementation
+
+### Data Fetching Architecture
+
+#### GraphQL Client Setup
+
+The project implements two main GraphQL clients in
+`lib/graphql/graphqlSsrClient.ts`:
+
+1. `graphqlSharedClient`:
+
+   - Used for queries that should be shared with the browser
+   - Results are cached and injected into the browser's cache
+   - Implements locale-based caching strategy
+
+2. `graphqlSsrClient`:
+   - Used for server-side only queries
+   - Implements no-cache policy by default
+   - Handles internationalization loading
+
+Both clients are configured with:
+
+- Apollo Client as the GraphQL client
+- GraphQL Mesh for schema stitching
+- InMemoryCache for caching
+- Error handling and performance measurement links
+
+### Page Implementation Pattern
+
+Pages in the application follow a consistent pattern for data fetching and
+rendering:
+
+1. **Static Props Generation**:
+
+```typescript
+export const getStaticProps: GetPageStaticProps = async (context) => {
+  const client = graphqlSharedClient(context);
+  const staticClient = graphqlSsrClient(context);
+
+  // Fetch data using both clients
+  const conf = client.query({ query: StoreConfigDocument });
+  const page = staticClient.query({ query: PageSpecificDocument });
+  const layout = staticClient.query({ query: LayoutDocument });
+
+  return {
+    props: {
+      page: (await page).data,
+      ...(await layout).data,
+      apolloState: await conf.then(() => client.cache.extract()),
+    },
+    revalidate: 60 * 20, // ISR revalidation period
+  };
+};
+```
+
+2. **Component Structure**:
+
+```typescript
+type Props = {
+  page: SpecificPageQuery;
+};
+
+function Page(props: Props) {
+  // Extract data from props
+  const { page } = props;
+
+  // Transform data if needed
+  const transformedData = transformPageData(page);
+
+  // Render components
+  return <Components data={transformedData} />;
+}
+
+Page.pageOptions = {
+  Layout: LayoutNavigation,
+} as PageOptions;
+```
+
+### GraphQL Query Structure
+
+The project uses a well-organized GraphQL query structure:
+
+1. **Query Files Location**: `/graphql/*.graphql`
+2. **Generated Types**: `/graphql/*.gql.ts`
+
+Example query structure (Homepage):
+
+```graphql
+query Homepage($filterPage: String = "homepage") {
+  hero: contents(
+    filters: {
+      url_key: { eq: "slider-hp" }
+      custom_attributes: [{ identifier: "slider_hp_id_page", filter: { eq: "homepage" } }]
+    }
+  ) {
+    custom_attributes {
+      identifier
+      value
+      repeater_field_contents {
+        custom_attributes {
+          custom_field_type
+          identifier
+          value
+        }
+      }
+    }
+  }
+  // Additional content sections...
+}
+```
+
+### Library Structure
+
+#### Core Libraries (`/lib`)
+
+1. **GraphQL Library** (`/lib/graphql/`):
+
+   - `graphqlSsrClient.ts`: GraphQL client configuration and setup
+   - Handles SSR and client-side data fetching
+   - Implements caching strategies
+
+2. **i18n Library** (`/lib/i18n/`):
+
+   - Internationalization setup
+   - Language loading and switching
+
+3. **Service Worker** (`/lib/sw.ts`):
+   - Progressive Web App configuration
+   - Offline functionality
+   - Cache management
+
+#### Utility Functions (`/utils`)
+
+1. **ACM2 Utilities**:
+   - Data transformation functions
+   - Component-specific data formatting
+   - Examples:
+     - `getHeroSliderData`
+     - `getHomeCategoryData`
+     - `getImageTextCtaData`
+     - `getProductsCarouselData`
+
+### Data Flow
+
+1. **Server-Side**:
+
+   - Pages fetch initial data using `getStaticProps`
+   - Data is fetched using both shared and SSR clients
+   - Layout data is fetched for consistent UI structure
+
+2. **Client-Side**:
+
+   - Shared data is hydrated from server state
+   - Additional data fetching uses Apollo Client
+   - Components can fetch data using hooks
+
+3. **Caching Strategy**:
+   - Server-side: Mix of no-cache and cache-first policies
+   - Client-side: Cache-first with selective invalidation
+   - Incremental Static Regeneration (ISR) for pages
+
+### Component Integration
+
+Components are designed to work seamlessly with GraphCommerce:
+
+1. **Data Props**:
+
+   - Components receive typed props from GraphQL queries
+   - Data transformation happens before component rendering
+
+2. **Layout System**:
+
+   - Uses GraphCommerce's layout system
+   - Consistent header, footer, and navigation
+
+3. **E-commerce Features**:
+   - Product display components
+   - Cart and checkout integration
+   - User account management
+   - Wishlist functionality
+
+### Development Workflow
+
+When working with GraphCommerce in this project:
+
+1. **Creating New Pages**:
+
+   - Create GraphQL query in `/graphql/*.graphql`
+   - Generate types using `yarn codegen`
+   - Implement page component with proper data fetching
+   - Add routing and navigation
+
+2. **Adding Features**:
+
+   - Utilize GraphCommerce hooks and components
+   - Implement proper data fetching patterns
+   - Follow established component structure
+   - Maintain type safety
+
+3. **Data Management**:
+   - Use appropriate GraphQL client based on needs
+   - Implement proper caching strategies
+   - Handle loading and error states
+   - Transform data at the page level
+
+This documentation provides an overview of the project structure and
+architecture. For detailed implementation details, please refer to the specific
+component and page files.

@@ -1,0 +1,185 @@
+---
+title: 'Git Commit'
+description: 'Learn how to create, modify, and manage commits in Git'
+---
+
+# Git Commit
+
+Commits are the fundamental building blocks in Git. A commit represents a snapshot of your repository at a specific point in time, including all tracked files and their contents.
+
+## Basic Commit
+
+The most basic way to create a commit is:
+
+```bash
+git commit -m "Your commit message"
+```
+
+This will commit all changes that have been staged using `git add`.
+
+## Staging and Committing
+
+Before you can commit, you need to stage your changes:
+
+```bash
+# Stage specific files
+git add file1.js file2.js
+
+# Stage all changes
+git add .
+
+# Stage changes to tracked files only (ignores new files)
+git add -u
+
+# Stage portions of files interactively
+git add -p
+```
+
+Then commit the staged changes:
+
+```bash
+git commit -m "Add new features to the login system"
+```
+
+## Writing Good Commit Messages
+
+A good commit message should:
+
+1. Start with a concise summary (50 characters or less)
+2. Use the imperative mood ("Add feature" not "Added feature")
+3. Explain what and why, not how
+
+For more detailed messages, use the extended description:
+
+```bash
+git commit -m "Add user authentication feature" -m "This implements JWT-based authentication with password hashing and session management to improve security."
+```
+
+Or omit the `-m` flag to open your default editor for a multi-line message:
+
+```bash
+git commit
+```
+
+```
+# Example of a good commit message format:
+Add user authentication feature
+
+- Implement JWT-based authentication
+- Add password hashing with bcrypt
+- Create session management system
+
+This improves security by replacing the old cookie-based auth.
+```
+
+## Committing All Changes
+
+To stage and commit all changes in one command:
+
+```bash
+git commit -a -m "Fix all linting errors"
+```
+
+Note: This only works for modified files that are already tracked. New files still need to be added with `git add`.
+
+## Amending Commits
+
+If you need to modify your most recent commit:
+
+```bash
+# Make your changes, then stage them
+git add .
+
+# Amend the previous commit
+git commit --amend -m "New commit message"
+
+# Keep the previous commit message
+git commit --amend --no-edit
+```
+
+Warning: Don't amend commits that have been pushed to a shared repository unless you're absolutely sure no one has based work on them.
+
+## Viewing Commit History
+
+```bash
+# View commit history
+git log
+
+# View compact history
+git log --oneline
+
+# View history with changes
+git log -p
+
+# View history with stats
+git log --stat
+
+# View graphical representation
+git log --graph --oneline --all
+```
+
+## Referencing Commits
+
+You can reference commits in various ways:
+
+```bash
+# By full SHA-1 hash
+git show 1a2b3c4d5e6f7g8h9i0j
+
+# By abbreviated hash (at least 7 characters)
+git show 1a2b3c4
+
+# By relative references
+git show HEAD        # Latest commit
+git show HEAD~1      # Second latest commit
+git show HEAD~2      # Third latest commit
+git show master~3    # Third commit before master
+```
+
+## Practical Examples
+
+### Example 1: Fixing a typo in your code
+
+```bash
+# Edit the file to fix the typo
+git add file-with-typo.js
+git commit -m "Fix typo in login error message"
+```
+
+### Example 2: Adding a new feature with multiple files
+
+```bash
+git add src/components/Button.js
+git add src/styles/button.css
+git add src/utils/buttonHelpers.js
+git commit -m "Add new Button component with animations"
+```
+
+### Example 3: Amending a commit that's missing a file
+
+```bash
+# Oops, forgot to include a file in the last commit
+git add forgotten-file.js
+git commit --amend --no-edit
+```
+
+### Example 4: Creating a detailed commit for a significant change
+
+```bash
+git add .
+git commit
+```
+
+Then in the editor:
+
+```
+Implement user authentication system
+
+- Add login/signup forms
+- Create JWT token generation
+- Add password hashing with bcrypt
+- Implement protected routes
+
+This change provides secure authentication for users
+and restricts access to protected content.
+```

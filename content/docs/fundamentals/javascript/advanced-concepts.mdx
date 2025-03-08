@@ -1,0 +1,1134 @@
+---
+title: 'Advanced JavaScript Concepts'
+description: 'Master advanced JavaScript concepts like closures, prototypes, and the event loop'
+---
+
+# Advanced JavaScript Concepts
+
+Understanding advanced JavaScript concepts is essential for writing efficient, maintainable code and debugging complex issues. This guide covers key advanced concepts that every JavaScript developer should know.
+
+## Execution Context and Call Stack
+
+JavaScript code runs within an execution context, which includes:
+
+- **Variable Environment**: Variables, functions, and arguments
+- **Scope Chain**: References to outer environments
+- **`this` Binding**: Value of the `this` keyword
+
+The call stack is a data structure that tracks the execution of functions:
+
+```javascript
+function first() {
+  console.log('Inside first function');
+  second();
+  console.log('Back to first');
+}
+
+function second() {
+  console.log('Inside second function');
+  third();
+  console.log('Back to second');
+}
+
+function third() {
+  console.log('Inside third function');
+}
+
+first();
+// Call stack progression:
+// 1. main() (global execution context)
+// 2. main() -> first()
+// 3. main() -> first() -> second()
+// 4. main() -> first() -> second() -> third()
+// 5. main() -> first() -> second() (after third() completes)
+// 6. main() -> first() (after second() completes)
+// 7. main() (after first() completes)
+```
+
+## Scope and Closures
+
+### Lexical Scope
+
+JavaScript uses lexical (static) scoping, meaning variable access is determined by the function's position in the code:
+
+```javascript
+const globalVar = 'I am global';
+
+function outer() {
+  const outerVar = 'I am outer';
+
+  function inner() {
+    const innerVar = 'I am inner';
+    console.log(innerVar); // Accessible
+    console.log(outerVar); // Accessible from parent scope
+    console.log(globalVar); // Accessible from global scope
+  }
+
+  inner();
+  console.log(innerVar); // Error: innerVar is not defined
+}
+```
+
+### Closures
+
+A closure is a function that retains access to its lexical scope even when executed outside that scope:
+
+```javascript
+function createCounter() {
+  let count = 0; // Private variable
+
+  return {
+    increment() {
+      count++;
+      return count;
+    },
+    decrement() {
+      count--;
+      return count;
+    },
+    getValue() {
+      return count;
+    },
+  };
+}
+
+const counter = createCounter();
+console.log(counter.increment()); // 1
+console.log(counter.increment()); // 2
+console.log(counter.getValue()); // 2
+console.log(counter.decrement()); // 1
+```
+
+Closures are commonly used for:
+
+1. **Data encapsulation**: Creating private variables
+2. **Factory functions**: Creating objects with shared behavior
+3. **Event handlers**: Maintaining state between events
+4. **Currying**: Creating specialized functions
+
+### Practical Closure Examples
+
+#### Module Pattern
+
+```javascript
+const calculator = (function () {
+  // Private variables and functions
+  let result = 0;
+
+  function validateNumber(num) {
+    return typeof num === 'number' && !isNaN(num);
+  }
+
+  // Public API
+  return {
+    add(num) {
+      if (validateNumber(num)) {
+        result += num;
+      }
+      return this;
+    },
+    subtract(num) {
+      if (validateNumber(num)) {
+        result -= num;
+      }
+      return this;
+    },
+    getResult() {
+      return result;
+    },
+    reset() {
+      result = 0;
+      return this;
+    },
+  };
+})();
+
+calculator.add(5).subtract(2).add(10);
+console.log(calculator.getResult()); // 13
+```
+
+#### Function Currying
+
+```javascript
+function curry(fn) {
+  return function curried(...args) {
+    if (args.length >= fn.length) {
+      return fn.apply(this, args);
+    } else {
+      return function (...moreArgs) {
+        return curried.apply(this, args.concat(moreArgs));
+      };
+    }
+  };
+}
+
+function add(a, b, c) {
+  return a + b + c;
+}
+
+const curriedAdd = curry(add);
+console.log(curriedAdd(1)(2)(3)); // 6
+console.log(curriedAdd(1, 2)(3)); // 6
+console.log(curriedAdd(1, 2, 3)); // 6
+```
+
+## The `this` Keyword
+
+The value of `this` depends on how a function is called:
+
+### Global Context
+
+In the global context, `this` refers to the global object:
+
+```javascript
+console.log(this); // Window (browser) or global (Node.js)
+```
+
+### Function Context
+
+In a regular function, `this` depends on how the function is called:
+
+```javascript
+function showThis() {
+  console.log(this);
+}
+
+showThis(); // Window or global (in non-strict mode)
+
+const obj = {
+  name: 'Object',
+  showThis: showThis,
+};
+
+obj.showThis(); // obj (method invocation)
+
+const boundFunction = showThis.bind({ name: 'Bound Object' });
+boundFunction(); // { name: 'Bound Object' }
+
+new showThis(); // {} (new instance)
+```
+
+### Arrow Functions
+
+Arrow functions don't have their own `this` binding; they inherit `this` from the surrounding code:
+
+```javascript
+const obj = {
+  name: 'Object',
+  regularFunction() {
+    console.log(this.name); // "Object"
+
+    setTimeout(function () {
+      console.log(this.name); // undefined (this is Window/global)
+    }, 100);
+
+    setTimeout(() => {
+      console.log(this.name); // "Object" (arrow function inherits this)
+    }, 100);
+  },
+};
+
+obj.regularFunction();
+```
+
+### Explicit Binding
+
+You can explicitly set `this` using:
+
+```javascript
+function greet(greeting) {
+  console.log(`${greeting}, ${this.name}!`);
+}
+
+const person = { name: 'John' };
+
+// call: immediately invokes the function with specified this and arguments
+greet.call(person, 'Hello'); // "Hello, John!"
+
+// apply: like call, but takes arguments as an array
+greet.apply(person, ['Hi']); // "Hi, John!"
+
+// bind: returns a new function with this bound
+const greetJohn = greet.bind(person);
+greetJohn('Hey'); // "Hey, John!"
+```
+
+## Prototypes and Inheritance
+
+### Prototype Chain
+
+Every JavaScript object has a prototype, which is another object it inherits properties from:
+
+```javascript
+const arr = [1, 2, 3];
+console.log(arr.__proto__ === Array.prototype); // true
+console.log(Array.prototype.__proto__ === Object.prototype); // true
+console.log(Object.prototype.__proto__); // null
+```
+
+### Prototypal Inheritance
+
+```javascript
+// Constructor function
+function Animal(name) {
+  this.name = name;
+}
+
+// Adding methods to prototype
+Animal.prototype.makeSound = function () {
+  return 'Some generic sound';
+};
+
+// Inheritance
+function Dog(name, breed) {
+  Animal.call(this, name); // Call parent constructor
+  this.breed = breed;
+}
+
+// Set up prototype chain
+Dog.prototype = Object.create(Animal.prototype);
+Dog.prototype.constructor = Dog; // Fix constructor reference
+
+// Override method
+Dog.prototype.makeSound = function () {
+  return 'Woof!';
+};
+
+// Add new method
+Dog.prototype.fetch = function () {
+  return `${this.name} is fetching!`;
+};
+
+const dog = new Dog('Rex', 'German Shepherd');
+console.log(dog.name); // "Rex"
+console.log(dog.makeSound()); // "Woof!"
+console.log(dog.fetch()); // "Rex is fetching!"
+console.log(dog instanceof Dog); // true
+console.log(dog instanceof Animal); // true
+```
+
+### Modern Inheritance with Classes
+
+ES6 classes provide a cleaner syntax for the same prototypal inheritance:
+
+```javascript
+class Animal {
+  constructor(name) {
+    this.name = name;
+  }
+
+  makeSound() {
+    return 'Some generic sound';
+  }
+}
+
+class Dog extends Animal {
+  constructor(name, breed) {
+    super(name);
+    this.breed = breed;
+  }
+
+  makeSound() {
+    return 'Woof!';
+  }
+
+  fetch() {
+    return `${this.name} is fetching!`;
+  }
+}
+```
+
+## Event Loop and Asynchronous JavaScript
+
+### The Event Loop
+
+JavaScript is single-threaded but can handle asynchronous operations through the event loop:
+
+1. **Call Stack**: Executes functions one at a time
+2. **Web APIs**: Handle asynchronous operations (setTimeout, fetch, etc.)
+3. **Callback Queue**: Holds callbacks from completed async operations
+4. **Microtask Queue**: Holds promises and other microtasks (higher priority)
+5. **Event Loop**: Moves callbacks to the call stack when it's empty
+
+```javascript
+console.log('Start'); // 1. Executes immediately
+
+setTimeout(() => {
+  console.log('Timeout'); // 4. Executes after the call stack is empty
+}, 0);
+
+Promise.resolve().then(() => {
+  console.log('Promise'); // 3. Executes after the current task, before the timeout
+});
+
+console.log('End'); // 2. Executes immediately
+
+// Output:
+// Start
+// End
+// Promise
+// Timeout
+```
+
+### Microtasks vs. Macrotasks
+
+- **Microtasks**: Promise callbacks, queueMicrotask, MutationObserver
+- **Macrotasks**: setTimeout, setInterval, I/O, UI rendering, event listeners
+
+Microtasks execute before the next macrotask:
+
+```javascript
+setTimeout(() => console.log('Timeout 1'), 0);
+setTimeout(() => {
+  console.log('Timeout 2');
+  Promise.resolve().then(() => console.log('Promise inside timeout'));
+}, 0);
+Promise.resolve().then(() => console.log('Promise 1'));
+Promise.resolve().then(() => {
+  console.log('Promise 2');
+  setTimeout(() => console.log('Timeout inside promise'), 0);
+});
+
+// Output:
+// Promise 1
+// Promise 2
+// Timeout 1
+// Timeout 2
+// Promise inside timeout
+// Timeout inside promise
+```
+
+## Memory Management and Garbage Collection
+
+JavaScript automatically manages memory through garbage collection:
+
+### Memory Lifecycle
+
+1. **Allocation**: Memory is allocated when values are declared
+2. **Usage**: Memory is read or written to
+3. **Release**: Memory is freed when no longer needed
+
+### Garbage Collection Algorithms
+
+JavaScript engines use algorithms like:
+
+- **Mark and Sweep**: Marks reachable objects and sweeps unreachable ones
+- **Reference Counting**: Counts references to objects (has issues with circular references)
+
+### Memory Leaks
+
+Common causes of memory leaks:
+
+1. **Global variables**: Unintentionally creating global variables
+2. **Forgotten timers and callbacks**: Not clearing timers or removing event listeners
+3. **Closures**: Capturing large objects in closures
+4. **DOM references**: Keeping references to removed DOM elements
+
+```javascript
+// Memory leak example
+function createLeak() {
+  const largeData = new Array(1000000).fill('x');
+
+  // This timer keeps largeData in memory
+  setInterval(() => {
+    console.log(largeData[0]);
+  }, 1000);
+}
+
+createLeak(); // largeData will never be garbage collected
+```
+
+### Preventing Memory Leaks
+
+```javascript
+// Proper cleanup
+function setupWithCleanup() {
+  const largeData = new Array(1000000).fill('x');
+
+  const timerId = setInterval(() => {
+    console.log(largeData[0]);
+  }, 1000);
+
+  // Return cleanup function
+  return function cleanup() {
+    clearInterval(timerId);
+    // Now largeData can be garbage collected
+  };
+}
+
+const cleanup = setupWithCleanup();
+// Later when no longer needed
+cleanup();
+```
+
+## Functional Programming Concepts
+
+### Pure Functions
+
+Functions that:
+
+1. Given the same input, always return the same output
+2. Have no side effects
+
+```javascript
+// Pure function
+function add(a, b) {
+  return a + b;
+}
+
+// Impure function (has side effects)
+let total = 0;
+function addToTotal(value) {
+  total += value;
+  return total;
+}
+```
+
+### Higher-Order Functions
+
+Functions that take functions as arguments or return functions:
+
+```javascript
+// Function that takes a function as an argument
+function map(array, transform) {
+  return array.map(transform);
+}
+
+const doubled = map([1, 2, 3], (x) => x * 2);
+
+// Function that returns a function
+function multiplier(factor) {
+  return function (number) {
+    return number * factor;
+  };
+}
+
+const double = multiplier(2);
+const triple = multiplier(3);
+console.log(double(5)); // 10
+console.log(triple(5)); // 15
+```
+
+### Function Composition
+
+Combining multiple functions to create a new function:
+
+```javascript
+function compose(...fns) {
+  return function (x) {
+    return fns.reduceRight((value, fn) => fn(value), x);
+  };
+}
+
+const add10 = (x) => x + 10;
+const multiply2 = (x) => x * 2;
+const subtract5 = (x) => x - 5;
+
+const compute = compose(subtract5, multiply2, add10);
+console.log(compute(5)); // ((5 + 10) * 2) - 5 = 25
+```
+
+### Immutability
+
+Avoiding changes to data after it's created:
+
+```javascript
+// Mutable approach
+const addItemMutable = (cart, item) => {
+  cart.push(item);
+  return cart;
+};
+
+// Immutable approach
+const addItemImmutable = (cart, item) => {
+  return [...cart, item];
+};
+
+const cart = ['apple', 'orange'];
+const updatedCart = addItemImmutable(cart, 'banana');
+console.log(cart); // ['apple', 'orange']
+console.log(updatedCart); // ['apple', 'orange', 'banana']
+```
+
+## Metaprogramming
+
+### Property Descriptors
+
+Control how object properties behave:
+
+```javascript
+const person = {};
+
+Object.defineProperty(person, 'name', {
+  value: 'John',
+  writable: true,
+  enumerable: true,
+  configurable: true,
+});
+
+Object.defineProperty(person, 'age', {
+  value: 30,
+  writable: false, // Can't change the value
+  enumerable: false, // Won't show up in loops
+  configurable: false, // Can't delete or reconfigure
+});
+
+person.name = 'Jane'; // Works
+person.age = 40; // Ignored in non-strict mode, error in strict mode
+console.log(person.age); // Still 30
+
+for (const key in person) {
+  console.log(key); // Only 'name' appears
+}
+```
+
+### Proxies
+
+Intercept and customize operations on objects:
+
+```javascript
+const handler = {
+  get(target, property) {
+    console.log(`Getting ${property}`);
+    return property in target ? target[property] : 'Not found';
+  },
+  set(target, property, value) {
+    console.log(`Setting ${property} to ${value}`);
+    if (property === 'age' && typeof value !== 'number') {
+      throw new TypeError('Age must be a number');
+    }
+    target[property] = value;
+    return true;
+  },
+};
+
+const person = new Proxy({}, handler);
+person.name = 'John'; // "Setting name to John"
+person.age = 30; // "Setting age to 30"
+console.log(person.name); // "Getting name", "John"
+console.log(person.unknown); // "Getting unknown", "Not found"
+// person.age = '30'; // Throws TypeError: Age must be a number
+```
+
+### Reflect API
+
+Provides methods for interceptable JavaScript operations:
+
+```javascript
+const obj = { name: 'John', age: 30 };
+
+// Instead of obj.name
+console.log(Reflect.get(obj, 'name')); // "John"
+
+// Instead of obj.name = 'Jane'
+Reflect.set(obj, 'name', 'Jane');
+
+// Instead of 'name' in obj
+console.log(Reflect.has(obj, 'name')); // true
+
+// Instead of delete obj.name
+Reflect.deleteProperty(obj, 'name');
+
+// Create a new object with specified prototype
+const child = Reflect.construct(Array, [1, 2, 3]);
+```
+
+### Symbols
+
+Unique and immutable values, often used as property keys:
+
+```javascript
+// Creating symbols
+const id = Symbol('id');
+const user = {
+  name: 'John',
+  [id]: 12345, // Using symbol as property key
+};
+
+console.log(user[id]); // 12345
+console.log(Object.keys(user)); // ['name'] (symbols are not enumerable)
+
+// Well-known symbols
+class Collection {
+  constructor() {
+    this.items = [];
+  }
+
+  add(item) {
+    this.items.push(item);
+  }
+
+  // Custom iterator
+  *[Symbol.iterator]() {
+    for (const item of this.items) {
+      yield item;
+    }
+  }
+}
+
+const collection = new Collection();
+collection.add('a');
+collection.add('b');
+collection.add('c');
+
+for (const item of collection) {
+  console.log(item); // 'a', 'b', 'c'
+}
+```
+
+## Performance Optimization
+
+### Debouncing and Throttling
+
+Control how often functions execute:
+
+```javascript
+// Debounce: Execute after a delay with no new calls
+function debounce(func, delay) {
+  let timeoutId;
+  return function (...args) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => {
+      func.apply(this, args);
+    }, delay);
+  };
+}
+
+// Throttle: Execute at most once per specified period
+function throttle(func, limit) {
+  let inThrottle = false;
+  return function (...args) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => {
+        inThrottle = false;
+      }, limit);
+    }
+  };
+}
+
+// Usage
+const debouncedSearch = debounce(searchFunction, 300);
+const throttledScroll = throttle(scrollHandler, 100);
+```
+
+### Memoization
+
+Cache function results for better performance:
+
+```javascript
+function memoize(fn) {
+  const cache = new Map();
+  return function (...args) {
+    const key = JSON.stringify(args);
+    if (cache.has(key)) {
+      return cache.get(key);
+    }
+    const result = fn.apply(this, args);
+    cache.set(key, result);
+    return result;
+  };
+}
+
+// Example: Expensive calculation
+function fibonacci(n) {
+  if (n <= 1) return n;
+  return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+const memoizedFibonacci = memoize(function (n) {
+  if (n <= 1) return n;
+  return memoizedFibonacci(n - 1) + memoizedFibonacci(n - 2);
+});
+
+console.time('Regular');
+fibonacci(35); // Very slow
+console.timeEnd('Regular');
+
+console.time('Memoized');
+memoizedFibonacci(35); // Much faster
+console.timeEnd('Memoized');
+```
+
+### Web Workers
+
+Run JavaScript in background threads:
+
+```javascript
+// main.js
+const worker = new Worker('worker.js');
+
+worker.addEventListener('message', (event) => {
+  console.log('Result from worker:', event.data);
+});
+
+worker.postMessage({
+  numbers: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  operation: 'sum',
+});
+
+// worker.js
+self.addEventListener('message', (event) => {
+  const { numbers, operation } = event.data;
+
+  let result;
+  if (operation === 'sum') {
+    result = numbers.reduce((sum, num) => sum + num, 0);
+  } else if (operation === 'average') {
+    result = numbers.reduce((sum, num) => sum + num, 0) / numbers.length;
+  }
+
+  self.postMessage(result);
+});
+```
+
+## Design Patterns
+
+### Module Pattern
+
+Encapsulate code and data:
+
+```javascript
+const counterModule = (function () {
+  // Private variables
+  let count = 0;
+
+  // Private functions
+  function validate(value) {
+    return typeof value === 'number';
+  }
+
+  // Public API
+  return {
+    increment() {
+      count++;
+      return count;
+    },
+    decrement() {
+      count--;
+      return count;
+    },
+    getValue() {
+      return count;
+    },
+    setValue(value) {
+      if (validate(value)) {
+        count = value;
+        return true;
+      }
+      return false;
+    },
+  };
+})();
+```
+
+### Factory Pattern
+
+Create objects without specifying the exact class:
+
+```javascript
+function createUser(type) {
+  const user = {
+    type,
+    createdAt: new Date(),
+    login() {
+      console.log(`${this.type} user logged in`);
+    },
+  };
+
+  switch (type) {
+    case 'admin':
+      user.permissions = ['read', 'write', 'delete'];
+      user.adminPanel = function () {
+        console.log('Accessing admin panel');
+      };
+      break;
+    case 'editor':
+      user.permissions = ['read', 'write'];
+      user.editContent = function () {
+        console.log('Editing content');
+      };
+      break;
+    case 'viewer':
+      user.permissions = ['read'];
+      break;
+  }
+
+  return user;
+}
+
+const admin = createUser('admin');
+const editor = createUser('editor');
+```
+
+### Observer Pattern
+
+Create a subscription model:
+
+```javascript
+class EventEmitter {
+  constructor() {
+    this.events = {};
+  }
+
+  on(event, listener) {
+    if (!this.events[event]) {
+      this.events[event] = [];
+    }
+    this.events[event].push(listener);
+    return () => this.off(event, listener);
+  }
+
+  off(event, listener) {
+    if (!this.events[event]) return;
+    this.events[event] = this.events[event].filter((l) => l !== listener);
+  }
+
+  emit(event, ...args) {
+    if (!this.events[event]) return;
+    this.events[event].forEach((listener) => listener(...args));
+  }
+
+  once(event, listener) {
+    const remove = this.on(event, (...args) => {
+      remove();
+      listener(...args);
+    });
+    return remove;
+  }
+}
+
+// Usage
+const emitter = new EventEmitter();
+
+const unsubscribe = emitter.on('userLoggedIn', (user) => {
+  console.log(`${user.name} logged in`);
+});
+
+emitter.emit('userLoggedIn', { name: 'John' });
+
+// Unsubscribe when no longer needed
+unsubscribe();
+```
+
+### Singleton Pattern
+
+Ensure a class has only one instance:
+
+```javascript
+class Database {
+  constructor(url) {
+    if (Database.instance) {
+      return Database.instance;
+    }
+
+    this.url = url;
+    this.connected = false;
+    Database.instance = this;
+  }
+
+  connect() {
+    if (this.connected) {
+      return console.log('Already connected');
+    }
+    console.log(`Connecting to ${this.url}`);
+    this.connected = true;
+  }
+
+  query(sql) {
+    if (!this.connected) {
+      throw new Error('Not connected to database');
+    }
+    console.log(`Executing query: ${sql}`);
+  }
+}
+
+const db1 = new Database('mongodb://localhost:27017');
+const db2 = new Database('another-url'); // Ignored, returns the same instance
+
+console.log(db1 === db2); // true
+db1.connect();
+db2.query('SELECT * FROM users'); // Works because it's the same instance
+```
+
+## Practical Examples
+
+### Implementing a Promise
+
+```javascript
+class MyPromise {
+  constructor(executor) {
+    this.state = 'pending';
+    this.value = undefined;
+    this.reason = undefined;
+    this.onFulfilledCallbacks = [];
+    this.onRejectedCallbacks = [];
+
+    const resolve = (value) => {
+      if (this.state === 'pending') {
+        this.state = 'fulfilled';
+        this.value = value;
+        this.onFulfilledCallbacks.forEach((callback) => callback(this.value));
+      }
+    };
+
+    const reject = (reason) => {
+      if (this.state === 'pending') {
+        this.state = 'rejected';
+        this.reason = reason;
+        this.onRejectedCallbacks.forEach((callback) => callback(this.reason));
+      }
+    };
+
+    try {
+      executor(resolve, reject);
+    } catch (error) {
+      reject(error);
+    }
+  }
+
+  then(onFulfilled, onRejected) {
+    onFulfilled =
+      typeof onFulfilled === 'function' ? onFulfilled : (value) => value;
+    onRejected =
+      typeof onRejected === 'function'
+        ? onRejected
+        : (reason) => {
+            throw reason;
+          };
+
+    const promise = new MyPromise((resolve, reject) => {
+      if (this.state === 'fulfilled') {
+        setTimeout(() => {
+          try {
+            const result = onFulfilled(this.value);
+            resolve(result);
+          } catch (error) {
+            reject(error);
+          }
+        }, 0);
+      } else if (this.state === 'rejected') {
+        setTimeout(() => {
+          try {
+            const result = onRejected(this.reason);
+            resolve(result);
+          } catch (error) {
+            reject(error);
+          }
+        }, 0);
+      } else {
+        this.onFulfilledCallbacks.push((value) => {
+          setTimeout(() => {
+            try {
+              const result = onFulfilled(value);
+              resolve(result);
+            } catch (error) {
+              reject(error);
+            }
+          }, 0);
+        });
+
+        this.onRejectedCallbacks.push((reason) => {
+          setTimeout(() => {
+            try {
+              const result = onRejected(reason);
+              resolve(result);
+            } catch (error) {
+              reject(error);
+            }
+          }, 0);
+        });
+      }
+    });
+
+    return promise;
+  }
+
+  catch(onRejected) {
+    return this.then(null, onRejected);
+  }
+
+  static resolve(value) {
+    return new MyPromise((resolve) => resolve(value));
+  }
+
+  static reject(reason) {
+    return new MyPromise((_, reject) => reject(reason));
+  }
+}
+```
+
+### Creating a State Management System
+
+```javascript
+function createStore(reducer, initialState) {
+  let state = initialState;
+  const listeners = [];
+
+  function getState() {
+    return state;
+  }
+
+  function dispatch(action) {
+    state = reducer(state, action);
+    listeners.forEach((listener) => listener());
+    return action;
+  }
+
+  function subscribe(listener) {
+    listeners.push(listener);
+    return function unsubscribe() {
+      const index = listeners.indexOf(listener);
+      if (index !== -1) {
+        listeners.splice(index, 1);
+      }
+    };
+  }
+
+  // Initialize store with default state
+  dispatch({ type: '@@INIT' });
+
+  return {
+    getState,
+    dispatch,
+    subscribe,
+  };
+}
+
+// Example usage
+const initialState = { count: 0 };
+
+function reducer(state, action) {
+  switch (action.type) {
+    case 'INCREMENT':
+      return { ...state, count: state.count + 1 };
+    case 'DECREMENT':
+      return { ...state, count: state.count - 1 };
+    case 'SET_COUNT':
+      return { ...state, count: action.payload };
+    default:
+      return state;
+  }
+}
+
+const store = createStore(reducer, initialState);
+
+// Subscribe to state changes
+const unsubscribe = store.subscribe(() => {
+  console.log('State updated:', store.getState());
+});
+
+// Dispatch actions
+store.dispatch({ type: 'INCREMENT' }); // State updated: { count: 1 }
+store.dispatch({ type: 'INCREMENT' }); // State updated: { count: 2 }
+store.dispatch({ type: 'SET_COUNT', payload: 10 }); // State updated: { count: 10 }
+store.dispatch({ type: 'DECREMENT' }); // State updated: { count: 9 }
+
+// Unsubscribe when no longer needed
+unsubscribe();
+```
+
+## Conclusion
+
+Understanding these advanced JavaScript concepts will help you write more efficient, maintainable code and debug complex issues more effectively. As you continue to develop your JavaScript skills, revisit these concepts regularly to deepen your understanding and apply them in your projects.

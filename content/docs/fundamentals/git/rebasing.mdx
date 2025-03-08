@@ -1,0 +1,234 @@
+---
+title: 'Git Rebase'
+description: 'Learn how to use Git rebase to maintain a clean project history'
+---
+
+# Git Rebase
+
+Rebasing is a powerful Git feature that allows you to reapply commits on top of another base commit. Unlike merging, which creates a new commit that combines changes from two branches, rebasing moves or combines a sequence of commits to a new base commit.
+
+## Basic Rebasing
+
+The basic syntax for rebasing is:
+
+```bash
+# While on your feature branch
+git rebase main
+```
+
+This will:
+
+1. Temporarily save changes from your feature branch
+2. Move your feature branch to the tip of the main branch
+3. Reapply your changes one by one
+
+## When to Use Rebase
+
+- **For a cleaner history**: Rebasing creates a linear project history
+- **Before submitting a pull request**: To incorporate latest changes from the target branch
+- **For local cleanup**: To clean up your local commits before sharing
+
+## When Not to Use Rebase
+
+- **On public/shared branches**: Never rebase commits that have been pushed and others might have based work on
+- **When you want to preserve the branch history**: Merging preserves the complete history and chronological order
+
+## Interactive Rebasing
+
+Interactive rebasing gives you complete control over your commit history:
+
+```bash
+# Rebase the last 3 commits interactively
+git rebase -i HEAD~3
+```
+
+This opens an editor with options for each commit:
+
+```
+pick f7f3f6d Add feature A
+pick 310154e Fix typo in feature A
+pick a5f4a0d Implement feature B
+
+# Commands:
+# p, pick = use commit
+# r, reword = use commit, but edit the commit message
+# e, edit = use commit, but stop for amending
+# s, squash = use commit, but meld into previous commit
+# f, fixup = like "squash", but discard this commit's log message
+# x, exec = run command (the rest of the line) using shell
+# d, drop = remove commit
+```
+
+You can change the order of commits or modify them using the available commands.
+
+## Common Interactive Rebase Operations
+
+### Squashing Commits
+
+Combine multiple commits into one:
+
+```bash
+# In the interactive rebase editor
+pick f7f3f6d Add feature A
+squash 310154e Fix typo in feature A
+pick a5f4a0d Implement feature B
+```
+
+This will combine the first two commits into one.
+
+### Rewording Commit Messages
+
+Change commit messages:
+
+```bash
+# In the interactive rebase editor
+pick f7f3f6d Add feature A
+reword 310154e Fix typo in feature A
+pick a5f4a0d Implement feature B
+```
+
+This will prompt you to edit the commit message for the second commit.
+
+### Editing Commits
+
+Make changes to specific commits:
+
+```bash
+# In the interactive rebase editor
+pick f7f3f6d Add feature A
+edit 310154e Fix typo in feature A
+pick a5f4a0d Implement feature B
+```
+
+Git will stop at the "edit" commit, allowing you to make changes:
+
+```bash
+# Make your changes
+git add .
+git commit --amend
+# Continue the rebase
+git rebase --continue
+```
+
+### Dropping Commits
+
+Remove commits entirely:
+
+```bash
+# In the interactive rebase editor
+pick f7f3f6d Add feature A
+drop 310154e Fix typo in feature A
+pick a5f4a0d Implement feature B
+```
+
+## Handling Rebase Conflicts
+
+When rebasing, you might encounter conflicts:
+
+```bash
+# During a rebase with conflicts
+# 1. Fix the conflicts in the files
+git add resolved-file.js
+# 2. Continue the rebase
+git rebase --continue
+
+# Or abort the rebase entirely
+git rebase --abort
+```
+
+## Rebasing onto Different Branches
+
+You can rebase onto any branch or commit:
+
+```bash
+# Rebase current branch onto a specific branch
+git rebase target-branch
+
+# Rebase a specific branch onto another
+git rebase target-branch source-branch
+
+# Rebase onto a specific commit
+git rebase a1b2c3d4
+```
+
+## Practical Examples
+
+### Example 1: Cleaning up local commits before pushing
+
+```bash
+# You've made several small commits locally
+git log --oneline
+# a5f4a0d Add validation
+# 310154e Fix typo in validation
+# f7f3f6d Add form field
+
+# Clean them up before pushing
+git rebase -i HEAD~3
+
+# In the editor, change to:
+pick f7f3f6d Add form field
+squash 310154e Fix typo in validation
+squash a5f4a0d Add validation
+
+# Write a new combined commit message
+# "Add form field with validation"
+```
+
+### Example 2: Incorporating upstream changes
+
+```bash
+# Update your local copy of the main branch
+git checkout main
+git pull
+
+# Rebase your feature branch on the updated main
+git checkout feature-branch
+git rebase main
+
+# If there are conflicts, resolve them
+# git add resolved-files
+# git rebase --continue
+
+# Push your rebased branch (requires force push if already pushed)
+git push --force-with-lease
+```
+
+### Example 3: Moving a branch to a different base
+
+```bash
+# You created a branch from the wrong starting point
+git checkout wrong-base-branch
+git checkout -b feature-branch
+# ... make some commits ...
+
+# Later, you realize you should have branched from main
+git rebase --onto main wrong-base-branch feature-branch
+```
+
+### Example 4: Splitting a commit
+
+```bash
+# Start an interactive rebase
+git rebase -i HEAD~3
+
+# Mark the commit you want to split with "edit"
+# When Git stops at that commit:
+git reset HEAD^  # Undo the commit but keep changes staged
+
+# Now create multiple commits
+git add file1.js
+git commit -m "First part of the feature"
+git add file2.js
+git commit -m "Second part of the feature"
+
+# Continue the rebase
+git rebase --continue
+```
+
+## Best Practices
+
+1. **Never rebase public branches** that others might be working on
+2. **Use `--force-with-lease`** instead of `--force` when pushing rebased branches
+3. **Communicate with your team** when rebasing shared branches
+4. **Keep rebases small and focused** to minimize conflicts
+5. **Test after rebasing** to ensure everything still works

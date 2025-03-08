@@ -1,0 +1,398 @@
+---
+title: 'Git Workflows'
+description: 'Learn about different Git workflows and how to implement them'
+---
+
+# Git Workflows
+
+Git workflows are structured approaches to using Git for collaboration and development. They define how code moves from development to production and how team members collaborate on changes.
+
+## Why Use a Workflow?
+
+A well-defined Git workflow:
+
+- Provides consistency across the team
+- Reduces merge conflicts
+- Makes releases more predictable
+- Improves code quality
+- Simplifies onboarding new team members
+
+## Common Git Workflows
+
+### 1. Centralized Workflow
+
+The simplest approach, similar to SVN but with Git's distributed features.
+
+#### How It Works
+
+- Single `main` branch
+- Everyone pulls and pushes to `main`
+- Conflicts are resolved locally before pushing
+
+#### Example
+
+```bash
+# Clone the repository
+git clone https://github.com/company/project.git
+
+# Make changes
+# ...
+
+# Pull latest changes
+git pull origin main
+
+# Resolve any conflicts
+# ...
+
+# Push changes
+git push origin main
+```
+
+#### Best For
+
+- Small teams
+- Simple projects
+- Teams transitioning from SVN
+
+#### Limitations
+
+- No isolation for new features
+- Higher risk of breaking the main branch
+- Difficult to have work-in-progress
+
+### 2. Feature Branch Workflow
+
+Each feature is developed in its own branch, then merged back to `main`.
+
+#### How It Works
+
+- `main` branch contains stable code
+- New features are developed in feature branches
+- Pull requests/merge requests are used for code review
+- After approval, feature branches are merged into `main`
+
+#### Example
+
+```bash
+# Create a feature branch
+git checkout -b feature/user-authentication
+
+# Make changes and commit
+git add .
+git commit -m "Implement user login"
+
+# Push feature branch to remote
+git push -u origin feature/user-authentication
+
+# Create a pull request (on GitHub/GitLab/etc.)
+# After approval:
+
+# Update main
+git checkout main
+git pull
+
+# Merge the feature branch
+git merge feature/user-authentication
+
+# Push the updated main
+git push origin main
+
+# Delete the feature branch
+git branch -d feature/user-authentication
+git push origin --delete feature/user-authentication
+```
+
+#### Best For
+
+- Most teams
+- Collaborative projects
+- Projects requiring code review
+
+### 3. Gitflow Workflow
+
+A robust framework for managing larger projects with scheduled releases.
+
+#### How It Works
+
+- Two main branches: `main` and `develop`
+- `main` always reflects production-ready state
+- `develop` contains latest delivered development changes
+- Feature branches branch off from `develop`
+- Release branches branch off from `develop`
+- Hotfix branches branch off from `main`
+
+#### Branch Types
+
+- **Feature branches**: New features (`feature/...`)
+- **Release branches**: Preparing for a release (`release/...`)
+- **Hotfix branches**: Urgent fixes for production (`hotfix/...`)
+- **Develop**: Integration branch for features
+- **Main**: Production code only
+
+#### Example
+
+```bash
+# Starting a feature
+git checkout develop
+git pull
+git checkout -b feature/shopping-cart
+
+# Completing a feature
+git checkout develop
+git pull
+git merge feature/shopping-cart
+git push origin develop
+
+# Creating a release
+git checkout develop
+git pull
+git checkout -b release/1.0.0
+# Make release-specific changes (version numbers, etc.)
+git commit -m "Bump version to 1.0.0"
+
+# Finishing a release
+git checkout main
+git pull
+git merge release/1.0.0
+git tag -a v1.0.0 -m "Version 1.0.0"
+git push origin main
+git push origin v1.0.0
+
+git checkout develop
+git pull
+git merge release/1.0.0
+git push origin develop
+
+git branch -d release/1.0.0
+
+# Creating a hotfix
+git checkout main
+git pull
+git checkout -b hotfix/1.0.1
+
+# Finishing a hotfix
+git checkout main
+git pull
+git merge hotfix/1.0.1
+git tag -a v1.0.1 -m "Version 1.0.1"
+git push origin main
+git push origin v1.0.1
+
+git checkout develop
+git pull
+git merge hotfix/1.0.1
+git push origin develop
+
+git branch -d hotfix/1.0.1
+```
+
+#### Best For
+
+- Larger teams
+- Projects with scheduled releases
+- Products with multiple versions in production
+
+#### Limitations
+
+- Complex for small projects
+- Overhead for simple changes
+- Can lead to long-lived branches
+
+### 4. GitHub Flow
+
+A simpler alternative to Gitflow, focused on continuous delivery.
+
+#### How It Works
+
+- `main` branch is always deployable
+- Branch off from `main` for new work
+- Commit regularly to your branch
+- Open a pull request for discussion
+- Merge to `main` after approval
+- Deploy immediately after merging to `main`
+
+#### Example
+
+```bash
+# Create a branch
+git checkout -b feature-user-profiles
+
+# Make changes and commit
+git add .
+git commit -m "Add user profile page"
+
+# Push branch and create PR
+git push -u origin feature-user-profiles
+
+# After approval and merge, pull the updated main
+git checkout main
+git pull
+```
+
+#### Best For
+
+- Continuous deployment environments
+- Web applications
+- Teams with good automated testing
+
+### 5. Trunk-Based Development
+
+A development practice where all developers work on a single branch with frequent commits.
+
+#### How It Works
+
+- Short-lived feature branches (1-2 days max)
+- Frequent merges to the trunk (`main`)
+- Feature flags for incomplete features
+- Emphasis on automated testing and CI/CD
+
+#### Example
+
+```bash
+# Start work on a small feature
+git checkout -b small-feature
+
+# Complete work quickly (within a day)
+git add .
+git commit -m "Add sorting to product list"
+
+# Pull latest changes from main
+git pull origin main
+
+# Push and create PR
+git push -u origin small-feature
+
+# After quick review, merge to main
+# Delete the branch after merging
+```
+
+#### Best For
+
+- Experienced teams
+- Projects with strong CI/CD
+- Teams practicing DevOps
+
+## Choosing a Workflow
+
+Consider these factors when choosing a workflow:
+
+1. **Team size and experience**
+2. **Project complexity**
+3. **Release frequency**
+4. **Need for multiple versions**
+5. **CI/CD capabilities**
+
+## Implementing Workflows with Tools
+
+### GitHub/GitLab Features
+
+- **Branch protection rules**: Prevent direct pushes to important branches
+- **Required reviews**: Enforce code review before merging
+- **Status checks**: Require CI tests to pass before merging
+- **Merge options**: Choose between merge commits, squash merging, or rebasing
+
+Example GitHub branch protection:
+
+```
+Settings > Branches > Branch protection rules > Add rule:
+- Branch name pattern: main
+- Require pull request reviews before merging
+- Require status checks to pass before merging
+- Include administrators
+- Restrict who can push to matching branches
+```
+
+### Automation Tools
+
+- **Git hooks**: Enforce workflow rules locally
+- **CI/CD pipelines**: Automate testing and deployment
+- **Bots**: Automate routine tasks like labeling PRs
+
+## Practical Examples
+
+### Example 1: Setting Up Gitflow
+
+```bash
+# Install gitflow (on macOS)
+brew install git-flow
+
+# Initialize gitflow in a repository
+git flow init
+
+# Accept the defaults or customize branch names
+
+# Start a feature
+git flow feature start user-authentication
+
+# Finish a feature
+git flow feature finish user-authentication
+
+# Start a release
+git flow release start 1.0.0
+
+# Finish a release
+git flow release finish 1.0.0
+```
+
+### Example 2: Implementing GitHub Flow with Protected Branches
+
+1. In GitHub repository settings, protect the `main` branch:
+
+   - Require pull request reviews
+   - Require status checks to pass
+
+2. Workflow for developers:
+
+```bash
+# Create a branch for a new feature
+git checkout -b feature-x
+
+# Make changes and commit
+git add .
+git commit -m "Implement feature X"
+
+# Push and create PR
+git push -u origin feature-x
+
+# Address review feedback
+git add .
+git commit -m "Address feedback"
+git push
+
+# After merge, clean up
+git checkout main
+git pull
+git branch -d feature-x
+```
+
+### Example 3: Trunk-Based Development with Feature Flags
+
+```bash
+# Create a short-lived branch
+git checkout -b add-search-feature
+
+# Add feature behind a flag
+# In code:
+if (FEATURES.enableSearch) {
+  // New search functionality
+}
+
+# Commit and push
+git add .
+git commit -m "Add search feature behind feature flag"
+git push -u origin add-search-feature
+
+# After quick review and merge, enable the feature in production
+# by changing the feature flag configuration
+```
+
+## Best Practices
+
+1. **Document your workflow** for the team
+2. **Automate as much as possible** with CI/CD
+3. **Keep branches short-lived** to minimize merge conflicts
+4. **Use meaningful branch names** and commit messages
+5. **Regularly clean up merged branches**
+6. **Consider using merge squashing** for cleaner history
+7. **Enforce workflow rules** with branch protection
+8. **Adapt the workflow** as your team and project evolve

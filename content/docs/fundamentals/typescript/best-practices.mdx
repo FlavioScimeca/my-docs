@@ -1,0 +1,1136 @@
+---
+title: 'TypeScript Best Practices'
+description: 'Learn recommended patterns and practices for writing clean, maintainable TypeScript code'
+---
+
+# TypeScript Best Practices
+
+Writing effective TypeScript code goes beyond just adding type annotations. This guide covers best practices, patterns, and techniques to help you write clean, maintainable, and type-safe TypeScript code.
+
+## Project Configuration
+
+### Use Strict Mode
+
+Enable strict mode in your `tsconfig.json` to catch more potential errors:
+
+```json
+{
+  "compilerOptions": {
+    "strict": true
+    // This enables:
+    // - noImplicitAny
+    // - noImplicitThis
+    // - alwaysStrict
+    // - strictBindCallApply
+    // - strictNullChecks
+    // - strictFunctionTypes
+    // - strictPropertyInitialization
+  }
+}
+```
+
+### Additional Recommended Compiler Options
+
+```json
+{
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
+  }
+}
+```
+
+### Use Path Aliases
+
+Configure path aliases in `tsconfig.json` for cleaner imports:
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@components/*": ["src/components/*"],
+      "@utils/*": ["src/utils/*"]
+    }
+  }
+}
+```
+
+Then use them in your code:
+
+```typescript
+// Instead of
+import { Button } from '../../../components/Button';
+
+// You can write
+import { Button } from '@components/Button';
+```
+
+## Type Definitions
+
+### Prefer Interfaces for Object Types
+
+Use interfaces for object types that will be extended or implemented:
+
+```typescript
+// Good
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+interface AdminUser extends User {
+  permissions: string[];
+}
+
+// Less ideal for extensible objects
+type User = {
+  id: number;
+  name: string;
+  email: string;
+};
+```
+
+### Use Type Aliases for Unions, Intersections, and Utility Types
+
+```typescript
+// Good
+type ID = string | number;
+type UserOrAdmin = User | AdminUser;
+type UserWithSettings = User & { settings: UserSettings };
+type Nullable<T> = T | null;
+```
+
+### Use Enums for Related Constants
+
+```typescript
+// Good
+enum UserRole {
+  Admin = 'ADMIN',
+  Editor = 'EDITOR',
+  Viewer = 'VIEWER',
+}
+
+// Usage
+function checkAccess(role: UserRole) {
+  if (role === UserRole.Admin) {
+    // ...
+  }
+}
+```
+
+For more type safety, consider using const enums or literal union types:
+
+```typescript
+// Const enum (inlined at compile time)
+const enum HttpStatus {
+  OK = 200,
+  Created = 201,
+  BadRequest = 400,
+  Unauthorized = 401,
+}
+
+// Or literal union type
+type UserRole = 'ADMIN' | 'EDITOR' | 'VIEWER';
+```
+
+### Use Descriptive Types
+
+Create descriptive types instead of using primitive types directly:
+
+```typescript
+// Instead of
+function createUser(name: string, age: number, role: string): void {
+  // ...
+}
+
+// Better
+type Username = string;
+type Age = number;
+type Role = 'admin' | 'user' | 'guest';
+
+function createUser(name: Username, age: Age, role: Role): void {
+  // ...
+}
+```
+
+### Use Readonly for Immutable Data
+
+```typescript
+// Good
+interface Point {
+  readonly x: number;
+  readonly y: number;
+}
+
+// For arrays
+const numbers: ReadonlyArray<number> = [1, 2, 3];
+// Or
+const numbers: readonly number[] = [1, 2, 3];
+```
+
+### Use Type Guards for Runtime Type Checking
+
+```typescript
+// Type guard function
+function isUser(obj: any): obj is User {
+  return (
+    obj &&
+    typeof obj === 'object' &&
+    'id' in obj &&
+    'name' in obj &&
+    'email' in obj
+  );
+}
+
+// Usage
+function processEntity(entity: unknown) {
+  if (isUser(entity)) {
+    // TypeScript knows entity is User here
+    console.log(entity.name);
+  }
+}
+```
+
+## Functions
+
+### Use Function Type Signatures
+
+```typescript
+// Good
+type GreetFunction = (name: string) => string;
+
+const greet: GreetFunction = (name) => `Hello, ${name}!`;
+```
+
+### Specify Return Types for Functions
+
+```typescript
+// Good
+function calculateTotal(items: CartItem[]): number {
+  return items.reduce((total, item) => total + item.price * item.quantity, 0);
+}
+
+// Arrow function
+const calculateTotal = (items: CartItem[]): number => {
+  return items.reduce((total, item) => total + item.price * item.quantity, 0);
+};
+```
+
+### Use Function Overloads for Complex Functions
+
+```typescript
+// Function overloads
+function getUser(id: number): User;
+function getUser(email: string): User;
+function getUser(idOrEmail: number | string): User {
+  if (typeof idOrEmail === 'number') {
+    // Find user by id
+    return /* user */;
+  } else {
+    // Find user by email
+    return /* user */;
+  }
+}
+```
+
+### Use Default Parameters
+
+```typescript
+// Good
+function createUser(
+  name: string,
+  role: UserRole = UserRole.Viewer,
+  active: boolean = true
+): User {
+  // ...
+}
+```
+
+### Use Rest Parameters for Variable Arguments
+
+```typescript
+// Good
+function sum(...numbers: number[]): number {
+  return numbers.reduce((total, n) => total + n, 0);
+}
+```
+
+## Classes
+
+### Use Access Modifiers
+
+```typescript
+// Good
+class User {
+  private id: number;
+  protected role: UserRole;
+  public name: string;
+
+  constructor(id: number, name: string, role: UserRole) {
+    this.id = id;
+    this.name = name;
+    this.role = role;
+  }
+}
+```
+
+### Use Parameter Properties for Concise Class Definitions
+
+```typescript
+// Good
+class User {
+  constructor(
+    private id: number,
+    public name: string,
+    protected role: UserRole
+  ) {}
+}
+```
+
+### Implement Interfaces
+
+```typescript
+// Good
+interface Entity {
+  id: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+class User implements Entity {
+  id: number;
+  createdAt: Date = new Date();
+  updatedAt: Date = new Date();
+  name: string;
+
+  constructor(id: number, name: string) {
+    this.id = id;
+    this.name = name;
+  }
+}
+```
+
+### Use Abstract Classes for Base Classes
+
+```typescript
+// Good
+abstract class BaseEntity {
+  abstract id: number;
+  createdAt: Date = new Date();
+  updatedAt: Date = new Date();
+
+  abstract validate(): boolean;
+
+  save(): void {
+    if (this.validate()) {
+      // Save to database
+    }
+  }
+}
+
+class User extends BaseEntity {
+  id: number;
+  name: string;
+
+  constructor(id: number, name: string) {
+    super();
+    this.id = id;
+    this.name = name;
+  }
+
+  validate(): boolean {
+    return this.name.length > 0;
+  }
+}
+```
+
+## Generics
+
+### Use Generics for Reusable Components
+
+```typescript
+// Good
+function getProperty<T, K extends keyof T>(obj: T, key: K): T[K] {
+  return obj[key];
+}
+
+// Usage
+const user = { id: 1, name: 'John' };
+const name = getProperty(user, 'name'); // Returns 'John' with type string
+```
+
+### Use Constraints to Limit Generic Types
+
+```typescript
+// Good
+interface HasId {
+  id: number;
+}
+
+function findById<T extends HasId>(items: T[], id: number): T | undefined {
+  return items.find((item) => item.id === id);
+}
+```
+
+### Use Default Type Parameters
+
+```typescript
+// Good
+interface ApiResponse<T = any> {
+  data: T;
+  status: number;
+  message: string;
+}
+
+// Usage
+type UserResponse = ApiResponse<User>;
+```
+
+## Error Handling
+
+### Use Discriminated Unions for Result Types
+
+```typescript
+// Good
+type Result<T, E = Error> =
+  | { success: true; value: T }
+  | { success: false; error: E };
+
+function fetchUser(id: number): Result<User> {
+  try {
+    const user = /* fetch user */;
+    return { success: true, value: user };
+  } catch (error) {
+    return { success: false, error: error as Error };
+  }
+}
+
+// Usage
+const result = fetchUser(123);
+if (result.success) {
+  // TypeScript knows result.value is User
+  console.log(result.value.name);
+} else {
+  // TypeScript knows result.error is Error
+  console.error(result.error.message);
+}
+```
+
+### Use Custom Error Classes
+
+```typescript
+// Good
+class AppError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AppError';
+  }
+}
+
+class NotFoundError extends AppError {
+  constructor(resource: string, id: string | number) {
+    super(`${resource} with id ${id} not found`);
+    this.name = 'NotFoundError';
+  }
+}
+```
+
+## Async Code
+
+### Use Async/Await with Proper Types
+
+```typescript
+// Good
+async function fetchUser(id: number): Promise<User> {
+  const response = await fetch(`/api/users/${id}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch user: ${response.statusText}`);
+  }
+  return response.json() as Promise<User>;
+}
+```
+
+### Handle Promise Rejections
+
+```typescript
+// Good
+async function fetchUser(id: number): Promise<User> {
+  try {
+    const response = await fetch(`/api/users/${id}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch user: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    throw error;
+  }
+}
+```
+
+## Null and Undefined Handling
+
+### Use Optional Chaining
+
+```typescript
+// Good
+const userName = user?.profile?.name;
+```
+
+### Use Nullish Coalescing
+
+```typescript
+// Good
+const displayName = user.name ?? 'Anonymous';
+```
+
+### Use Non-Null Assertion Only When Necessary
+
+```typescript
+// Use sparingly and only when you're certain
+function getUser(id: number): User | undefined {
+  // ...
+}
+
+// Only use ! when you're absolutely sure the value isn't null/undefined
+const user = getUser(123)!;
+```
+
+### Use Definite Assignment Assertion When Needed
+
+```typescript
+// Good
+class UserService {
+  private api!: ApiClient; // Will be initialized in init method
+
+  async init(): Promise<void> {
+    this.api = await createApiClient();
+  }
+}
+```
+
+## Type Assertions
+
+### Prefer Type Guards Over Type Assertions
+
+```typescript
+// Instead of
+const user = entity as User;
+
+// Better
+if (isUser(entity)) {
+  // entity is User here
+  const user = entity;
+}
+```
+
+### Use `as const` for Literal Values
+
+```typescript
+// Good
+const config = {
+  api: {
+    baseUrl: 'https://api.example.com',
+    timeout: 5000,
+  },
+  features: {
+    darkMode: true,
+  },
+} as const;
+
+// Now config.api.baseUrl is of type 'https://api.example.com' (literal)
+// instead of just string
+```
+
+## Imports and Exports
+
+### Use Named Exports for Multiple Exports
+
+```typescript
+// Good
+export interface User {
+  id: number;
+  name: string;
+}
+
+export function createUser(name: string): User {
+  // ...
+}
+```
+
+### Use Default Exports for Main Component/Function
+
+```typescript
+// Good
+export default function Button(props: ButtonProps): JSX.Element {
+  // ...
+}
+```
+
+### Re-export from Barrel Files
+
+```typescript
+// src/components/index.ts
+export { default as Button } from './Button';
+export { default as Input } from './Input';
+export { default as Select } from './Select';
+
+// Usage
+import { Button, Input, Select } from './components';
+```
+
+## Comments and Documentation
+
+### Use JSDoc for Public APIs
+
+```typescript
+/**
+ * Creates a new user in the system
+ * @param name - The user's full name
+ * @param email - The user's email address
+ * @param role - The user's role (defaults to 'user')
+ * @returns The created user object
+ * @throws {ValidationError} If the email is invalid
+ */
+function createUser(
+  name: string,
+  email: string,
+  role: UserRole = UserRole.User
+): User {
+  // ...
+}
+```
+
+### Document Complex Types
+
+```typescript
+/**
+ * Represents a response from the API
+ * @template T - The type of data returned
+ */
+interface ApiResponse<T> {
+  /** The response data */
+  data: T;
+  /** HTTP status code */
+  status: number;
+  /** Response message */
+  message: string;
+}
+```
+
+## Code Organization
+
+### Group Related Functionality
+
+```typescript
+// user/types.ts
+export interface User {
+  id: number;
+  name: string;
+}
+
+// user/api.ts
+import { User } from './types';
+
+export async function fetchUser(id: number): Promise<User> {
+  // ...
+}
+
+// user/hooks.ts (React)
+import { User } from './types';
+import { fetchUser } from './api';
+
+export function useUser(id: number) {
+  // ...
+}
+
+// user/index.ts
+export * from './types';
+export * from './api';
+export * from './hooks';
+```
+
+### Separate Types from Implementation
+
+```typescript
+// types.ts
+export interface User {
+  id: number;
+  name: string;
+}
+
+export interface UserService {
+  getUser(id: number): Promise<User>;
+  createUser(name: string): Promise<User>;
+}
+
+// userService.ts
+import { User, UserService } from './types';
+
+export class UserServiceImpl implements UserService {
+  async getUser(id: number): Promise<User> {
+    // ...
+  }
+
+  async createUser(name: string): Promise<User> {
+    // ...
+  }
+}
+```
+
+## Testing
+
+### Use Type-Safe Testing
+
+```typescript
+// Good (with Jest)
+import { User } from '../types';
+import { createUser } from '../userService';
+
+describe('userService', () => {
+  it('should create a user', async () => {
+    const user: User = await createUser('John Doe');
+    expect(user.name).toBe('John Doe');
+    expect(user.id).toBeDefined();
+  });
+});
+```
+
+### Use TypeScript-Aware Testing Libraries
+
+- Jest with `ts-jest`
+- Vitest
+- Testing Library with TypeScript
+
+## Performance Considerations
+
+### Use Type-Only Imports for Types
+
+```typescript
+// Good
+import type { User } from './types';
+
+// Function implementation
+function processUser(user: User): void {
+  // ...
+}
+```
+
+### Avoid Excessive Type Complexity
+
+```typescript
+// Instead of complex mapped and conditional types
+type ComplexType<T> = T extends string
+  ? { [K in keyof T]: T[K] extends Function ? ReturnType<T[K]> : never }
+  : never;
+
+// Consider breaking it down or using simpler types
+type FunctionPropertyNames<T> = {
+  [K in keyof T]: T[K] extends Function ? K : never;
+}[keyof T];
+
+type FunctionReturnTypes<T> = {
+  [K in FunctionPropertyNames<T>]: ReturnType<T[K]>;
+};
+```
+
+## Common Patterns
+
+### Builder Pattern
+
+```typescript
+// Good
+class UserBuilder {
+  private user: Partial<User> = {};
+
+  withName(name: string): UserBuilder {
+    this.user.name = name;
+    return this;
+  }
+
+  withEmail(email: string): UserBuilder {
+    this.user.email = email;
+    return this;
+  }
+
+  withRole(role: UserRole): UserBuilder {
+    this.user.role = role;
+    return this;
+  }
+
+  build(): User {
+    // Validate required fields
+    if (!this.user.name || !this.user.email) {
+      throw new Error('Name and email are required');
+    }
+
+    return {
+      id: Math.random(),
+      createdAt: new Date(),
+      ...this.user,
+      role: this.user.role || UserRole.User,
+    } as User;
+  }
+}
+
+// Usage
+const user = new UserBuilder()
+  .withName('John Doe')
+  .withEmail('john@example.com')
+  .withRole(UserRole.Admin)
+  .build();
+```
+
+### Factory Pattern
+
+```typescript
+// Good
+interface UserFactory {
+  createUser(name: string, email: string): User;
+  createAdmin(name: string, email: string): User;
+}
+
+class UserFactoryImpl implements UserFactory {
+  createUser(name: string, email: string): User {
+    return {
+      id: Math.random(),
+      name,
+      email,
+      role: UserRole.User,
+      createdAt: new Date(),
+    };
+  }
+
+  createAdmin(name: string, email: string): User {
+    return {
+      id: Math.random(),
+      name,
+      email,
+      role: UserRole.Admin,
+      createdAt: new Date(),
+    };
+  }
+}
+```
+
+### Repository Pattern
+
+```typescript
+// Good
+interface UserRepository {
+  findById(id: number): Promise<User | null>;
+  findAll(): Promise<User[]>;
+  create(user: Omit<User, 'id'>): Promise<User>;
+  update(id: number, user: Partial<User>): Promise<User>;
+  delete(id: number): Promise<boolean>;
+}
+
+class ApiUserRepository implements UserRepository {
+  private apiClient: ApiClient;
+
+  constructor(apiClient: ApiClient) {
+    this.apiClient = apiClient;
+  }
+
+  async findById(id: number): Promise<User | null> {
+    try {
+      return await this.apiClient.get<User>(`/users/${id}`);
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  // Other methods...
+}
+```
+
+### Singleton Pattern
+
+```typescript
+// Good
+class Logger {
+  private static instance: Logger;
+
+  private constructor() {
+    // Private constructor to prevent direct construction calls
+  }
+
+  static getInstance(): Logger {
+    if (!Logger.instance) {
+      Logger.instance = new Logger();
+    }
+
+    return Logger.instance;
+  }
+
+  log(message: string): void {
+    console.log(`[LOG]: ${message}`);
+  }
+
+  error(message: string, error?: Error): void {
+    console.error(`[ERROR]: ${message}`, error);
+  }
+}
+
+// Usage
+const logger = Logger.getInstance();
+logger.log('Application started');
+```
+
+## Linting and Formatting
+
+### Use ESLint with TypeScript Rules
+
+```json
+// .eslintrc.json
+{
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"],
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
+  "rules": {
+    "@typescript-eslint/explicit-function-return-type": "warn",
+    "@typescript-eslint/no-explicit-any": "warn",
+    "@typescript-eslint/no-unused-vars": "error"
+  }
+}
+```
+
+### Use Prettier for Consistent Formatting
+
+```json
+// .prettierrc
+{
+  "semi": true,
+  "trailingComma": "es5",
+  "singleQuote": true,
+  "printWidth": 80,
+  "tabWidth": 2
+}
+```
+
+## Practical Examples
+
+### Example 1: Type-Safe API Client
+
+```typescript
+// api-client.ts
+interface ApiClientOptions {
+  baseUrl: string;
+  timeout?: number;
+  headers?: Record<string, string>;
+}
+
+class ApiClient {
+  private baseUrl: string;
+  private timeout: number;
+  private headers: Record<string, string>;
+
+  constructor(options: ApiClientOptions) {
+    this.baseUrl = options.baseUrl;
+    this.timeout = options.timeout || 10000;
+    this.headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+  }
+
+  async get<T>(path: string): Promise<T> {
+    return this.request<T>('GET', path);
+  }
+
+  async post<T, D = any>(path: string, data?: D): Promise<T> {
+    return this.request<T>('POST', path, data);
+  }
+
+  async put<T, D = any>(path: string, data?: D): Promise<T> {
+    return this.request<T>('PUT', path, data);
+  }
+
+  async delete<T>(path: string): Promise<T> {
+    return this.request<T>('DELETE', path);
+  }
+
+  private async request<T>(
+    method: string,
+    path: string,
+    data?: any
+  ): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(url, {
+        method,
+        headers: this.headers,
+        body: data ? JSON.stringify(data) : undefined,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new ApiError(
+          `API error: ${response.status} ${response.statusText}`,
+          response.status,
+          await response.text()
+        );
+      }
+
+      return await response.json();
+    } catch (error) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof ApiError) {
+        throw error;
+      }
+
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new ApiError('Request timeout', 408);
+      }
+
+      throw new ApiError(`Request failed: ${(error as Error).message}`, 0);
+    }
+  }
+}
+
+class ApiError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public responseBody?: string
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+// Usage
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+const apiClient = new ApiClient({
+  baseUrl: 'https://api.example.com',
+  headers: {
+    Authorization: 'Bearer token123',
+  },
+});
+
+async function fetchUsers(): Promise<User[]> {
+  return apiClient.get<User[]>('/users');
+}
+
+async function createUser(name: string, email: string): Promise<User> {
+  return apiClient.post<User>('/users', { name, email });
+}
+```
+
+### Example 2: Type-Safe Event System
+
+```typescript
+// event-system.ts
+type EventMap = {
+  'user:created': { id: number; name: string };
+  'user:updated': { id: number; changes: Partial<User> };
+  'user:deleted': { id: number };
+  error: { message: string; code: number };
+};
+
+class EventBus<Events extends Record<string, any>> {
+  private listeners: {
+    [E in keyof Events]?: Array<(data: Events[E]) => void>;
+  } = {};
+
+  on<E extends keyof Events>(
+    event: E,
+    listener: (data: Events[E]) => void
+  ): void {
+    if (!this.listeners[event]) {
+      this.listeners[event] = [];
+    }
+    this.listeners[event]!.push(listener);
+  }
+
+  off<E extends keyof Events>(
+    event: E,
+    listener: (data: Events[E]) => void
+  ): void {
+    if (!this.listeners[event]) {
+      return;
+    }
+    this.listeners[event] = this.listeners[event]!.filter(
+      (l) => l !== listener
+    );
+  }
+
+  emit<E extends keyof Events>(event: E, data: Events[E]): void {
+    if (!this.listeners[event]) {
+      return;
+    }
+    this.listeners[event]!.forEach((listener) => {
+      try {
+        listener(data);
+      } catch (error) {
+        console.error(`Error in event listener for ${String(event)}:`, error);
+      }
+    });
+  }
+
+  once<E extends keyof Events>(
+    event: E,
+    listener: (data: Events[E]) => void
+  ): void {
+    const onceListener = (data: Events[E]) => {
+      this.off(event, onceListener);
+      listener(data);
+    };
+    this.on(event, onceListener);
+  }
+}
+
+// Usage
+const eventBus = new EventBus<EventMap>();
+
+eventBus.on('user:created', ({ id, name }) => {
+  console.log(`User created: ${name} (ID: ${id})`);
+});
+
+eventBus.on('error', ({ message, code }) => {
+  console.error(`Error ${code}: ${message}`);
+});
+
+// Type-safe event emission
+eventBus.emit('user:created', { id: 1, name: 'John Doe' });
+eventBus.emit('error', { message: 'Something went wrong', code: 500 });
+
+// This would cause a type error:
+// eventBus.emit('user:created', { id: 1 }); // Missing 'name' property
+```
+
+## Conclusion
+
+Following these TypeScript best practices will help you write more maintainable, robust, and type-safe code. Remember that TypeScript is a tool to help you catch errors early and document your code, but it's not a substitute for good software design principles.
+
+Key takeaways:
+
+1. Use strict TypeScript configuration
+2. Create descriptive, specific types
+3. Leverage TypeScript's advanced type system
+4. Write self-documenting code with proper types
+5. Use patterns that work well with TypeScript
+6. Test your TypeScript code thoroughly
+7. Keep learning as TypeScript evolves

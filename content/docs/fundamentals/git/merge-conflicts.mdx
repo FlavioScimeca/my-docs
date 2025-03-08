@@ -1,0 +1,253 @@
+---
+title: 'Git Merge Conflicts'
+description: 'Learn how to handle and resolve merge conflicts in Git'
+---
+
+# Git Merge Conflicts
+
+Merge conflicts occur when Git can't automatically combine changes from different branches. This typically happens when two branches have modified the same part of a file, or when one branch has modified a file that another branch has deleted.
+
+## Understanding Merge Conflicts
+
+When Git encounters a conflict, it will mark the conflicted areas in your files and pause the merge process, allowing you to resolve the conflicts manually.
+
+A conflict-marked file looks like this:
+
+```
+<<<<<<< HEAD
+This is the content from the current branch (HEAD)
+=======
+This is the content from the branch you're merging in
+>>>>>>> feature-branch
+```
+
+The content between `<<<<<<< HEAD` and `=======` is from your current branch, and the content between `=======` and `>>>>>>> feature-branch` is from the branch you're trying to merge.
+
+## When Conflicts Occur
+
+Conflicts commonly happen during these operations:
+
+- Merging branches (`git merge`)
+- Rebasing (`git rebase`)
+- Cherry-picking (`git cherry-pick`)
+- Pulling changes (`git pull`)
+- Applying stashes (`git stash apply`)
+
+## Resolving Merge Conflicts
+
+### Step 1: Identify Conflicted Files
+
+When a conflict occurs, Git will tell you which files have conflicts:
+
+```bash
+# During a merge
+Auto-merging src/app.js
+CONFLICT (content): Merge conflict in src/app.js
+Automatic merge failed; fix conflicts and then commit the result.
+```
+
+You can also list conflicted files with:
+
+```bash
+git status
+```
+
+### Step 2: Understand the Conflict
+
+Open the conflicted files in your editor and look for the conflict markers:
+
+```
+<<<<<<< HEAD
+const greeting = "Hello, world!";
+=======
+const greeting = "Hi, everyone!";
+>>>>>>> feature-branch
+```
+
+### Step 3: Resolve the Conflict
+
+Edit the file to remove the conflict markers and choose the correct content. You might:
+
+- Keep one version
+- Keep the other version
+- Combine both versions
+- Write something completely different
+
+For example, a resolved conflict might look like:
+
+```javascript
+const greeting = 'Hello, everyone!';
+```
+
+### Step 4: Mark as Resolved
+
+After editing, mark the file as resolved:
+
+```bash
+git add src/app.js
+```
+
+### Step 5: Complete the Merge
+
+Once all conflicts are resolved and marked as such:
+
+```bash
+# For a merge
+git merge --continue
+# Or simply
+git commit
+
+# For a rebase
+git rebase --continue
+
+# For a cherry-pick
+git cherry-pick --continue
+```
+
+## Tools for Resolving Conflicts
+
+### Command Line
+
+```bash
+# Show the current conflicts
+git diff
+
+# Use a merge tool
+git mergetool
+```
+
+### Visual Tools
+
+Many editors and IDEs have built-in conflict resolution tools:
+
+- VS Code
+- IntelliJ/WebStorm
+- Sublime Merge
+- GitKraken
+
+## Strategies to Avoid Conflicts
+
+1. **Pull frequently** to stay up-to-date with remote changes
+2. **Use smaller, focused commits** that are easier to merge
+3. **Communicate with your team** about who is working on which files
+4. **Use feature branches** to isolate work
+5. **Structure your codebase** to minimize overlap between features
+
+## Advanced Conflict Resolution
+
+### Aborting a Merge
+
+If you want to cancel a merge with conflicts:
+
+```bash
+git merge --abort
+```
+
+### Using `--ours` or `--theirs`
+
+For binary files or when you know which version to keep:
+
+```bash
+# Keep the version from the current branch
+git checkout --ours path/to/file
+
+# Keep the version from the branch being merged
+git checkout --theirs path/to/file
+
+# Don't forget to mark as resolved
+git add path/to/file
+```
+
+### Resolving Multiple Conflicts
+
+When dealing with many conflicts:
+
+```bash
+# List all conflicted files
+git diff --name-only --diff-filter=U
+
+# Resolve each file one by one
+git checkout --ours path/to/file1
+git add path/to/file1
+
+git checkout --theirs path/to/file2
+git add path/to/file2
+
+# For files that need manual resolution
+# Edit the file, then:
+git add path/to/file3
+```
+
+## Practical Examples
+
+### Example 1: Basic Merge Conflict Resolution
+
+```bash
+# Start a merge that results in conflicts
+git checkout main
+git merge feature-branch
+
+# See which files have conflicts
+git status
+
+# Open and edit the conflicted file
+# After resolving the conflict:
+git add resolved-file.js
+git commit -m "Merge feature-branch, resolving conflicts in login functionality"
+```
+
+### Example 2: Resolving Conflicts During Rebase
+
+```bash
+# Start a rebase that results in conflicts
+git checkout feature-branch
+git rebase main
+
+# Resolve conflicts in the current commit
+# Edit the conflicted files
+git add resolved-file.js
+git rebase --continue
+
+# If more conflicts appear in the next commit, repeat the process
+```
+
+### Example 3: Using a Merge Tool
+
+```bash
+# Configure your preferred merge tool
+git config --global merge.tool vscode
+git config --global mergetool.vscode.cmd 'code --wait $MERGED'
+
+# When you have conflicts
+git mergetool
+
+# After resolving all conflicts
+git commit
+```
+
+### Example 4: Resolving Conflicts with Different Strategies
+
+```bash
+# Keep "our" version for specific files
+git checkout --ours config.json
+git add config.json
+
+# Keep "their" version for other files
+git checkout --theirs package.json
+git add package.json
+
+# Manually resolve the rest
+# Edit app.js to resolve conflicts
+git add app.js
+
+# Complete the merge
+git commit
+```
+
+## Best Practices
+
+1. **Understand both changes** before resolving conflicts
+2. **Test your code** after resolving conflicts to ensure it still works
+3. **Communicate with the author** of the other changes if you're unsure
+4. **Use meaningful commit messages** when completing conflict resolution
+5. **Consider rebasing instead of merging** for cleaner history

@@ -1,0 +1,540 @@
+---
+title: 'Advanced TypeScript Types'
+description: 'Master advanced type features in TypeScript for more robust code'
+---
+
+# Advanced TypeScript Types
+
+TypeScript's type system goes far beyond basic types, offering powerful features that help you model complex data structures and relationships. This guide covers advanced type features that will help you write more precise and maintainable code.
+
+## Union Types
+
+Union types allow a value to be one of several types:
+
+```typescript
+// A variable that can be either a string or a number
+let id: string | number;
+id = 'abc123';
+id = 456;
+// id = true; // Error: Type 'boolean' is not assignable to type 'string | number'
+
+// Function that accepts multiple types
+function printId(id: string | number) {
+  console.log(`ID: ${id}`);
+}
+```
+
+### Type Narrowing with Union Types
+
+When working with union types, you often need to narrow down the type:
+
+```typescript
+function processValue(value: string | number) {
+  // Using type guards
+  if (typeof value === 'string') {
+    // TypeScript knows value is a string here
+    return value.toUpperCase();
+  } else {
+    // TypeScript knows value is a number here
+    return value.toFixed(2);
+  }
+}
+```
+
+## Intersection Types
+
+Intersection types combine multiple types into one:
+
+```typescript
+interface Person {
+  name: string;
+  age: number;
+}
+
+interface Employee {
+  employeeId: string;
+  department: string;
+}
+
+// Combines both types
+type EmployedPerson = Person & Employee;
+
+const worker: EmployedPerson = {
+  name: 'John Doe',
+  age: 30,
+  employeeId: 'E123',
+  department: 'Engineering',
+};
+```
+
+## Type Aliases
+
+Type aliases create a new name for a type:
+
+```typescript
+// Simple type alias
+type ID = string | number;
+
+// Object type alias
+type Point = {
+  x: number;
+  y: number;
+};
+
+// Function type alias
+type Callback = (data: string) => void;
+
+// Generic type alias
+type Container<T> = { value: T };
+
+// Recursive type alias
+type Tree<T> = {
+  value: T;
+  children?: Tree<T>[];
+};
+```
+
+## Literal Types
+
+Literal types allow you to specify exact values:
+
+```typescript
+// String literal type
+type Direction = 'north' | 'south' | 'east' | 'west';
+let direction: Direction = 'north';
+// direction = "northeast"; // Error: Type '"northeast"' is not assignable to type 'Direction'
+
+// Numeric literal type
+type DiceRoll = 1 | 2 | 3 | 4 | 5 | 6;
+let roll: DiceRoll = 3;
+
+// Boolean literal type
+type Bool = true | false;
+
+// Combined literal types
+type Answer = 'yes' | 'no' | 'maybe';
+type Status = 200 | 404 | 500;
+```
+
+## Discriminated Unions
+
+Discriminated unions (also called tagged unions) are a pattern that combines singleton types, union types, and type guards:
+
+```typescript
+interface Square {
+  kind: 'square';
+  size: number;
+}
+
+interface Rectangle {
+  kind: 'rectangle';
+  width: number;
+  height: number;
+}
+
+interface Circle {
+  kind: 'circle';
+  radius: number;
+}
+
+type Shape = Square | Rectangle | Circle;
+
+function calculateArea(shape: Shape): number {
+  switch (shape.kind) {
+    case 'square':
+      return shape.size * shape.size;
+    case 'rectangle':
+      return shape.width * shape.height;
+    case 'circle':
+      return Math.PI * shape.radius ** 2;
+    default:
+      // Exhaustiveness checking
+      const _exhaustiveCheck: never = shape;
+      return _exhaustiveCheck;
+  }
+}
+```
+
+## Type Guards and Type Predicates
+
+Type guards help narrow down types in conditional blocks:
+
+```typescript
+// typeof type guard
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+// instanceof type guard
+function isDate(value: unknown): value is Date {
+  return value instanceof Date;
+}
+
+// Custom type guard with type predicate
+interface Car {
+  make: string;
+  model: string;
+}
+
+function isCar(value: any): value is Car {
+  return (
+    value && typeof value === 'object' && 'make' in value && 'model' in value
+  );
+}
+
+function processValue(value: unknown) {
+  if (isString(value)) {
+    // TypeScript knows value is a string here
+    console.log(value.toUpperCase());
+  } else if (isDate(value)) {
+    // TypeScript knows value is a Date here
+    console.log(value.toISOString());
+  } else if (isCar(value)) {
+    // TypeScript knows value is a Car here
+    console.log(`${value.make} ${value.model}`);
+  }
+}
+```
+
+## Mapped Types
+
+Mapped types allow you to create new types based on existing ones by transforming properties:
+
+```typescript
+// Make all properties optional
+type Partial<T> = {
+  [P in keyof T]?: T[P];
+};
+
+// Make all properties required
+type Required<T> = {
+  [P in keyof T]-?: T[P];
+};
+
+// Make all properties readonly
+type Readonly<T> = {
+  readonly [P in keyof T]: T[P];
+};
+
+// Pick specific properties
+type Pick<T, K extends keyof T> = {
+  [P in K]: T[P];
+};
+
+// Example usage
+interface User {
+  id: number;
+  name: string;
+  email: string;
+}
+
+// All properties are optional
+type PartialUser = Partial<User>;
+
+// Only id and name properties
+type UserBasicInfo = Pick<User, 'id' | 'name'>;
+```
+
+## Conditional Types
+
+Conditional types select a type based on a condition:
+
+```typescript
+type IsString<T> = T extends string ? true : false;
+
+// Examples
+type A = IsString<string>; // true
+type B = IsString<number>; // false
+
+// More complex example
+type ExtractReturnType<T> = T extends (...args: any[]) => infer R ? R : never;
+
+function greet(): string {
+  return 'Hello';
+}
+
+type GreetReturn = ExtractReturnType<typeof greet>; // string
+```
+
+## Template Literal Types
+
+Template literal types build on string literal types to create new string types:
+
+```typescript
+type Color = 'red' | 'green' | 'blue';
+type Quantity = 'one' | 'two' | 'three';
+
+// Combines all possible combinations
+type ColorQuantity = `${Color}-${Quantity}`;
+// "red-one" | "red-two" | "red-three" | "green-one" | etc.
+
+// Practical example
+type CSSProperty = 'margin' | 'padding' | 'border';
+type CSSDirection = 'top' | 'right' | 'bottom' | 'left';
+
+type CSSPropertyWithDirection = `${CSSProperty}-${CSSDirection}`;
+// "margin-top" | "margin-right" | etc.
+
+// With numbers
+type Digit = '0' | '1' | '2';
+type WithPrefix = `prefix-${Digit}`;
+// "prefix-0" | "prefix-1" | "prefix-2"
+```
+
+## Index Types
+
+Index types help you work with the properties of an object:
+
+```typescript
+// Keyof operator
+interface Person {
+  name: string;
+  age: number;
+  address: string;
+}
+
+type PersonKeys = keyof Person; // "name" | "age" | "address"
+
+// Index access types
+type PersonName = Person['name']; // string
+
+// Dynamic property access
+function getProperty<T, K extends keyof T>(obj: T, key: K): T[K] {
+  return obj[key];
+}
+
+const person: Person = {
+  name: 'John',
+  age: 30,
+  address: '123 Main St',
+};
+
+const name = getProperty(person, 'name'); // Returns string
+const age = getProperty(person, 'age'); // Returns number
+```
+
+## Utility Types
+
+TypeScript provides several built-in utility types:
+
+```typescript
+// Partial - Makes all properties optional
+interface Todo {
+  title: string;
+  description: string;
+  completed: boolean;
+}
+
+function updateTodo(todo: Todo, fieldsToUpdate: Partial<Todo>): Todo {
+  return { ...todo, ...fieldsToUpdate };
+}
+
+// Required - Makes all properties required
+type RequiredTodo = Required<Partial<Todo>>;
+
+// Readonly - Makes all properties readonly
+type ReadonlyTodo = Readonly<Todo>;
+
+// Record - Creates a type with specified properties
+type PageInfo = {
+  title: string;
+  url: string;
+};
+
+type Pages = Record<'home' | 'about' | 'contact', PageInfo>;
+
+// Pick - Selects a subset of properties
+type TodoPreview = Pick<Todo, 'title' | 'completed'>;
+
+// Omit - Removes a subset of properties
+type TodoWithoutDescription = Omit<Todo, 'description'>;
+
+// Exclude - Excludes types from a union
+type T0 = Exclude<'a' | 'b' | 'c', 'a'>; // "b" | "c"
+
+// Extract - Extracts types from a union
+type T1 = Extract<'a' | 'b' | 'c', 'a' | 'f'>; // "a"
+
+// NonNullable - Removes null and undefined
+type T2 = NonNullable<string | number | undefined | null>; // string | number
+
+// ReturnType - Extracts the return type of a function
+function f() {
+  return { a: 1, b: 'string' };
+}
+type FReturn = ReturnType<typeof f>; // { a: number, b: string }
+
+// Parameters - Extracts parameter types of a function
+type T3 = Parameters<(a: string, b: number) => void>; // [string, number]
+
+// InstanceType - Extracts the instance type of a constructor
+class C {
+  x = 0;
+  y = 0;
+}
+type T4 = InstanceType<typeof C>; // C
+```
+
+## Type Inference and Type Widening
+
+TypeScript infers types when they're not explicitly specified:
+
+```typescript
+// Type inference
+let x = 3; // Inferred as number
+let y = 'hello'; // Inferred as string
+let z = [1, 2, 3]; // Inferred as number[]
+
+// Type widening
+const a = 'hello'; // Type is "hello" (literal type)
+let b = 'hello'; // Type is string (widened)
+
+// Controlling widening with as const
+const point = { x: 10, y: 20 } as const; // Readonly object with literal types
+// point.x = 5; // Error: Cannot assign to 'x' because it is a read-only property
+```
+
+## Recursive Types
+
+Recursive types reference themselves:
+
+```typescript
+// JSON value type
+type JSONValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JSONValue[]
+  | { [key: string]: JSONValue };
+
+// File system structure
+type FileSystemObject =
+  | { type: 'file'; name: string; content: string }
+  | { type: 'directory'; name: string; children: FileSystemObject[] };
+
+// Linked list
+type LinkedList<T> = {
+  value: T;
+  next: LinkedList<T> | null;
+};
+
+// Tree structure
+type TreeNode<T> = {
+  value: T;
+  children: TreeNode<T>[];
+};
+```
+
+## Practical Examples
+
+### Example 1: API Response Handler
+
+```typescript
+// Define possible API responses
+type ApiResponse<T> =
+  | { status: 'success'; data: T }
+  | { status: 'error'; error: string }
+  | { status: 'loading' };
+
+// Function to handle API responses
+function handleResponse<T>(response: ApiResponse<T>): void {
+  switch (response.status) {
+    case 'success':
+      console.log('Success:', response.data);
+      break;
+    case 'error':
+      console.error('Error:', response.error);
+      break;
+    case 'loading':
+      console.log('Loading...');
+      break;
+  }
+}
+
+// Usage
+const userResponse: ApiResponse<{ id: number; name: string }> = {
+  status: 'success',
+  data: { id: 1, name: 'John' },
+};
+
+handleResponse(userResponse);
+```
+
+### Example 2: State Management
+
+```typescript
+// Define possible states
+type State =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'success'; data: any }
+  | { status: 'error'; error: string };
+
+// State transitions
+type StateTransition<S extends State['status'], T> = {
+  from: State;
+  to: Extract<State, { status: S }> & T;
+};
+
+// Example transitions
+type LoadTransition = StateTransition<'loading', {}>;
+type SuccessTransition = StateTransition<'success', { data: any }>;
+type ErrorTransition = StateTransition<'error', { error: string }>;
+```
+
+### Example 3: Form Validation
+
+```typescript
+// Define form fields
+interface FormFields {
+  username: string;
+  email: string;
+  password: string;
+}
+
+// Create validation errors type
+type ValidationErrors = Partial<Record<keyof FormFields, string>>;
+
+// Validation function
+function validateForm(form: FormFields): ValidationErrors {
+  const errors: ValidationErrors = {};
+
+  if (form.username.length < 3) {
+    errors.username = 'Username must be at least 3 characters';
+  }
+
+  if (!form.email.includes('@')) {
+    errors.email = 'Email must be valid';
+  }
+
+  if (form.password.length < 8) {
+    errors.password = 'Password must be at least 8 characters';
+  }
+
+  return errors;
+}
+
+// Usage
+const formData: FormFields = {
+  username: 'jo',
+  email: 'invalid-email',
+  password: 'short',
+};
+
+const errors = validateForm(formData);
+console.log(errors);
+```
+
+## Best Practices
+
+1. **Start with simple types** and move to more complex ones as needed
+2. **Use union types** instead of `any` when possible
+3. **Leverage type guards** to narrow types in conditionals
+4. **Use discriminated unions** for complex state management
+5. **Create reusable type utilities** for common patterns
+6. **Use mapped types** to transform existing types
+7. **Add type predicates** for custom type guards
+8. **Use conditional types** for advanced type logic
+9. **Avoid type assertions** (`as`) when possible
+10. **Document complex types** with comments

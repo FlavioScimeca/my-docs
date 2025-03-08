@@ -1,0 +1,99 @@
+---
+title: Git Fundamentals
+description: Learn the essential Git concepts and commands for version control
+---
+
+# Git
+
+Git is a distributed version control system that allows developers to track changes in their code, collaborate with others, and maintain different versions of their projects.
+
+## Basic Concepts
+
+- **Repository**: A storage location for your project, containing all files and their history
+- **Commit**: A snapshot of your project at a specific point in time
+- **Branch**: A parallel version of your repository that allows you to work on features without affecting the main codebase
+- **Remote**: A version of your repository hosted on a server (like GitHub, GitLab, or Bitbucket)
+- **Clone**: Creating a local copy of a remote repository
+- **Pull**: Fetching changes from a remote repository and merging them into your local repository
+- **Push**: Sending your local changes to a remote repository
+
+## Essential Commands
+
+### Setup and Configuration
+
+```bash
+# Configure your identity
+git config --global user.name "Your Name"
+git config --global user.email "your.email@example.com"
+
+# Initialize a new repository
+git init
+```
+
+### Basic Workflow
+
+```bash
+# Check status of your repository
+git status
+
+# Add files to staging area
+git add <filename>
+git add .  # Add all files
+
+# Commit changes
+git commit -m "Descriptive commit message"
+
+# View commit history
+git log
+```
+
+### Working with Branches
+
+```bash
+# Create a new branch
+git branch <branch-name>
+
+# Switch to a branch
+git checkout <branch-name>
+
+# Create and switch to a new branch
+git checkout -b <branch-name>
+
+# Merge a branch into your current branch
+git merge <branch-name>
+```
+
+### Remote Operations
+
+```bash
+# Clone a repository
+git clone <repository-url>
+
+# Add a remote
+git remote add origin <repository-url>
+
+# Fetch changes from remote
+git fetch
+
+# Pull changes from remote
+git pull origin <branch-name>
+
+# Push changes to remote
+git push origin <branch-name>
+```
+
+## Best Practices
+
+1. **Write meaningful commit messages** that clearly describe what changes were made
+2. **Commit often** to create smaller, more manageable changes
+3. **Use branches** for new features or bug fixes
+4. **Pull before pushing** to avoid merge conflicts
+5. **Use .gitignore** to exclude files that shouldn't be tracked (build artifacts, dependencies, etc.)
+
+## Advanced Topics
+
+- **Rebasing**: Reapplying commits on top of another base
+- **Cherry-picking**: Applying specific commits from one branch to another
+- **Stashing**: Temporarily storing changes without committing
+- **Git hooks**: Scripts that run automatically on certain Git events
+- **Git workflows**: Strategies for organizing branches and collaboration (like Git Flow, GitHub Flow)

@@ -1,0 +1,300 @@
+---
+title: 'Git Hooks'
+description: 'Learn how to automate tasks with Git hooks'
+---
+
+# Git Hooks
+
+Git hooks are scripts that Git executes before or after events such as commit, push, and receive. They allow you to customize Git's internal behavior and trigger customizable actions at key points in the development lifecycle.
+
+## Types of Git Hooks
+
+Git hooks are divided into client-side and server-side hooks:
+
+### Client-Side Hooks
+
+- **pre-commit**: Runs before a commit is created
+- **prepare-commit-msg**: Runs before the commit message editor is launched
+- **commit-msg**: Runs to validate commit messages
+- **post-commit**: Runs after a commit is created
+- **pre-rebase**: Runs before rebasing
+- **post-rewrite**: Runs after commands that rewrite commits (like rebase)
+- **pre-push**: Runs before pushing to a remote
+- **post-checkout**: Runs after checking out a branch
+- **post-merge**: Runs after a merge is completed
+- **pre-auto-gc**: Runs before garbage collection
+
+### Server-Side Hooks
+
+- **pre-receive**: Runs when receiving a push before any refs are updated
+- **update**: Runs once for each ref being updated
+- **post-receive**: Runs after the entire push process is completed
+- **post-update**: Similar to post-receive but runs once for all refs
+
+## Hook Locations
+
+Git hooks are stored in the `.git/hooks` directory of your repository. Each hook is a separate script file named after the hook it implements (without any extension).
+
+```bash
+# List all available hooks in your repository
+ls -la .git/hooks
+```
+
+By default, Git provides sample hooks with the `.sample` extension. To activate a hook, remove the `.sample` extension and make the file executable.
+
+```bash
+# Activate the pre-commit hook
+cp .git/hooks/pre-commit.sample .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+## Creating a Basic Hook
+
+Hooks can be written in any scripting language, as long as:
+
+1. The file is executable
+2. The file has the correct name (e.g., `pre-commit`)
+3. The file has a proper shebang line (e.g., `#!/bin/sh`)
+
+Here's a simple pre-commit hook that prevents committing to the main branch:
+
+```bash
+#!/bin/sh
+
+branch="$(git rev-parse --abbrev-ref HEAD)"
+
+if [ "$branch" = "main" ]; then
+  echo "You can't commit directly to the main branch!"
+  exit 1
+fi
+```
+
+## Common Use Cases
+
+### Linting Code
+
+A pre-commit hook to run linters:
+
+```bash
+#!/bin/sh
+
+# Run ESLint on staged JavaScript files
+git diff --cached --name-only --diff-filter=ACM | grep '\.js$' | xargs eslint
+
+# Exit with error code if linting failed
+if [ $? -ne 0 ]; then
+  echo "ESLint failed, commit aborted!"
+  exit 1
+fi
+```
+
+### Enforcing Commit Message Format
+
+A commit-msg hook to enforce conventional commit messages:
+
+```bash
+#!/bin/sh
+
+commit_msg_file=$1
+commit_msg=$(cat "$commit_msg_file")
+
+# Check if the message follows conventional commit format
+if ! echo "$commit_msg" | grep -qE '^(feat|fix|docs|style|refactor|test|chore)(\(.+\))?: .+'; then
+  echo "Error: Commit message must follow the conventional commit format."
+  echo "Example: feat(auth): add login functionality"
+  exit 1
+fi
+```
+
+### Running Tests Before Push
+
+A pre-push hook to run tests:
+
+```bash
+#!/bin/sh
+
+# Run tests before pushing
+npm test
+
+# If tests fail, prevent the push
+if [ $? -ne 0 ]; then
+  echo "Tests failed, push aborted!"
+  exit 1
+fi
+```
+
+### Automatically Formatting Code
+
+A pre-commit hook to format code:
+
+```bash
+#!/bin/sh
+
+# Get staged JavaScript files
+files=$(git diff --cached --name-only --diff-filter=ACM | grep '\.js$')
+
+if [ -n "$files" ]; then
+  # Format the files
+  echo "$files" | xargs prettier --write
+
+  # Add the formatted files back to staging
+  echo "$files" | xargs git add
+fi
+```
+
+## Sharing Hooks with Your Team
+
+Git hooks aren't automatically shared when a repository is cloned. Here are some approaches to share hooks:
+
+### 1. Script to Install Hooks
+
+Create a script that copies hooks to the `.git/hooks` directory:
+
+```bash
+#!/bin/sh
+# setup-hooks.sh
+
+# Copy hooks to .git/hooks and make them executable
+cp hooks/* .git/hooks/
+chmod +x .git/hooks/*
+
+echo "Git hooks installed successfully!"
+```
+
+### 2. Using Git Template Directory
+
+Set up a template directory that will be copied when initializing or cloning repositories:
+
+```bash
+# Create a template directory
+mkdir -p ~/.git-templates/hooks
+
+# Copy your hooks there
+cp hooks/* ~/.git-templates/hooks/
+chmod +x ~/.git-templates/hooks/*
+
+# Configure Git to use this template directory
+git config --global init.templateDir ~/.git-templates
+```
+
+### 3. Using a Tool Like Husky
+
+Husky is a popular npm package that makes it easy to use Git hooks in a Node.js project:
+
+```bash
+# Install husky
+npm install husky --save-dev
+
+# Configure hooks in package.json
+```
+
+```json
+{
+  "husky": {
+    "hooks": {
+      "pre-commit": "npm run lint",
+      "pre-push": "npm test",
+      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
+    }
+  }
+}
+```
+
+## Bypassing Hooks
+
+Sometimes you need to bypass hooks temporarily:
+
+```bash
+# Skip pre-commit and commit-msg hooks
+git commit --no-verify -m "Emergency fix"
+
+# Skip pre-push hooks
+git push --no-verify
+```
+
+Use these with caution, as hooks are usually there for a good reason!
+
+## Practical Examples
+
+### Example 1: Preventing Secrets from Being Committed
+
+```bash
+#!/bin/sh
+# pre-commit hook to detect secrets
+
+# Check for potential AWS keys
+if git diff --cached --name-only -z | xargs -0 cat | grep -q 'AKIA[0-9A-Z]{16}'; then
+  echo "Error: Potential AWS access key found in commit."
+  echo "Please remove credentials before committing."
+  exit 1
+fi
+
+# Check for potential private keys
+if git diff --cached --name-only -z | xargs -0 cat | grep -q '-----BEGIN.*PRIVATE KEY'; then
+  echo "Error: Private key found in commit."
+  echo "Please remove private keys before committing."
+  exit 1
+fi
+```
+
+### Example 2: Automatically Adding Issue Number from Branch
+
+```bash
+#!/bin/sh
+# prepare-commit-msg hook
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Only add issue number for branch names like "issue-123-description"
+branch_name=$(git symbolic-ref --short HEAD)
+issue_number=$(echo "$branch_name" | grep -o '^issue-[0-9]\+' | sed 's/issue-//')
+
+if [ -n "$issue_number" ] && [ "$COMMIT_SOURCE" != "message" ]; then
+  # Prepend the issue number to the commit message
+  sed -i.bak -e "1s/^/[#$issue_number] /" "$COMMIT_MSG_FILE"
+fi
+```
+
+### Example 3: Enforcing Branch Naming Conventions
+
+```bash
+#!/bin/sh
+# pre-push hook
+
+# Get the current branch name
+branch=$(git symbolic-ref --short HEAD)
+
+# Check if the branch name follows the convention
+if ! echo "$branch" | grep -qE '^(feature|bugfix|hotfix|release)/[a-z0-9-]+$'; then
+  echo "Error: Branch name doesn't follow the convention."
+  echo "Branch names should start with feature/, bugfix/, hotfix/, or release/ followed by a descriptive name."
+  echo "Example: feature/user-authentication"
+  exit 1
+fi
+```
+
+### Example 4: Preventing Force Pushes to Protected Branches
+
+```bash
+#!/bin/sh
+# pre-push hook
+
+protected_branches="^(main|develop)$"
+current_branch=$(git symbolic-ref --short HEAD)
+force_push=$(echo "$@" | grep -- '--force\|--force-with-lease\|-f')
+
+if [[ -n "$force_push" && "$current_branch" =~ $protected_branches ]]; then
+  echo "Force push to $current_branch is not allowed."
+  exit 1
+fi
+```
+
+## Best Practices
+
+1. **Keep hooks fast** - Slow hooks can disrupt workflow
+2. **Make hooks fail clearly** - Provide clear error messages
+3. **Allow bypassing when necessary** - But log when bypasses happen
+4. **Test hooks thoroughly** - Ensure they work in all scenarios
+5. **Document your hooks** - Make sure your team understands what hooks do
+6. **Use a consistent approach** - Standardize hook management across projects

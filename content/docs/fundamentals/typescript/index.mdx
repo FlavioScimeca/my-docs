@@ -1,0 +1,282 @@
+---
+title: 'TypeScript Fundamentals'
+description: 'Learn the essential concepts and features of TypeScript'
+---
+
+# TypeScript
+
+TypeScript is a strongly typed programming language that builds on JavaScript, giving you better tooling at any scale. It adds static type definitions to JavaScript, helping you catch errors early and making your code more robust and maintainable.
+
+## What is TypeScript?
+
+TypeScript is a superset of JavaScript developed and maintained by Microsoft. It compiles to plain JavaScript and can be used in any JavaScript environment (browser, Node.js, etc.). TypeScript adds:
+
+- Static typing
+- Class-based object-oriented programming
+- Advanced type features
+- Enhanced IDE support
+- Better tooling for large codebases
+
+## Why Use TypeScript?
+
+- **Catch errors earlier**: Type checking helps identify common errors during development
+- **Better documentation**: Types serve as documentation that stays in sync with code
+- **Enhanced IDE support**: Get better autocomplete, navigation, and refactoring tools
+- **Safer refactoring**: Types help ensure changes don't break existing functionality
+- **Better team collaboration**: Types make it easier to understand and work with others' code
+- **Gradual adoption**: Can be adopted incrementally in existing JavaScript projects
+
+## Basic Types
+
+TypeScript provides several basic types to help you describe your data:
+
+```typescript
+// Boolean
+let isDone: boolean = false;
+
+// Number
+let decimal: number = 6;
+let hex: number = 0xf00d;
+let binary: number = 0b1010;
+
+// String
+let color: string = 'blue';
+let greeting: string = `Hello, my name is ${name}`;
+
+// Array
+let list: number[] = [1, 2, 3];
+let fruits: Array<string> = ['apple', 'banana', 'orange'];
+
+// Tuple
+let person: [string, number] = ['Alice', 30];
+
+// Enum
+enum Color {
+  Red,
+  Green,
+  Blue,
+}
+let c: Color = Color.Green;
+
+// Any
+let notSure: any = 4;
+notSure = 'maybe a string';
+notSure = false;
+
+// Void
+function logMessage(message: string): void {
+  console.log(message);
+}
+
+// Null and Undefined
+let u: undefined = undefined;
+let n: null = null;
+
+// Never
+function error(message: string): never {
+  throw new Error(message);
+}
+
+// Object
+let obj: object = { key: 'value' };
+```
+
+## Interfaces
+
+Interfaces define the structure that objects must adhere to:
+
+```typescript
+interface User {
+  id: number;
+  name: string;
+  email: string;
+  age?: number; // Optional property
+  readonly createdAt: Date; // Can't be modified after creation
+}
+
+function createUser(user: User): User {
+  return {
+    ...user,
+    createdAt: new Date(),
+  };
+}
+
+const newUser = createUser({
+  id: 1,
+  name: 'John Doe',
+  email: 'john@example.com',
+});
+```
+
+## Functions
+
+TypeScript allows you to specify the types of function parameters and return values:
+
+```typescript
+// Function with type annotations
+function add(a: number, b: number): number {
+  return a + b;
+}
+
+// Optional parameters
+function buildName(firstName: string, lastName?: string): string {
+  return lastName ? `${firstName} ${lastName}` : firstName;
+}
+
+// Default parameters
+function greet(name: string, greeting: string = 'Hello'): string {
+  return `${greeting}, ${name}!`;
+}
+
+// Rest parameters
+function sum(...numbers: number[]): number {
+  return numbers.reduce((total, num) => total + num, 0);
+}
+
+// Function types
+let myAdd: (x: number, y: number) => number;
+myAdd = (a: number, b: number): number => a + b;
+```
+
+## Classes
+
+TypeScript supports class-based object-oriented programming with inheritance:
+
+```typescript
+class Animal {
+  protected name: string;
+
+  constructor(name: string) {
+    this.name = name;
+  }
+
+  move(distanceInMeters: number = 0): void {
+    console.log(`${this.name} moved ${distanceInMeters}m.`);
+  }
+}
+
+class Dog extends Animal {
+  private breed: string;
+
+  constructor(name: string, breed: string) {
+    super(name);
+    this.breed = breed;
+  }
+
+  bark(): void {
+    console.log('Woof! Woof!');
+  }
+
+  // Override the parent method
+  move(distanceInMeters = 5): void {
+    console.log(`${this.name} is running...`);
+    super.move(distanceInMeters);
+  }
+}
+
+const dog = new Dog('Rex', 'German Shepherd');
+dog.bark();
+dog.move(10);
+```
+
+## Generics
+
+Generics allow you to create reusable components that work with a variety of types:
+
+```typescript
+// Generic function
+function identity<T>(arg: T): T {
+  return arg;
+}
+
+let output1 = identity<string>('myString');
+let output2 = identity(42); // Type inference determines T is number
+
+// Generic interface
+interface GenericIdentityFn<T> {
+  (arg: T): T;
+}
+
+let myIdentity: GenericIdentityFn<number> = identity;
+
+// Generic class
+class GenericBox<T> {
+  private value: T;
+
+  constructor(value: T) {
+    this.value = value;
+  }
+
+  getValue(): T {
+    return this.value;
+  }
+}
+
+const stringBox = new GenericBox('Hello TypeScript');
+const numberBox = new GenericBox(42);
+```
+
+## Type Assertions
+
+Type assertions are a way to tell the compiler "trust me, I know what I'm doing":
+
+```typescript
+// Using angle-bracket syntax
+let someValue: any = 'this is a string';
+let strLength: number = (<string>someValue).length;
+
+// Using as syntax (preferred in JSX)
+let otherValue: any = 'another string';
+let otherLength: number = (otherValue as string).length;
+```
+
+## TypeScript Configuration
+
+TypeScript is configured using a `tsconfig.json` file:
+
+```json
+{
+  "compilerOptions": {
+    "target": "es2020",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "**/*.spec.ts"]
+}
+```
+
+## TypeScript Compiler
+
+The TypeScript compiler (`tsc`) converts TypeScript code to JavaScript:
+
+```bash
+# Install TypeScript
+npm install -g typescript
+
+# Compile a file
+tsc filename.ts
+
+# Initialize a TypeScript project
+tsc --init
+
+# Compile with a specific tsconfig.json
+tsc -p ./path/to/tsconfig.json
+
+# Watch mode
+tsc -w
+```
+
+## Next Steps
+
+Explore the following topics to deepen your TypeScript knowledge:
+
+- [Advanced Types](./advanced-types) - Learn about union types, intersection types, type guards, and more
+- [TypeScript with React](./typescript-react) - How to use TypeScript in React applications
+- [TypeScript with Node.js](./typescript-node) - Using TypeScript for backend development
+- [TypeScript with GraphQL](./typescript-graphql) - Integrating TypeScript with GraphQL
+- [TypeScript Best Practices](./best-practices) - Recommended patterns and practices

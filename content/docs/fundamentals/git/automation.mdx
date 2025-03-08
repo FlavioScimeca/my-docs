@@ -1,0 +1,671 @@
+---
+title: 'Git Automation Tools'
+description: 'Learn how to automate Git workflows with CI/CD pipelines, bots, and other automation tools'
+---
+
+# Git Automation Tools
+
+Automation tools can significantly enhance Git workflows by reducing manual tasks, enforcing standards, and improving collaboration. This guide covers CI/CD pipelines, bots, and other automation tools that integrate with Git.
+
+## CI/CD Pipelines
+
+Continuous Integration and Continuous Deployment (CI/CD) pipelines automate the process of testing, building, and deploying code changes.
+
+### Popular CI/CD Tools
+
+- **GitHub Actions**: Built into GitHub
+- **GitLab CI/CD**: Built into GitLab
+- **Jenkins**: Self-hosted automation server
+- **CircleCI**: Cloud-based CI/CD service
+- **Travis CI**: Cloud-based CI/CD service
+- **Azure DevOps Pipelines**: Microsoft's CI/CD solution
+
+### Basic CI/CD Workflow
+
+1. Developer pushes code to a Git repository
+2. CI/CD system detects the change and triggers a pipeline
+3. Pipeline runs tests, builds the application
+4. If successful, changes may be automatically deployed
+5. Results are reported back to the Git repository
+
+### GitHub Actions Example
+
+Create a `.github/workflows/ci.yml` file:
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+```
+
+### GitLab CI/CD Example
+
+Create a `.gitlab-ci.yml` file:
+
+```yaml
+stages:
+  - test
+  - build
+  - deploy
+
+test:
+  stage: test
+  image: node:16
+  script:
+    - npm ci
+    - npm test
+
+build:
+  stage: build
+  image: node:16
+  script:
+    - npm ci
+    - npm run build
+  artifacts:
+    paths:
+      - dist/
+
+deploy:
+  stage: deploy
+  script:
+    - echo "Deploying application..."
+    - ./deploy.sh
+  only:
+    - main
+```
+
+### Jenkins Pipeline Example
+
+Create a `Jenkinsfile`:
+
+```groovy
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'npm ci'
+                sh 'npm run build'
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh 'npm test'
+            }
+        }
+
+        stage('Deploy') {
+            when {
+                branch 'main'
+            }
+            steps {
+                sh './deploy.sh'
+            }
+        }
+    }
+
+    post {
+        always {
+            junit 'test-results/*.xml'
+        }
+    }
+}
+```
+
+## Common CI/CD Pipeline Tasks
+
+### Automated Testing
+
+```yaml
+# GitHub Actions example
+- name: Run unit tests
+  run: npm test
+
+- name: Run integration tests
+  run: npm run test:integration
+
+- name: Run end-to-end tests
+  run: npm run test:e2e
+```
+
+### Code Quality Checks
+
+```yaml
+# GitHub Actions example
+- name: Lint code
+  run: npm run lint
+
+- name: Check code formatting
+  run: npm run format:check
+
+- name: Run security scan
+  uses: snyk/actions/node@master
+  with:
+    args: --severity-threshold=high
+```
+
+### Automated Deployments
+
+```yaml
+# GitHub Actions example for deploying to production
+- name: Deploy to production
+  if: github.ref == 'refs/heads/main'
+  run: |
+    echo "Deploying to production..."
+    ./scripts/deploy-prod.sh
+  env:
+    DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+```
+
+### Branch-Specific Workflows
+
+```yaml
+# GitHub Actions example
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # Deploy to staging for feature branches
+      - name: Deploy to staging
+        if: startsWith(github.ref, 'refs/heads/feature/')
+        run: ./deploy-staging.sh
+
+      # Deploy to production for main branch
+      - name: Deploy to production
+        if: github.ref == 'refs/heads/main'
+        run: ./deploy-production.sh
+```
+
+## Git Bots
+
+Git bots automate routine tasks in Git workflows, such as labeling pull requests, enforcing standards, and providing feedback.
+
+### Types of Git Bots
+
+- **PR/MR management bots**: Label, assign, and manage pull/merge requests
+- **Code review bots**: Automate parts of the code review process
+- **Dependency management bots**: Keep dependencies updated
+- **Issue management bots**: Triage and manage issues
+- **Documentation bots**: Keep documentation up-to-date
+
+### Popular Git Bots
+
+#### Dependabot
+
+Automatically updates dependencies and creates pull requests.
+
+```yaml
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    open-pull-requests-limit: 10
+```
+
+#### Stale Bot
+
+Identifies and closes stale issues and pull requests.
+
+```yaml
+# .github/stale.yml
+daysUntilStale: 60
+daysUntilClose: 7
+exemptLabels:
+  - pinned
+  - security
+staleLabel: wontfix
+markComment: >
+  This issue has been automatically marked as stale due to inactivity.
+  It will be closed in 7 days if no further activity occurs.
+closeComment: >
+  This issue has been automatically closed due to inactivity.
+```
+
+#### Probot Apps
+
+Probot is a framework for building GitHub Apps that automate workflows.
+
+Popular Probot apps include:
+
+- **Welcome**: Welcomes new contributors
+- **Request Info**: Requests more information for issues/PRs
+- **Pull Request Size**: Labels PRs based on the number of lines changed
+- **No Response**: Closes issues when the author doesn't respond
+
+### Creating Custom Bots
+
+#### GitHub Actions for Custom Automation
+
+```yaml
+# .github/workflows/label-prs.yml
+name: Label PRs
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Label based on changed files
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            const hasBackendChanges = files.some(file => file.filename.startsWith('server/'));
+            const hasFrontendChanges = files.some(file => file.filename.startsWith('client/'));
+
+            if (hasBackendChanges) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['backend']
+              });
+            }
+
+            if (hasFrontendChanges) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['frontend']
+              });
+            }
+```
+
+## Other Automation Tools
+
+### Pre-commit Hooks
+
+Pre-commit is a framework for managing Git pre-commit hooks.
+
+```yaml
+# .pre-commit-config.yaml
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+
+  - repo: https://github.com/psf/black
+    rev: 23.1.0
+    hooks:
+      - id: black
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.12.0
+    hooks:
+      - id: isort
+```
+
+### Husky
+
+Husky improves your Git hooks in JavaScript projects.
+
+```json
+// package.json
+{
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged",
+      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS"
+    }
+  },
+  "lint-staged": {
+    "*.js": ["eslint --fix", "prettier --write"],
+    "*.{json,md}": ["prettier --write"]
+  }
+}
+```
+
+### Semantic Release
+
+Automates the versioning and release process based on commit messages.
+
+```json
+// package.json
+{
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    "@semantic-release/npm",
+    "@semantic-release/github"
+  ]
+}
+```
+
+### Danger JS
+
+Danger runs during your CI process and gives teams the chance to automate common code review chores.
+
+```javascript
+// dangerfile.js
+import { danger, warn, message } from 'danger';
+
+// Warn about large PRs
+const bigPRThreshold = 500;
+if (danger.github.pr.additions + danger.github.pr.deletions > bigPRThreshold) {
+  warn(`This PR is big! Consider breaking it into smaller PRs.`);
+}
+
+// Check for updated tests
+const appModified = danger.git.modified_files.some((file) =>
+  file.includes('src/')
+);
+const testModified = danger.git.modified_files.some((file) =>
+  file.includes('test/')
+);
+
+if (appModified && !testModified) {
+  warn('Changes were made to app code, but not to test code.');
+}
+
+// Encourage documentation updates
+const docsModified = danger.git.modified_files.some((file) =>
+  file.includes('docs/')
+);
+if (appModified && !docsModified) {
+  message('Changes were made to app code, but not to documentation.');
+}
+```
+
+## Practical Examples
+
+### Example 1: Complete GitHub Actions Workflow
+
+```yaml
+# .github/workflows/main.yml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm test
+      - name: Upload test coverage
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage
+          path: coverage/
+
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run build
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build
+          path: build/
+
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build
+          path: build
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging..."
+          # Add your deployment script here
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build
+          path: build
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production..."
+          # Add your deployment script here
+```
+
+### Example 2: Automated PR Management
+
+```yaml
+# .github/workflows/pr-management.yml
+name: PR Management
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto-label PR
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            // Add labels based on file types
+            const labels = new Set();
+
+            for (const file of files) {
+              if (file.filename.endsWith('.js') || file.filename.endsWith('.ts')) {
+                labels.add('javascript');
+              }
+              if (file.filename.endsWith('.css') || file.filename.endsWith('.scss')) {
+                labels.add('css');
+              }
+              if (file.filename.includes('docs/')) {
+                labels.add('documentation');
+              }
+              if (file.filename.includes('test/')) {
+                labels.add('tests');
+              }
+            }
+
+            // Only add labels if they don't already exist
+            const { data: existingLabels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+
+            const existingLabelNames = existingLabels.map(label => label.name);
+            const newLabels = [...labels].filter(label => !existingLabelNames.includes(label));
+
+            if (newLabels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: newLabels
+              });
+            }
+
+      - name: Auto-assign reviewers
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+
+            // Define code owners
+            const codeOwners = {
+              'frontend': ['frontend-reviewer'],
+              'backend': ['backend-reviewer'],
+              'docs': ['docs-reviewer']
+            };
+
+            // Determine reviewers based on changed files
+            const reviewers = new Set();
+
+            for (const file of files) {
+              if (file.filename.startsWith('client/')) {
+                codeOwners.frontend.forEach(reviewer => reviewers.add(reviewer));
+              }
+              if (file.filename.startsWith('server/')) {
+                codeOwners.backend.forEach(reviewer => reviewers.add(reviewer));
+              }
+              if (file.filename.includes('docs/')) {
+                codeOwners.docs.forEach(reviewer => reviewers.add(reviewer));
+              }
+            }
+
+            // Request reviews
+            if (reviewers.size > 0) {
+              await github.rest.pulls.requestReviewers({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                reviewers: [...reviewers]
+              });
+            }
+```
+
+### Example 3: Automated Release Process
+
+```yaml
+# .github/workflows/release.yml
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npx semantic-release
+```
+
+## Best Practices
+
+1. **Start small and iterate**: Begin with simple automations and expand as needed
+2. **Document your automation**: Make sure your team understands how the automation works
+3. **Test automations thoroughly**: Verify that your automations work as expected
+4. **Monitor and maintain**: Regularly review and update your automation tools
+5. **Balance automation with flexibility**: Don't over-automate to the point of hindering development
+6. **Secure your CI/CD pipelines**: Protect secrets and credentials used in automation
+7. **Use caching**: Speed up CI/CD pipelines by caching dependencies
+8. **Parallelize when possible**: Run independent tasks concurrently
+9. **Fail fast**: Configure pipelines to fail early when issues are detected
+10. **Provide clear feedback**: Ensure automation tools give clear, actionable feedback

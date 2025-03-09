@@ -1,0 +1,444 @@
+---
+title: 'Fabric Rendering'
+description: 'Understanding React Native Fabric rendering system'
+---
+
+# Fabric Rendering System
+
+Fabric is React Native's new rendering system that provides improved performance, better thread management, and more consistent rendering across platforms.
+
+## Core Concepts
+
+### Shadow Tree
+
+The shadow tree is an intermediate representation of the UI that Fabric uses to compute layouts.
+
+```javascript
+// React Component Tree
+const MyComponent = () => (
+  <View style={styles.container}>
+    <Text style={styles.text}>Hello</Text>
+    <Image source={require('./image.png')} />
+  </View>
+);
+
+// Converts to Shadow Tree nodes internally
+// View -> ViewShadowNode
+// Text -> TextShadowNode
+// Image -> ImageShadowNode
+```
+
+### Host Components
+
+Host components are the platform-specific implementations of React Native components.
+
+```cpp
+// C++ definition (internal)
+class ViewComponentDescriptor : public ConcreteComponentDescriptor<ViewComponent> {
+  // Implementation details
+};
+```
+
+## Rendering Pipeline
+
+### 1. Render Phase
+
+```javascript
+// React creates elements
+const element = React.createElement(
+  View,
+  {
+    style: styles.container,
+  },
+  children
+);
+
+// Fabric converts to shadow nodes
+// Internal representation (pseudo-code):
+const shadowNode = new ViewShadowNode({
+  props: element.props,
+  children: element.children,
+});
+```
+
+### 2. Commit Phase
+
+```javascript
+// After layout is calculated
+// Internal process (pseudo-code):
+function commitUpdate(shadowNode) {
+  // Calculate layout
+  layoutNode(shadowNode);
+
+  // Create/update native views
+  updateNativeViews(shadowNode);
+}
+```
+
+### 3. Mount Phase
+
+```javascript
+// Final mounting to native UI
+// Internal process (pseudo-code):
+function mountNode(shadowNode) {
+  // Create native view if needed
+  const nativeView = createNativeView(shadowNode);
+
+  // Apply layout
+  applyLayout(nativeView, shadowNode.layout);
+
+  // Mount children
+  mountChildren(shadowNode.children);
+}
+```
+
+## Threading Model
+
+### Main Thread
+
+```javascript
+// UI updates happen on main thread
+const MyComponent = () => {
+  const [count, setCount] = useState(0);
+
+  return (
+    <TouchableOpacity onPress={() => setCount((c) => c + 1)}>
+      <Text>Count: {count}</Text>
+    </TouchableOpacity>
+  );
+};
+```
+
+### JavaScript Thread
+
+```javascript
+// Business logic runs on JS thread
+const MyComponent = () => {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    // This runs on JS thread
+    fetchData().then(setData);
+  }, []);
+
+  return <View>{/* render data */}</View>;
+};
+```
+
+### Shadow Thread
+
+```javascript
+// Layout calculations happen on shadow thread
+// Internal process (pseudo-code):
+function calculateLayout(shadowNode) {
+  // Runs on shadow thread
+  const layout = yogaNode.calculateLayout();
+  shadowNode.setLayoutMetrics(layout);
+}
+```
+
+## Performance Optimizations
+
+### 1. View Flattening
+
+```javascript
+// Before flattening
+<View style={styles.outer}>
+  <View style={styles.inner}>
+    <Text>Hello</Text>
+  </View>
+</View>
+
+// After flattening (internal)
+<FlattenedView style={mergedStyles}>
+  <Text>Hello</Text>
+</FlattenedView>
+```
+
+### 2. State Updates
+
+```javascript
+// Optimized state updates
+const MyComponent = () => {
+  const [state, setState] = useState(initialState);
+
+  const updateState = useCallback(() => {
+    // Batched state updates
+    setState((prev) => ({ ...prev, value: newValue }));
+  }, []);
+
+  return <View>{/* render */}</View>;
+};
+```
+
+### 3. Layout Optimization
+
+```javascript
+// Use constants for static layouts
+const styles = StyleSheet.create({
+  container: {
+    width: 100,
+    height: 100,
+    margin: 10,
+  },
+});
+
+// Instead of dynamic values
+const badExample = {
+  width: calculateWidth(), // Triggers layout calculation
+  height: calculateHeight(), // Triggers layout calculation
+};
+```
+
+## Interoperability
+
+### Legacy Components
+
+```javascript
+// Using legacy component with Fabric
+const LegacyWrapper = requireNativeComponent('LegacyView');
+
+const MyComponent = () => (
+  <LegacyWrapper style={styles.container} prop1='value1' prop2={42} />
+);
+```
+
+### Native Components
+
+```javascript
+// Creating Fabric-compatible native component
+export interface Props extends ViewProps {
+  color: string;
+  onCustomEvent?: (event: CustomEvent) => void;
+}
+
+const NativeComponent = requireNativeComponent < Props > 'CustomView';
+```
+
+## Debugging
+
+### 1. Performance Monitoring
+
+```javascript
+import { PerformanceObserver } from 'react-native';
+
+const observer = new PerformanceObserver((list) => {
+  const entries = list.getEntries();
+  entries.forEach((entry) => {
+    if (entry.name.includes('Fabric')) {
+      console.log(`${entry.name}: ${entry.duration}ms`);
+    }
+  });
+});
+
+observer.observe({ entryTypes: ['measure'] });
+```
+
+### 2. Layout Debugging
+
+```javascript
+// Enable layout debugging
+if (__DEV__) {
+  const { connectToDevTools } = require('react-devtools-core');
+  connectToDevTools({
+    host: 'localhost',
+    port: 8097,
+  });
+}
+```
+
+### 3. Component Inspection
+
+```javascript
+// Add testID for easier debugging
+const MyComponent = () => (
+  <View testID='debug-view'>
+    <Text testID='debug-text'>Hello</Text>
+  </View>
+);
+```
+
+## Best Practices
+
+### 1. Component Design
+
+```javascript
+// Use proper component hierarchy
+const GoodComponent = () => (
+  <View style={styles.container}>
+    <Header />
+    <Content />
+    <Footer />
+  </View>
+);
+
+// Avoid deep nesting
+const BadComponent = () => (
+  <View>
+    <View>
+      <View>
+        <View>
+          <Text>Too deep!</Text>
+        </View>
+      </View>
+    </View>
+  </View>
+);
+```
+
+### 2. Layout Performance
+
+```javascript
+// Use flexbox for dynamic layouts
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    flexDirection: 'column',
+  },
+  content: {
+    flex: 1,
+  },
+});
+
+// Avoid absolute positioning when possible
+const badStyles = StyleSheet.create({
+  positioned: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+});
+```
+
+### 3. Memory Management
+
+```javascript
+// Clean up resources
+useEffect(() => {
+  const subscription = subscribe();
+
+  return () => {
+    // Cleanup when component unmounts
+    subscription.unsubscribe();
+  };
+}, []);
+```
+
+## Common Issues and Solutions
+
+### 1. Layout Issues
+
+```javascript
+// Problem: Inconsistent layout
+<View style={{ height: '100%' }}>
+  <Text>Content</Text>
+</View>
+
+// Solution: Use flex
+<View style={{ flex: 1 }}>
+  <Text>Content</Text>
+</View>
+```
+
+### 2. Performance Issues
+
+```javascript
+// Problem: Frequent re-renders
+const BadComponent = ({ data }) => (
+  <View style={{ width: calculateWidth(data) }}>
+    <Text>{data.text}</Text>
+  </View>
+);
+
+// Solution: Memoize calculations
+const GoodComponent = ({ data }) => {
+  const width = useMemo(() => calculateWidth(data), [data]);
+
+  return (
+    <View style={{ width }}>
+      <Text>{data.text}</Text>
+    </View>
+  );
+};
+```
+
+### 3. Animation Issues
+
+```javascript
+// Problem: Janky animations
+const BadAnimation = () => {
+  const [position, setPosition] = useState(0);
+
+  useEffect(() => {
+    // Direct state updates cause re-renders
+    setInterval(() => setPosition((p) => p + 1), 16);
+  }, []);
+
+  return <View style={{ transform: [{ translateX: position }] }} />;
+};
+
+// Solution: Use Animated
+const GoodAnimation = () => {
+  const position = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(position, {
+        toValue: 100,
+        duration: 1000,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+
+  return <Animated.View style={{ transform: [{ translateX: position }] }} />;
+};
+```
+
+## Migration Guide
+
+### 1. Preparation
+
+```bash
+# Update to React Native 0.70.0 or higher
+npm install react-native@latest
+
+# Enable Fabric
+export RCT_NEW_ARCH_ENABLED=1
+```
+
+### 2. Component Updates
+
+```javascript
+// Update components to be Fabric-compatible
+const MyComponent = ({ style, ...props }) => (
+  <View style={[styles.default, style]} {...props} />
+);
+
+// Use proper prop types
+MyComponent.propTypes = {
+  style: ViewPropTypes.style,
+};
+```
+
+### 3. Testing
+
+```javascript
+// Add tests for layout behavior
+test('component layout', () => {
+  const { getByTestId } = render(<MyComponent />);
+  const component = getByTestId('my-component');
+
+  expect(component).toHaveStyle({
+    flex: 1,
+    flexDirection: 'column',
+  });
+});
+```
+
+## Further Resources
+
+- [Official Fabric Documentation](https://reactnative.dev/docs/next/fabric-renderer)
+- [React Native New Architecture](https://reactnative.dev/docs/next/the-new-architecture/introduction)
+- [Performance Best Practices](https://reactnative.dev/docs/performance)
+- [Layout Props Documentation](https://reactnative.dev/docs/layout-props)

@@ -1,0 +1,496 @@
+---
+title: 'Threading Model'
+description: 'Understanding React Native threading model and thread management'
+---
+
+# Threading Model
+
+React Native uses a multi-threaded architecture to ensure smooth performance and responsive user interfaces. Understanding how these threads work and interact is crucial for building performant applications.
+
+## Core Threads
+
+### 1. Main Thread (UI Thread)
+
+The main thread is responsible for rendering UI components and handling user interactions.
+
+```javascript
+// UI updates must happen on the main thread
+const MyComponent = () => {
+  const [count, setCount] = useState(0);
+
+  return (
+    <TouchableOpacity
+      onPress={() => {
+        // This callback runs on the main thread
+        setCount((c) => c + 1);
+      }}
+    >
+      <Text>Count: {count}</Text>
+    </TouchableOpacity>
+  );
+};
+```
+
+### 2. JavaScript Thread
+
+The JavaScript thread runs your React components and business logic.
+
+```javascript
+// Business logic runs on the JS thread
+const MyComponent = () => {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    // This runs on the JS thread
+    fetchData().then((response) => {
+      // Data processing on JS thread
+      const processed = processData(response);
+      setData(processed);
+    });
+  }, []);
+
+  return <View>{/* render data */}</View>;
+};
+```
+
+### 3. Shadow Thread
+
+The shadow thread handles layout calculations in Fabric.
+
+```javascript
+// Layout calculations happen on the shadow thread
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
+
+// These styles trigger layout calculations on the shadow thread
+const MyComponent = () => (
+  <View style={styles.container}>
+    <Text>Content</Text>
+  </View>
+);
+```
+
+## Thread Communication
+
+### Bridge vs. JSI
+
+```javascript
+// Old Bridge approach (asynchronous)
+NativeModules.MyModule.doSomething().then((result) => console.log(result));
+
+// New JSI approach (synchronous)
+const result = MyModule.doSomething();
+console.log(result);
+```
+
+### Event Handling
+
+```javascript
+// Events flow from native to JS
+const MyComponent = () => {
+  const onScroll = useCallback((event) => {
+    // Runs on JS thread
+    console.log(event.nativeEvent);
+  }, []);
+
+  return (
+    <ScrollView onScroll={onScroll} scrollEventThrottle={16}>
+      <Text>Content</Text>
+    </ScrollView>
+  );
+};
+```
+
+## Thread Management
+
+### 1. Scheduling Work
+
+```javascript
+import { InteractionManager } from 'react-native';
+
+// Schedule non-urgent work
+InteractionManager.runAfterInteractions(() => {
+  // This runs after animations/interactions complete
+  heavyOperation();
+});
+
+// For time-critical operations
+requestAnimationFrame(() => {
+  // This runs before the next frame
+  updateAnimation();
+});
+```
+
+### 2. Managing Long Tasks
+
+```javascript
+// Break up long tasks
+const processLargeData = (data) => {
+  const chunks = chunkArray(data, 100);
+
+  const processChunk = (index) => {
+    if (index >= chunks.length) return;
+
+    // Process one chunk
+    processChunkData(chunks[index]);
+
+    // Schedule next chunk
+    setTimeout(() => processChunk(index + 1), 0);
+  };
+
+  processChunk(0);
+};
+```
+
+### 3. Background Tasks
+
+```javascript
+import { AppState } from 'react-native';
+
+const MyComponent = () => {
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background') {
+        // App is in background
+        pauseHeavyOperations();
+      } else if (nextAppState === 'active') {
+        // App is in foreground
+        resumeOperations();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  return <View>{/* content */}</View>;
+};
+```
+
+## Performance Optimization
+
+### 1. Avoiding Bridge Congestion
+
+```javascript
+// Bad: Many small native calls
+const BadExample = () => {
+  const items = new Array(1000).fill(0);
+
+  return (
+    <View>
+      {items.map((_, i) => (
+        // Each Text component creates a native call
+        <Text key={i}>Item {i}</Text>
+      ))}
+    </View>
+  );
+};
+
+// Good: Batch native calls
+const GoodExample = () => {
+  const items = new Array(1000).fill(0);
+
+  // Group items into batches
+  const batches = chunk(items, 10);
+
+  return (
+    <View>
+      {batches.map((batch, i) => (
+        <View key={i}>
+          {batch.map((_, j) => (
+            <Text key={j}>Item {i * 10 + j}</Text>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+};
+```
+
+### 2. Optimizing Animations
+
+```javascript
+import { Animated } from 'react-native';
+
+const AnimatedComponent = () => {
+  const translateX = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Use native driver for better performance
+    Animated.timing(translateX, {
+      toValue: 100,
+      duration: 1000,
+      useNativeDriver: true, // Runs on UI thread
+    }).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={{
+        transform: [{ translateX }],
+      }}
+    />
+  );
+};
+```
+
+### 3. JS Thread Optimization
+
+```javascript
+// Use worker threads for heavy computation
+const heavyComputation = (data) => {
+  return new Promise((resolve) => {
+    const worker = new Worker('./worker.js');
+
+    worker.onmessage = (event) => {
+      resolve(event.data);
+      worker.terminate();
+    };
+
+    worker.postMessage(data);
+  });
+};
+
+// In worker.js
+self.onmessage = (event) => {
+  const result = processData(event.data);
+  self.postMessage(result);
+};
+```
+
+## Debugging Thread Issues
+
+### 1. Performance Monitoring
+
+```javascript
+import { PerformanceObserver } from 'react-native';
+
+const observer = new PerformanceObserver((list) => {
+  const entries = list.getEntries();
+  entries.forEach((entry) => {
+    console.log(`${entry.name}: ${entry.duration}ms`);
+  });
+});
+
+observer.observe({ entryTypes: ['measure'] });
+
+// Measure performance
+performance.mark('startOperation');
+// ... do work ...
+performance.mark('endOperation');
+performance.measure('operation', 'startOperation', 'endOperation');
+```
+
+### 2. Thread Profiling
+
+```javascript
+if (__DEV__) {
+  const { connectToDevTools } = require('react-devtools-core');
+  connectToDevTools({
+    host: 'localhost',
+    port: 8097,
+  });
+}
+```
+
+### 3. Identifying Thread Blocks
+
+```javascript
+// Monitor JS thread blocks
+const startTime = Date.now();
+
+setTimeout(() => {
+  const endTime = Date.now();
+  const blockDuration = endTime - startTime - 100;
+
+  if (blockDuration > 16) {
+    console.warn(`JS thread blocked for ${blockDuration}ms`);
+  }
+}, 100);
+```
+
+## Best Practices
+
+### 1. Thread-Safe Code
+
+```javascript
+// Use proper synchronization
+class ThreadSafeCounter {
+  constructor() {
+    this.value = 0;
+    this.lock = false;
+  }
+
+  increment() {
+    while (this.lock) {
+      // Wait for lock to be released
+    }
+
+    this.lock = true;
+    this.value++;
+    this.lock = false;
+
+    return this.value;
+  }
+}
+```
+
+### 2. Resource Management
+
+```javascript
+// Clean up resources properly
+const MyComponent = () => {
+  useEffect(() => {
+    const worker = new Worker('./worker.js');
+
+    return () => {
+      // Clean up when component unmounts
+      worker.terminate();
+    };
+  }, []);
+
+  return <View>{/* content */}</View>;
+};
+```
+
+### 3. Error Handling
+
+```javascript
+// Handle errors in different threads
+const safeOperation = async () => {
+  try {
+    // Operation that might fail
+    await riskyOperation();
+  } catch (error) {
+    // Log error and recover
+    console.error('Operation failed:', error);
+    // Attempt recovery
+    await fallbackOperation();
+  }
+};
+```
+
+## Common Issues and Solutions
+
+### 1. UI Thread Blocking
+
+```javascript
+// Problem: Blocking UI thread
+const BadComponent = () => {
+  const [result, setResult] = useState(null);
+
+  const onPress = () => {
+    // Blocks UI thread
+    const heavyResult = heavyComputation();
+    setResult(heavyResult);
+  };
+
+  return (
+    <TouchableOpacity onPress={onPress}>
+      <Text>Compute</Text>
+    </TouchableOpacity>
+  );
+};
+
+// Solution: Move heavy work off UI thread
+const GoodComponent = () => {
+  const [result, setResult] = useState(null);
+
+  const onPress = async () => {
+    // Run in background
+    const heavyResult = await heavyComputation();
+    setResult(heavyResult);
+  };
+
+  return (
+    <TouchableOpacity onPress={onPress}>
+      <Text>Compute</Text>
+    </TouchableOpacity>
+  );
+};
+```
+
+### 2. JS Thread Overload
+
+```javascript
+// Problem: Too many JS operations
+const BadList = ({ items }) => (
+  <FlatList
+    data={items}
+    renderItem={({ item }) => {
+      // Heavy computation on JS thread
+      const processed = heavyProcess(item);
+      return <ListItem data={processed} />;
+    }}
+  />
+);
+
+// Solution: Cache and optimize
+const GoodList = ({ items }) => {
+  // Memoize heavy computations
+  const processedItems = useMemo(() => items.map(heavyProcess), [items]);
+
+  const renderItem = useCallback(({ item }) => <ListItem data={item} />, []);
+
+  return <FlatList data={processedItems} renderItem={renderItem} />;
+};
+```
+
+### 3. Thread Synchronization
+
+```javascript
+// Problem: Race conditions
+const BadSync = () => {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    fetchData().then((result) => {
+      // Race condition if component unmounts
+      setData(result);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return <View>{/* render data */}</View>;
+};
+
+// Solution: Proper cleanup
+const GoodSync = () => {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    fetchData().then((result) => {
+      if (mounted) {
+        setData(result);
+      }
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  return <View>{/* render data */}</View>;
+};
+```
+
+## Further Resources
+
+- [Official Threading Documentation](https://reactnative.dev/docs/performance#js-frame-rate)
+- [Performance Optimization Guide](https://reactnative.dev/docs/performance)
+- [Debugging Guide](https://reactnative.dev/docs/debugging)
+- [Native Modules Threading](https://reactnative.dev/docs/native-modules-android#threading)

@@ -1,0 +1,146 @@
+---
+title: 'React Native New Architecture sumup'
+description: 'A deep dive into the new architecture of React Native, including Hermes, JSI, and Fabric.'
+---
+
+import { Tab, Tabs } from 'fumadocs-ui/components/tabs';
+
+# React Native New Architecture 🚀
+
+React Native has introduced a **new architecture** to improve performance and efficiency. This documentation explains:
+
+✅ **Hermes (JavaScript Engine)**  
+✅ **JSI (JavaScript Interface - Replaces the Bridge)**  
+✅ **Fabric (New UI Rendering System)**
+
+---
+
+## 1️⃣ JSX & JavaScript Execution
+
+### Writing JSX & Modern JavaScript
+
+```jsx
+const App = () => <Text>Hello World</Text>;
+```
+
+### Babel Transpilation (Before & After)
+
+```jsx
+// JSX Code (Before Babel)
+const App = () => <Text>Hello World</Text>;
+
+// Transpiled Code (After Babel)
+const App = () => React.createElement(Text, null, 'Hello World');
+```
+
+---
+
+## 2️⃣ Hermes: The JavaScript Engine for React Native
+
+Hermes is a lightweight JavaScript engine built for React Native. It improves:
+
+- **Startup Time** (AOT Compilation)
+- **Memory Usage** (Lower RAM consumption)
+- **Garbage Collection** (Optimized for mobile)
+
+### Hermes Bytecode Compilation
+
+```sh
+hermesc -emit-binary index.js -out index.hbc
+```
+
+### Enable Hermes in `android/app/build.gradle`
+
+```gradle
+project.ext.react = [
+    enableHermes: true  // Enable Hermes for better performance
+]
+```
+
+---
+
+## 3️⃣ JSI: JavaScript Interface (Replaces the Old Bridge)
+
+JSI allows JavaScript to interact **directly** with Native code (C++, Java, Swift) without the **Bridge**.
+
+### Example: Calling Native Code via JSI
+
+```javascript
+const batteryLevel = global.MyNativeModule.getBatteryLevel();
+console.log(`Battery Level: ${batteryLevel}%`);
+```
+
+### Example: Implementing JSI in C++ (Native Side)
+
+```cpp
+jsi::Value getBatteryLevel(jsi::Runtime &runtime, const jsi::Value *args, size_t count) {
+    return jsi::Value(85); // Returns battery level (85%)
+}
+```
+
+---
+
+## 4️⃣ Fabric: The New UI Rendering System
+
+Fabric improves UI updates by making them **synchronous** and reducing latency.
+
+### Example: Native View Rendering with Fabric
+
+```javascript
+<View>
+  <Text>Battery: {batteryLevel}%</Text>
+</View>
+```
+
+---
+
+## 5️⃣ Full Flow: How React Native Executes Code
+
+1. **You write JSX & JavaScript** (React components)
+2. **Babel transpiles** JSX & modern JavaScript to standard JavaScript
+3. **Hermes compiles JavaScript to bytecode** (AOT)
+4. **JSI provides direct access** to native code (no bridge)
+5. **Native modules execute the logic** and return data
+6. **Hermes executes JavaScript with the native response**
+7. **Fabric updates the UI synchronously**
+
+---
+
+## 6️⃣ Comparison: Old vs. New React Native Architecture
+
+<Tabs items={['Old Architecture', 'New Architecture']}>
+<Tab value="Old Architecture">
+
+| Feature                       | Old Bridge (Legacy)          |
+| ----------------------------- | ---------------------------- |
+| **JS Execution**              | JavaScriptCore (JSC)         |
+| **JS ↔ Native Communication** | Bridge (Slow, Async)         |
+| **UI Updates**                | Old UI Manager (Slow, Async) |
+| **Memory Usage**              | Higher                       |
+| **Startup Time**              | Slower                       |
+
+</Tab>
+
+<Tab value="New Architecture">
+
+| Feature                       | New (Hermes + JSI + Fabric) |
+| ----------------------------- | --------------------------- |
+| **JS Execution**              | Hermes (AOT compiled)       |
+| **JS ↔ Native Communication** | JSI (Fast, Direct)          |
+| **UI Updates**                | Fabric (Fast, Synchronous)  |
+| **Memory Usage**              | Lower                       |
+| **Startup Time**              | Faster                      |
+
+</Tab>
+</Tabs>
+
+---
+
+## 7️⃣ Summary: Why Use the New React Native Architecture? 🚀
+
+✅ **Faster startup (Hermes precompiles JS)**  
+✅ **Lower memory usage (Bytecode execution)**  
+✅ **No more slow bridge communication (JSI replaces it)**  
+✅ **Smoother animations (Fabric handles UI updates better)**
+
+Would you like a deeper dive into **JSI implementation** or **Fabric internals**? Let’s discuss! 🚀

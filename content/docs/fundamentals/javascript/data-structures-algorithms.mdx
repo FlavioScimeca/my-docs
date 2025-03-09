@@ -1,0 +1,284 @@
+---
+title: 'JavaScript Data Structures and Algorithms'
+description: 'A comprehensive guide to implementing common data structures and algorithms in JavaScript'
+---
+
+# JavaScript Data Structures and Algorithms
+
+## Common Data Structures
+
+### 1. Linked List
+
+```javascript
+class Node {
+  constructor(value) {
+    this.value = value;
+    this.next = null;
+  }
+}
+
+class LinkedList {
+  constructor() {
+    this.head = null;
+    this.size = 0;
+  }
+
+  append(value) {
+    const node = new Node(value);
+    if (!this.head) {
+      this.head = node;
+    } else {
+      let current = this.head;
+      while (current.next) {
+        current = current.next;
+      }
+      current.next = node;
+    }
+    this.size++;
+  }
+
+  // Example usage:
+  // const list = new LinkedList();
+  // list.append(1);
+  // list.append(2);
+}
+```
+
+### 2. Binary Search Tree
+
+```javascript
+class TreeNode {
+  constructor(value) {
+    this.value = value;
+    this.left = null;
+    this.right = null;
+  }
+}
+
+class BinarySearchTree {
+  constructor() {
+    this.root = null;
+  }
+
+  insert(value) {
+    const node = new TreeNode(value);
+    if (!this.root) {
+      this.root = node;
+      return;
+    }
+
+    let current = this.root;
+    while (true) {
+      if (value < current.value) {
+        if (!current.left) {
+          current.left = node;
+          break;
+        }
+        current = current.left;
+      } else {
+        if (!current.right) {
+          current.right = node;
+          break;
+        }
+        current = current.right;
+      }
+    }
+  }
+
+  // Example usage:
+  // const bst = new BinarySearchTree();
+  // bst.insert(5);
+  // bst.insert(3);
+  // bst.insert(7);
+}
+```
+
+## Algorithm Patterns
+
+### 1. Two Pointers Pattern
+
+```javascript
+function findPairWithSum(arr, target) {
+  let left = 0;
+  let right = arr.length - 1;
+
+  while (left < right) {
+    const sum = arr[left] + arr[right];
+    if (sum === target) {
+      return [left, right];
+    }
+    if (sum < target) {
+      left++;
+    } else {
+      right--;
+    }
+  }
+  return null;
+}
+
+// Example usage:
+// const arr = [1, 2, 3, 4, 5];
+// const result = findPairWithSum(arr, 7); // Returns [2, 4]
+```
+
+### 2. Sliding Window Pattern
+
+```javascript
+function findMaxSubarraySum(arr, k) {
+  if (k > arr.length) return null;
+
+  let maxSum = 0;
+  let windowSum = 0;
+
+  // Calculate sum of first window
+  for (let i = 0; i < k; i++) {
+    windowSum += arr[i];
+  }
+  maxSum = windowSum;
+
+  // Slide window and update maxSum
+  for (let i = k; i < arr.length; i++) {
+    windowSum = windowSum - arr[i - k] + arr[i];
+    maxSum = Math.max(maxSum, windowSum);
+  }
+
+  return maxSum;
+}
+
+// Example usage:
+// const arr = [1, 4, 2, 10, 2, 3, 1, 0, 20];
+// const maxSum = findMaxSubarraySum(arr, 3); // Returns 23
+```
+
+## Performance Considerations
+
+### Time Complexity Analysis
+
+```javascript
+// O(n) - Linear Time
+function linearSearch(arr, target) {
+  for (let i = 0; i < arr.length; i++) {
+    if (arr[i] === target) return i;
+  }
+  return -1;
+}
+
+// O(log n) - Logarithmic Time
+function binarySearch(arr, target) {
+  let left = 0;
+  let right = arr.length - 1;
+
+  while (left <= right) {
+    const mid = Math.floor((left + right) / 2);
+    if (arr[mid] === target) return mid;
+    if (arr[mid] < target) {
+      left = mid + 1;
+    } else {
+      right = mid - 1;
+    }
+  }
+  return -1;
+}
+```
+
+### Space Complexity Optimization
+
+```javascript
+// Space-optimized fibonacci using iteration
+function fibonacci(n) {
+  if (n <= 1) return n;
+
+  let prev = 0;
+  let current = 1;
+
+  for (let i = 2; i <= n; i++) {
+    const temp = current;
+    current = prev + current;
+    prev = temp;
+  }
+
+  return current;
+}
+
+// Example usage:
+// console.log(fibonacci(10)); // Returns 55
+```
+
+## Common Algorithm Implementations
+
+### 1. Sorting Algorithms
+
+```javascript
+// Quick Sort Implementation
+function quickSort(arr) {
+  if (arr.length <= 1) return arr;
+
+  const pivot = arr[Math.floor(arr.length / 2)];
+  const left = arr.filter((x) => x < pivot);
+  const middle = arr.filter((x) => x === pivot);
+  const right = arr.filter((x) => x > pivot);
+
+  return [...quickSort(left), ...middle, ...quickSort(right)];
+}
+
+// Example usage:
+// const arr = [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5];
+// console.log(quickSort(arr));
+```
+
+### 2. Graph Algorithms
+
+```javascript
+class Graph {
+  constructor() {
+    this.adjacencyList = {};
+  }
+
+  addVertex(vertex) {
+    if (!this.adjacencyList[vertex]) {
+      this.adjacencyList[vertex] = [];
+    }
+  }
+
+  addEdge(vertex1, vertex2) {
+    this.adjacencyList[vertex1].push(vertex2);
+    this.adjacencyList[vertex2].push(vertex1);
+  }
+
+  // Breadth-First Search
+  bfs(start) {
+    const queue = [start];
+    const visited = new Set([start]);
+    const result = [];
+
+    while (queue.length) {
+      const vertex = queue.shift();
+      result.push(vertex);
+
+      for (const neighbor of this.adjacencyList[vertex]) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          queue.push(neighbor);
+        }
+      }
+    }
+
+    return result;
+  }
+}
+
+// Example usage:
+// const graph = new Graph();
+// graph.addVertex("A");
+// graph.addVertex("B");
+// graph.addVertex("C");
+// graph.addEdge("A", "B");
+// graph.addEdge("B", "C");
+// console.log(graph.bfs("A")); // Returns ["A", "B", "C"]
+```
+
+## Related Topics
+
+- [Performance Optimization](/docs/fundamentals/javascript/performance-optimization)
+- [Memory Management](/docs/fundamentals/javascript/memory-management)
+- [Advanced Concepts](/docs/fundamentals/javascript/advanced-concepts)

@@ -1,0 +1,251 @@
+---
+title: 'JavaScript Internationalization (i18n)'
+description: 'A comprehensive guide to implementing internationalization in JavaScript using the Intl API'
+---
+
+# JavaScript Internationalization (i18n)
+
+## Using the Intl API
+
+### 1. Number Formatting
+
+```javascript
+// Basic number formatting
+const number = 123456.789;
+
+// US English formatting
+console.log(new Intl.NumberFormat('en-US').format(number));
+// Output: 123,456.789
+
+// German formatting
+console.log(new Intl.NumberFormat('de-DE').format(number));
+// Output: 123.456,789
+
+// Currency formatting
+const price = 99.99;
+console.log(
+  new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(price)
+);
+// Output: $99.99
+
+// Percentage formatting
+const percentage = 0.25;
+console.log(
+  new Intl.NumberFormat('en-US', {
+    style: 'percent',
+  }).format(percentage)
+);
+// Output: 25%
+```
+
+### 2. Date and Time Formatting
+
+```javascript
+const date = new Date();
+
+// Basic date formatting
+console.log(new Intl.DateTimeFormat('en-US').format(date));
+// Output: 3/14/2024
+
+// Full date and time
+console.log(
+  new Intl.DateTimeFormat('en-US', {
+    dateStyle: 'full',
+    timeStyle: 'long',
+  }).format(date)
+);
+// Output: Thursday, March 14, 2024 at 2:45:30 PM GMT-4
+
+// Relative time formatting
+const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+console.log(rtf.format(-1, 'day')); // Output: yesterday
+console.log(rtf.format(2, 'day')); // Output: in 2 days
+```
+
+### 3. Collation (String Comparison)
+
+```javascript
+const letters = ['é', 'a', 'ç', 'b'];
+const collator = new Intl.Collator('fr');
+
+// Sort according to French rules
+console.log(letters.sort(collator.compare));
+// Output: ['a', 'b', 'ç', 'é']
+
+// Case-insensitive sorting
+const words = ['apple', 'Apple', 'banana', 'Banana'];
+const caseInsensitive = new Intl.Collator('en', { sensitivity: 'base' });
+console.log(words.sort(caseInsensitive.compare));
+// Output: ['apple', 'Apple', 'banana', 'Banana']
+```
+
+## Formatting for Different Locales
+
+### 1. Pluralization
+
+```javascript
+const pluralRules = new Intl.PluralRules('en-US');
+
+function getItemText(count) {
+  const rule = pluralRules.select(count);
+  const messages = {
+    one: 'item',
+    other: 'items',
+  };
+  return `${count} ${messages[rule]}`;
+}
+
+console.log(getItemText(1)); // Output: 1 item
+console.log(getItemText(2)); // Output: 2 items
+```
+
+### 2. List Formatting
+
+```javascript
+const fruits = ['apple', 'banana', 'orange'];
+
+const listFormatter = new Intl.ListFormat('en', {
+  style: 'long',
+  type: 'conjunction',
+});
+
+console.log(listFormatter.format(fruits));
+// Output: apple, banana, and orange
+
+const listFormatterDisjunction = new Intl.ListFormat('en', {
+  style: 'short',
+  type: 'disjunction',
+});
+
+console.log(listFormatterDisjunction.format(fruits));
+// Output: apple, banana, or orange
+```
+
+## RTL (Right-to-Left) Considerations
+
+### 1. Bidirectional Text Handling
+
+```javascript
+// Using Unicode control characters for bidirectional text
+function wrapRTL(text) {
+  return `\u202B${text}\u202C`; // RLE and PDF markers
+}
+
+function wrapLTR(text) {
+  return `\u202A${text}\u202C`; // LRE and PDF markers
+}
+
+// Example usage
+const mixedText = `${wrapLTR('English')} ${wrapRTL('العربية')} ${wrapLTR(
+  'More English'
+)}`;
+```
+
+### 2. CSS Considerations for RTL
+
+```javascript
+// Dynamic RTL styles
+function applyRTLStyles(isRTL) {
+  const styles = {
+    direction: isRTL ? 'rtl' : 'ltr',
+    textAlign: isRTL ? 'right' : 'left',
+    // Mirror margins and paddings
+    marginLeft: isRTL ? '0' : '20px',
+    marginRight: isRTL ? '20px' : '0',
+  };
+
+  return styles;
+}
+
+// Example usage with a component
+function createComponent(text, isRTL) {
+  const element = document.createElement('div');
+  const styles = applyRTLStyles(isRTL);
+
+  Object.assign(element.style, styles);
+  element.textContent = text;
+
+  return element;
+}
+```
+
+## Best Practices
+
+### 1. Message Format Pattern
+
+```javascript
+class MessageFormatter {
+  constructor(locale) {
+    this.locale = locale;
+    this.numberFormatter = new Intl.NumberFormat(locale);
+    this.dateFormatter = new Intl.DateTimeFormat(locale);
+  }
+
+  format(message, values) {
+    return message.replace(/\{(\w+)(?::(\w+))?\}/g, (match, key, type) => {
+      const value = values[key];
+      if (value === undefined) return match;
+
+      switch (type) {
+        case 'number':
+          return this.numberFormatter.format(value);
+        case 'date':
+          return this.dateFormatter.format(value);
+        default:
+          return value;
+      }
+    });
+  }
+}
+
+// Example usage
+const formatter = new MessageFormatter('en-US');
+const message =
+  'Hello {name}, you have {count:number} messages as of {date:date}';
+const values = {
+  name: 'John',
+  count: 3,
+  date: new Date(),
+};
+
+console.log(formatter.format(message, values));
+// Output: Hello John, you have 3 messages as of 3/14/2024
+```
+
+### 2. Loading Locale Data
+
+```javascript
+async function loadLocaleData(locale) {
+  try {
+    const response = await fetch(`/locales/${locale}.json`);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error(`Failed to load locale data for ${locale}:`, error);
+    return null;
+  }
+}
+
+// Example usage
+async function initializeI18n(defaultLocale = 'en-US') {
+  const userLocale = navigator.language || defaultLocale;
+  const localeData = await loadLocaleData(userLocale);
+
+  if (localeData) {
+    // Initialize your i18n system with the loaded data
+    return new MessageFormatter(userLocale);
+  }
+
+  // Fallback to default locale
+  return new MessageFormatter(defaultLocale);
+}
+```
+
+## Related Topics
+
+- [Modern APIs](/docs/fundamentals/javascript/modern-apis)
+- [Web APIs and DOM](/docs/fundamentals/javascript/web-apis-dom)
+- [Performance Optimization](/docs/fundamentals/javascript/performance-optimization)

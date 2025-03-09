@@ -1,0 +1,390 @@
+---
+title: 'JavaScript Accessibility'
+description: 'A comprehensive guide to implementing accessibility features in JavaScript applications'
+---
+
+# JavaScript Accessibility
+
+## Writing Accessible JavaScript
+
+### 1. Focus Management
+
+```javascript
+// Custom focus trap for modals
+class FocusTrap {
+  constructor(element) {
+    this.element = element;
+    this.focusableElements = element.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    this.firstFocusable = this.focusableElements[0];
+    this.lastFocusable =
+      this.focusableElements[this.focusableElements.length - 1];
+  }
+
+  trapFocus(e) {
+    const isTabPressed = e.key === 'Tab';
+    if (!isTabPressed) return;
+
+    if (e.shiftKey) {
+      if (document.activeElement === this.firstFocusable) {
+        e.preventDefault();
+        this.lastFocusable.focus();
+      }
+    } else {
+      if (document.activeElement === this.lastFocusable) {
+        e.preventDefault();
+        this.firstFocusable.focus();
+      }
+    }
+  }
+
+  activate() {
+    this.element.addEventListener('keydown', this.trapFocus.bind(this));
+    this.firstFocusable.focus();
+  }
+
+  deactivate() {
+    this.element.removeEventListener('keydown', this.trapFocus.bind(this));
+  }
+}
+
+// Example usage:
+// const modal = document.querySelector('.modal');
+// const focusTrap = new FocusTrap(modal);
+// focusTrap.activate();
+```
+
+### 2. Skip Links
+
+```javascript
+// Implementing skip links for keyboard navigation
+function createSkipLink() {
+  const skipLink = document.createElement('a');
+  skipLink.href = '#main-content';
+  skipLink.className = 'skip-link';
+  skipLink.textContent = 'Skip to main content';
+
+  // Style the skip link
+  skipLink.style.cssText = `
+    position: absolute;
+    top: -40px;
+    left: 0;
+    padding: 8px;
+    background: #000;
+    color: #fff;
+    z-index: 100;
+    transition: top 0.2s;
+  `;
+
+  // Show skip link on focus
+  skipLink.addEventListener('focus', () => {
+    skipLink.style.top = '0';
+  });
+
+  skipLink.addEventListener('blur', () => {
+    skipLink.style.top = '-40px';
+  });
+
+  document.body.insertBefore(skipLink, document.body.firstChild);
+}
+```
+
+## Managing Focus
+
+### 1. Focus Management Utility
+
+```javascript
+const FocusManager = {
+  savedFocus: null,
+
+  save() {
+    this.savedFocus = document.activeElement;
+  },
+
+  restore() {
+    if (this.savedFocus) {
+      this.savedFocus.focus();
+      this.savedFocus = null;
+    }
+  },
+
+  moveFocusToElement(element) {
+    if (element) {
+      this.save();
+      element.focus();
+    }
+  },
+
+  // Focus first interactive element in a container
+  focusFirstInteractive(container) {
+    const firstFocusable = container.querySelector(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (firstFocusable) {
+      firstFocusable.focus();
+    }
+  },
+};
+
+// Example usage:
+// FocusManager.save();
+// showModal();
+// FocusManager.restore();
+```
+
+### 2. Keyboard Navigation
+
+```javascript
+class KeyboardNavigation {
+  constructor(container, selector) {
+    this.container = container;
+    this.elements = Array.from(container.querySelectorAll(selector));
+    this.currentIndex = 0;
+  }
+
+  handleKeyPress(event) {
+    switch (event.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        event.preventDefault();
+        this.currentIndex = (this.currentIndex + 1) % this.elements.length;
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        event.preventDefault();
+        this.currentIndex =
+          (this.currentIndex - 1 + this.elements.length) % this.elements.length;
+        break;
+      case 'Home':
+        event.preventDefault();
+        this.currentIndex = 0;
+        break;
+      case 'End':
+        event.preventDefault();
+        this.currentIndex = this.elements.length - 1;
+        break;
+      default:
+        return;
+    }
+    this.elements[this.currentIndex].focus();
+  }
+
+  activate() {
+    this.container.addEventListener('keydown', this.handleKeyPress.bind(this));
+  }
+
+  deactivate() {
+    this.container.removeEventListener(
+      'keydown',
+      this.handleKeyPress.bind(this)
+    );
+  }
+}
+
+// Example usage:
+// const menu = document.querySelector('.menu');
+// const navigation = new KeyboardNavigation(menu, 'button');
+// navigation.activate();
+```
+
+## ARIA in JavaScript Applications
+
+### 1. Dynamic ARIA Updates
+
+```javascript
+class AriaManager {
+  static updateLiveRegion(message, priority = 'polite') {
+    let region = document.querySelector(`[aria-live="${priority}"]`);
+
+    if (!region) {
+      region = document.createElement('div');
+      region.setAttribute('aria-live', priority);
+      region.setAttribute('role', 'status');
+      region.style.position = 'absolute';
+      region.style.clip = 'rect(0 0 0 0)';
+      document.body.appendChild(region);
+    }
+
+    // Clear and update content
+    region.textContent = '';
+    setTimeout(() => {
+      region.textContent = message;
+    }, 100);
+  }
+
+  static updateProgressBar(element, value, max = 100) {
+    element.setAttribute('aria-valuenow', value);
+    element.setAttribute('aria-valuemax', max);
+    element.setAttribute('aria-valuetext', `${value}%`);
+  }
+
+  static setExpandedState(trigger, expanded) {
+    trigger.setAttribute('aria-expanded', expanded);
+    const targetId = trigger.getAttribute('aria-controls');
+    if (targetId) {
+      const target = document.getElementById(targetId);
+      if (target) {
+        target.hidden = !expanded;
+      }
+    }
+  }
+}
+
+// Example usage:
+// AriaManager.updateLiveRegion('New message received', 'assertive');
+// AriaManager.updateProgressBar(progressElement, 75);
+// AriaManager.setExpandedState(buttonElement, true);
+```
+
+### 2. Custom Accessible Components
+
+```javascript
+class AccessibleTabs {
+  constructor(container) {
+    this.tablist = container.querySelector('[role="tablist"]');
+    this.tabs = Array.from(container.querySelectorAll('[role="tab"]'));
+    this.panels = Array.from(container.querySelectorAll('[role="tabpanel"]'));
+
+    this.init();
+  }
+
+  init() {
+    // Add keyboard support
+    this.tablist.addEventListener('keydown', this.handleKeydown.bind(this));
+
+    // Add click events
+    this.tabs.forEach((tab) => {
+      tab.addEventListener('click', this.handleClick.bind(this));
+    });
+
+    // Set initial states
+    this.tabs.forEach((tab, index) => {
+      tab.setAttribute('aria-selected', index === 0);
+      tab.setAttribute('tabindex', index === 0 ? '0' : '-1');
+      this.panels[index].hidden = index !== 0;
+    });
+  }
+
+  handleClick(e) {
+    e.preventDefault();
+    const clickedTab = e.target;
+    this.switchTab(clickedTab);
+  }
+
+  handleKeydown(e) {
+    const targetTab = e.target;
+    const currentIndex = this.tabs.indexOf(targetTab);
+
+    switch (e.key) {
+      case 'ArrowLeft':
+        e.preventDefault();
+        this.switchTab(
+          this.tabs[(currentIndex - 1 + this.tabs.length) % this.tabs.length]
+        );
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        this.switchTab(this.tabs[(currentIndex + 1) % this.tabs.length]);
+        break;
+      case 'Home':
+        e.preventDefault();
+        this.switchTab(this.tabs[0]);
+        break;
+      case 'End':
+        e.preventDefault();
+        this.switchTab(this.tabs[this.tabs.length - 1]);
+        break;
+    }
+  }
+
+  switchTab(newTab) {
+    // Update tab states
+    this.tabs.forEach((tab) => {
+      const isSelected = tab === newTab;
+      tab.setAttribute('aria-selected', isSelected);
+      tab.setAttribute('tabindex', isSelected ? '0' : '-1');
+    });
+
+    // Update panel visibility
+    const newPanelId = newTab.getAttribute('aria-controls');
+    this.panels.forEach((panel) => {
+      panel.hidden = panel.id !== newPanelId;
+    });
+
+    // Focus the new tab
+    newTab.focus();
+  }
+}
+
+// Example usage:
+// const tabContainer = document.querySelector('.tabs-container');
+// new AccessibleTabs(tabContainer);
+```
+
+## Event Handling for Accessibility
+
+### 1. Touch and Mouse Events
+
+```javascript
+class AccessibleButton {
+  constructor(element) {
+    this.element = element;
+    this.isPressed = false;
+
+    this.init();
+  }
+
+  init() {
+    // Ensure the element has proper role
+    if (!this.element.hasAttribute('role')) {
+      this.element.setAttribute('role', 'button');
+    }
+
+    // Add keyboard support
+    this.element.addEventListener('keydown', this.handleKeydown.bind(this));
+    this.element.addEventListener('keyup', this.handleKeyup.bind(this));
+
+    // Add touch/mouse support
+    this.element.addEventListener('mousedown', this.handlePress.bind(this));
+    this.element.addEventListener('mouseup', this.handleRelease.bind(this));
+    this.element.addEventListener('touchstart', this.handlePress.bind(this));
+    this.element.addEventListener('touchend', this.handleRelease.bind(this));
+  }
+
+  handleKeydown(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      this.handlePress();
+    }
+  }
+
+  handleKeyup(e) {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      this.handleRelease();
+      this.element.click();
+    }
+  }
+
+  handlePress() {
+    this.isPressed = true;
+    this.element.setAttribute('aria-pressed', 'true');
+  }
+
+  handleRelease() {
+    this.isPressed = false;
+    this.element.setAttribute('aria-pressed', 'false');
+  }
+}
+
+// Example usage:
+// const button = document.querySelector('.custom-button');
+// new AccessibleButton(button);
+```
+
+## Related Topics
+
+- [Web APIs and DOM](/docs/fundamentals/javascript/web-apis-dom)
+- [Event Loop](/docs/fundamentals/javascript/event-loop)
+- [Modern APIs](/docs/fundamentals/javascript/modern-apis)

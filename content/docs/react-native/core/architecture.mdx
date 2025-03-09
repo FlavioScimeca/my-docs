@@ -1,0 +1,268 @@
+---
+title: 'React Native Architecture'
+description: 'Understanding the architecture and internal workings of React Native'
+---
+
+# React Native Architecture
+
+## Overview
+
+React Native's architecture is built on three main pillars:
+
+1. JavaScript Thread
+2. Native Bridge
+3. Native Threads (Main/UI Thread)
+
+```javascript
+// High-level architecture visualization
+const architectureOverview = {
+  javascriptThread: {
+    responsibilities: [
+      'React Components',
+      'Business Logic',
+      'API Calls',
+      'Event Handling',
+    ],
+  },
+  nativeBridge: {
+    responsibilities: [
+      'Message Serialization',
+      'Asynchronous Communication',
+      'Batched Updates',
+    ],
+  },
+  nativeThreads: {
+    main: ['UI Updates', 'Native Modules', 'Platform APIs'],
+    shadow: ['Layout Calculations', 'Yoga Engine'],
+  },
+};
+```
+
+## The JavaScript Thread
+
+The JavaScript thread is where your React code runs. It handles:
+
+```javascript
+// Example of JavaScript thread responsibilities
+class ExampleComponent extends React.Component {
+  state = { data: null };
+
+  // Business Logic
+  async componentDidMount() {
+    try {
+      // API Calls
+      const response = await fetch('https://api.example.com/data');
+      const data = await response.json();
+
+      // State Updates
+      this.setState({ data });
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  }
+
+  // Event Handling
+  handlePress = () => {
+    // UI Updates through Bridge
+    this.setState({ pressed: true });
+  };
+
+  render() {
+    // Component Tree Management
+    return (
+      <View>
+        <Text>Data: {this.state.data}</Text>
+        <Button onPress={this.handlePress} />
+      </View>
+    );
+  }
+}
+```
+
+## The Native Bridge
+
+The bridge is responsible for communication between JavaScript and Native code:
+
+```javascript
+// Example of bridge communication
+import { NativeModules, NativeEventEmitter } from 'react-native';
+
+// Native Module Definition
+const GeolocationModule = NativeModules.Geolocation;
+
+// Event Emitter for Native to JS communication
+const geolocationEmitter = new NativeEventEmitter(GeolocationModule);
+
+class LocationTracker {
+  constructor() {
+    // JS to Native: Method calls
+    this.watchId = GeolocationModule.startLocationUpdates();
+
+    // Native to JS: Event listening
+    this.subscription = geolocationEmitter.addListener(
+      'locationUpdated',
+      this.handleLocationUpdate
+    );
+  }
+
+  handleLocationUpdate = (location) => {
+    console.log('Location received through bridge:', location);
+  };
+
+  stopTracking() {
+    // Cleanup
+    GeolocationModule.stopLocationUpdates(this.watchId);
+    this.subscription.remove();
+  }
+}
+```
+
+## Native Threads
+
+### Main Thread (UI Thread)
+
+```javascript
+// Example of native module that runs on main thread
+import { NativeModules } from 'react-native';
+
+const UIManager = NativeModules.UIManager;
+
+class UIComponent {
+  measure() {
+    return new Promise((resolve) => {
+      // Runs on UI thread
+      UIManager.measure(
+        this._nativeTag,
+        (x, y, width, height, pageX, pageY) => {
+          resolve({ x, y, width, height, pageX, pageY });
+        }
+      );
+    });
+  }
+}
+```
+
+### Shadow Thread
+
+```javascript
+// Example of layout calculation
+import { LayoutAnimation } from 'react-native';
+
+class AnimatedLayout extends React.Component {
+  componentWillUpdate() {
+    // Configure next layout animation
+    LayoutAnimation.configureNext({
+      duration: 300,
+      create: {
+        type: LayoutAnimation.Types.easeInEaseOut,
+        property: LayoutAnimation.Properties.opacity,
+      },
+      update: {
+        type: LayoutAnimation.Types.spring,
+        springDamping: 0.7,
+      },
+    });
+  }
+}
+```
+
+## New Architecture (Fabric & TurboModules)
+
+React Native's new architecture introduces several improvements:
+
+```javascript
+// Example of Fabric component
+import { createReactNativeComponentClass } from 'react-native';
+
+// JSI-powered direct method calls
+const FabricView = createReactNativeComponentClass('RCTView', {
+  validAttributes: {
+    style: true,
+    // Direct access to native props
+    nativeID: true
+  },
+  uiViewClassName: 'RCTView'
+});
+
+// TurboModule example
+import { TurboModuleRegistry } from 'react-native';
+
+interface Spec extends TurboModule {
+  readonly getConstants: () => {
+    const1: string;
+    const2: number;
+  };
+  multiply(a: number, b: number): Promise<number>;
+}
+
+export default TurboModuleRegistry.get<Spec>('MyTurboModule');
+```
+
+## Performance Implications
+
+Understanding the architecture helps in optimizing performance:
+
+```javascript
+class OptimizedComponent extends React.Component {
+  // Runs on JS thread
+  heavyComputation() {
+    // Move to native module if computation intensive
+    return NativeModules.Calculator.compute();
+  }
+
+  // Minimize bridge crossing
+  batchedUpdates() {
+    // Bad: Multiple bridge crossings
+    this.setState({ value1: 1 });
+    this.setState({ value2: 2 });
+
+    // Good: Single bridge crossing
+    this.setState({
+      value1: 1,
+      value2: 2,
+    });
+  }
+
+  // Use native driver for animations
+  animateValue() {
+    Animated.timing(this.animatedValue, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true, // Runs on UI thread
+    }).start();
+  }
+}
+```
+
+## Debugging Architecture Issues
+
+```javascript
+class ArchitectureDebugger {
+  static logBridgeCrossing() {
+    // Monitor JS-Native communication
+    global.__RCTProfileIsProfiling = true;
+
+    // Log bridge messages
+    MessageQueue.spy((msg) => {
+      console.log('Bridge message:', msg);
+    });
+  }
+
+  static checkThreadBlocking() {
+    const start = Date.now();
+
+    // Simulate heavy work
+    while (Date.now() - start < 500) {
+      // Blocking JS thread
+    }
+
+    console.warn('JS thread blocked for:', Date.now() - start);
+  }
+}
+```
+
+## Related Topics
+
+- [Native Modules Bridge](/docs/react-native/core/native-bridge)
+- [Performance Fundamentals](/docs/react-native/core/performance)
+- [JavaScript Runtime](/docs/react-native/core/javascript-runtime)

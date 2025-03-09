@@ -1,0 +1,410 @@
+---
+title: 'JavaScript for Different Environments'
+description: 'A comprehensive guide to using JavaScript across different runtime environments'
+---
+
+# JavaScript for Different Environments
+
+## JavaScript in Browsers vs Node.js vs Deno
+
+### 1. Browser Environment
+
+```javascript
+// Browser-specific APIs
+class BrowserAPI {
+  static async getUserMedia() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: true,
+      });
+      return stream;
+    } catch (error) {
+      console.error('Media access error:', error);
+      throw error;
+    }
+  }
+
+  static async getGeolocation() {
+    return new Promise((resolve, reject) => {
+      if (!navigator.geolocation) {
+        reject(new Error('Geolocation not supported'));
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(resolve, reject);
+    });
+  }
+
+  static async storeData(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      console.error('Storage error:', error);
+      return false;
+    }
+  }
+}
+
+// Browser-specific event handling
+window.addEventListener('load', () => {
+  console.log('Page loaded');
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOM ready');
+});
+```
+
+### 2. Node.js Environment
+
+```javascript
+// Node.js-specific APIs
+const fs = require('fs').promises;
+const path = require('path');
+const http = require('http');
+
+class NodeAPI {
+  static async readFile(filePath) {
+    try {
+      const content = await fs.readFile(filePath, 'utf8');
+      return content;
+    } catch (error) {
+      console.error('File read error:', error);
+      throw error;
+    }
+  }
+
+  static createServer(port = 3000) {
+    const server = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('Hello from Node.js!');
+    });
+
+    server.listen(port, () => {
+      console.log(`Server running at http://localhost:${port}/`);
+    });
+
+    return server;
+  }
+
+  static async writeFile(filePath, content) {
+    try {
+      await fs.writeFile(filePath, content);
+      return true;
+    } catch (error) {
+      console.error('File write error:', error);
+      return false;
+    }
+  }
+}
+
+// Node.js-specific event handling
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('SIGTERM', () => {
+  console.log('Received SIGTERM');
+  process.exit(0);
+});
+```
+
+### 3. Deno Environment
+
+```javascript
+// Deno-specific APIs
+class DenoAPI {
+  static async readFile(filePath) {
+    try {
+      const content = await Deno.readTextFile(filePath);
+      return content;
+    } catch (error) {
+      console.error('File read error:', error);
+      throw error;
+    }
+  }
+
+  static async serveHttp(port = 8000) {
+    const server = Deno.listen({ port });
+    console.log(`Server running at http://localhost:${port}/`);
+
+    for await (const conn of server) {
+      (async () => {
+        const httpConn = Deno.serveHttp(conn);
+        for await (const requestEvent of httpConn) {
+          const response = new Response('Hello from Deno!', {
+            status: 200,
+          });
+          await requestEvent.respondWith(response);
+        }
+      })();
+    }
+  }
+
+  static async writeFile(filePath, content) {
+    try {
+      await Deno.writeTextFile(filePath, content);
+      return true;
+    } catch (error) {
+      console.error('File write error:', error);
+      return false;
+    }
+  }
+}
+
+// Deno-specific permissions
+const permissions = {
+  async checkRead() {
+    const status = await Deno.permissions.query({ name: 'read' });
+    return status.state === 'granted';
+  },
+
+  async checkWrite() {
+    const status = await Deno.permissions.query({ name: 'write' });
+    return status.state === 'granted';
+  },
+};
+```
+
+## JavaScript in Embedded Systems
+
+### 1. Embedded JavaScript (e.g., with Johnny-Five)
+
+```javascript
+const { Board, Led, Button } = require('johnny-five');
+
+class EmbeddedSystem {
+  constructor() {
+    this.board = new Board();
+    this.initialize();
+  }
+
+  initialize() {
+    this.board.on('ready', () => {
+      // LED control
+      const led = new Led(13);
+      const button = new Button(2);
+
+      button.on('press', () => {
+        led.toggle();
+      });
+
+      // Temperature sensor
+      const sensor = new five.Thermometer({
+        controller: 'LM35',
+        pin: 'A0',
+      });
+
+      sensor.on('change', () => {
+        console.log(`Temperature: ${sensor.celsius}°C`);
+      });
+    });
+  }
+
+  cleanup() {
+    this.board.on('exit', () => {
+      // Cleanup code
+    });
+  }
+}
+```
+
+### 2. Microcontroller Programming
+
+```javascript
+// Example using Espruino
+class MicroController {
+  constructor() {
+    this.led = LED1;
+    this.button = BTN1;
+    this.initialize();
+  }
+
+  initialize() {
+    // Configure GPIO
+    this.led.mode('output');
+    this.button.mode('input_pullup');
+
+    // Event handling
+    setWatch(
+      () => {
+        this.toggleLED();
+      },
+      this.button,
+      { repeat: true, edge: 'falling' }
+    );
+  }
+
+  toggleLED() {
+    this.led.toggle();
+  }
+
+  // PWM control
+  setPWM(value) {
+    analogWrite(this.led, value);
+  }
+
+  // I2C communication
+  async readI2C(address, register) {
+    const i2c = new I2C();
+    i2c.setup({ scl: 14, sda: 15 });
+    return i2c.readFrom(address, register);
+  }
+}
+```
+
+## JavaScript for Desktop Applications (Electron)
+
+### 1. Main Process
+
+```javascript
+const { app, BrowserWindow, ipcMain } = require('electron');
+const path = require('path');
+
+class ElectronApp {
+  constructor() {
+    this.window = null;
+    this.initialize();
+  }
+
+  initialize() {
+    app.whenReady().then(() => {
+      this.createWindow();
+      this.setupIPC();
+    });
+
+    app.on('window-all-closed', () => {
+      if (process.platform !== 'darwin') {
+        app.quit();
+      }
+    });
+  }
+
+  createWindow() {
+    this.window = new BrowserWindow({
+      width: 800,
+      height: 600,
+      webPreferences: {
+        nodeIntegration: true,
+        contextIsolation: false,
+      },
+    });
+
+    this.window.loadFile('index.html');
+  }
+
+  setupIPC() {
+    ipcMain.handle('perform-task', async (event, data) => {
+      try {
+        // Perform some task
+        return { success: true, data };
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    });
+  }
+}
+```
+
+### 2. Renderer Process
+
+```javascript
+const { ipcRenderer } = require('electron');
+
+class RendererProcess {
+  constructor() {
+    this.initialize();
+  }
+
+  initialize() {
+    this.setupEventListeners();
+  }
+
+  setupEventListeners() {
+    document
+      .getElementById('action-button')
+      .addEventListener('click', async () => {
+        try {
+          const result = await ipcRenderer.invoke('perform-task', {
+            action: 'example',
+          });
+          this.handleResult(result);
+        } catch (error) {
+          console.error('IPC error:', error);
+        }
+      });
+  }
+
+  handleResult(result) {
+    if (result.success) {
+      this.updateUI(result.data);
+    } else {
+      this.showError(result.error);
+    }
+  }
+
+  updateUI(data) {
+    const element = document.getElementById('result');
+    element.textContent = JSON.stringify(data, null, 2);
+  }
+
+  showError(error) {
+    const element = document.getElementById('error');
+    element.textContent = `Error: ${error}`;
+  }
+}
+
+// Initialize renderer
+new RendererProcess();
+```
+
+## Cross-Environment Compatibility
+
+### 1. Environment Detection
+
+```javascript
+class EnvironmentDetector {
+  static get environment() {
+    if (typeof window !== 'undefined' && window.document) {
+      return 'browser';
+    }
+    if (typeof Deno !== 'undefined') {
+      return 'deno';
+    }
+    if (typeof process !== 'undefined' && process.versions.node) {
+      return 'node';
+    }
+    if (
+      typeof navigator !== 'undefined' &&
+      navigator.userAgent.includes('Electron')
+    ) {
+      return 'electron';
+    }
+    return 'unknown';
+  }
+
+  static get features() {
+    const env = this.environment;
+    return {
+      fileSystem: env !== 'browser',
+      dom: env === 'browser' || env === 'electron',
+      network: true,
+      processAccess: env === 'node' || env === 'electron',
+      webAPIs: env === 'browser' || env === 'electron',
+    };
+  }
+}
+
+// Example usage:
+console.log('Current environment:', EnvironmentDetector.environment);
+console.log('Available features:', EnvironmentDetector.features);
+```
+
+## Related Topics
+
+- [Node.js Core Concepts](/docs/nodejs/core-concepts)
+- [Browser APIs](/docs/fundamentals/javascript/web-apis-dom)
+- [Build Tools](/docs/fundamentals/javascript/build-tools)

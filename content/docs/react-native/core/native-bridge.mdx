@@ -1,0 +1,344 @@
+---
+title: 'Native Modules Bridge'
+description: 'Understanding and implementing Native Modules Bridge in React Native'
+---
+
+# Native Modules Bridge
+
+## Introduction
+
+The Native Modules Bridge is the communication layer between JavaScript and native code (iOS/Android). It enables:
+
+1. JavaScript to Native calls
+2. Native to JavaScript events
+3. Synchronous and asynchronous communication
+4. Data serialization and type conversion
+
+## Creating Native Modules
+
+### iOS Native Module
+
+```objective-c
+// iOS: RCTCalculator.h
+#import <React/RCTBridgeModule.h>
+
+@interface RCTCalculator : NSObject <RCTBridgeModule>
+@end
+
+// iOS: RCTCalculator.m
+#import "RCTCalculator.h"
+
+@implementation RCTCalculator
+
+// Expose module to JavaScript
+RCT_EXPORT_MODULE();
+
+// Asynchronous method
+RCT_EXPORT_METHOD(add:(NSInteger)a
+                  b:(NSInteger)b
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+  NSInteger result = a + b;
+  resolve(@(result));
+}
+
+// Synchronous method
+RCT_EXPORT_SYNCHRONOUS_TYPED_METHOD(NSNumber *, multiply:(NSInteger)a withB:(NSInteger)b) {
+  return @(a * b);
+}
+
+// Constants exposed to JavaScript
+- (NSDictionary *)constantsToExport {
+  return @{
+    @"PI": @(3.14159),
+    @"E": @(2.71828)
+  };
+}
+
+// Specify main thread only
+- (dispatch_queue_t)methodQueue {
+  return dispatch_get_main_queue();
+}
+
+@end
+```
+
+### Android Native Module
+
+```java
+// Android: CalculatorModule.java
+public class CalculatorModule extends ReactContextBaseJavaModule {
+  public CalculatorModule(ReactApplicationContext reactContext) {
+    super(reactContext);
+  }
+
+  // Module name for JavaScript
+  @Override
+  public String getName() {
+    return "Calculator";
+  }
+
+  // Asynchronous method
+  @ReactMethod
+  public void add(int a, int b, Promise promise) {
+    try {
+      promise.resolve(a + b);
+    } catch (Exception e) {
+      promise.reject("CALC_ERROR", e);
+    }
+  }
+
+  // Synchronous method
+  @ReactMethod(isBlockingSynchronousMethod = true)
+  public int multiply(int a, int b) {
+    return a * b;
+  }
+
+  // Constants exposed to JavaScript
+  @Override
+  public Map<String, Object> getConstants() {
+    final Map<String, Object> constants = new HashMap<>();
+    constants.put("PI", 3.14159);
+    constants.put("E", 2.71828);
+    return constants;
+  }
+}
+
+// Android: CalculatorPackage.java
+public class CalculatorPackage implements ReactPackage {
+  @Override
+  public List<NativeModule> createNativeModules(ReactApplicationContext reactContext) {
+    List<NativeModule> modules = new ArrayList<>();
+    modules.add(new CalculatorModule(reactContext));
+    return modules;
+  }
+
+  @Override
+  public List<ViewManager> createViewManagers(ReactApplicationContext reactContext) {
+    return Collections.emptyList();
+  }
+}
+```
+
+## Using Native Modules in JavaScript
+
+```javascript
+import { NativeModules } from 'react-native';
+
+class Calculator {
+  static async performCalculations() {
+    const { Calculator } = NativeModules;
+
+    try {
+      // Asynchronous call
+      const sum = await Calculator.add(5, 3);
+      console.log('Sum:', sum);
+
+      // Synchronous call
+      const product = Calculator.multiply(4, 2);
+      console.log('Product:', product);
+
+      // Accessing constants
+      console.log('PI:', Calculator.PI);
+      console.log('E:', Calculator.E);
+    } catch (error) {
+      console.error('Calculation error:', error);
+    }
+  }
+}
+```
+
+## Native Event Emitters
+
+### iOS Events
+
+```objective-c
+// iOS: RCTEventEmitter implementation
+#import <React/RCTEventEmitter.h>
+
+@interface SensorModule : RCTEventEmitter <RCTBridgeModule>
+@end
+
+@implementation SensorModule
+
+RCT_EXPORT_MODULE();
+
+- (NSArray<NSString *> *)supportedEvents {
+  return @[@"onSensorData"];
+}
+
+- (void)startMonitoring {
+  // Simulate sensor data
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    [self sendEventWithName:@"onSensorData" body:@{@"value": @(42)}];
+  });
+}
+
+@end
+```
+
+### Android Events
+
+```java
+// Android: Event Emitter implementation
+public class SensorModule extends ReactContextBaseJavaModule {
+  private static final String EVENT_NAME = "onSensorData";
+
+  public SensorModule(ReactApplicationContext reactContext) {
+    super(reactContext);
+  }
+
+  @Override
+  public String getName() {
+    return "Sensor";
+  }
+
+  private void sendEvent(String eventName, WritableMap params) {
+    getReactApplicationContext()
+        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+        .emit(eventName, params);
+  }
+
+  @ReactMethod
+  public void startMonitoring() {
+    // Simulate sensor data
+    WritableMap params = Arguments.createMap();
+    params.putInt("value", 42);
+    sendEvent(EVENT_NAME, params);
+  }
+}
+```
+
+## JavaScript Event Handling
+
+```javascript
+import { NativeEventEmitter, NativeModules } from 'react-native';
+
+class SensorManager {
+  constructor() {
+    this.eventEmitter = new NativeEventEmitter(NativeModules.Sensor);
+  }
+
+  startMonitoring() {
+    // Subscribe to native events
+    this.subscription = this.eventEmitter.addListener(
+      'onSensorData',
+      this.handleSensorData
+    );
+
+    // Start native monitoring
+    NativeModules.Sensor.startMonitoring();
+  }
+
+  handleSensorData = (data) => {
+    console.log('Received sensor data:', data);
+  };
+
+  stopMonitoring() {
+    if (this.subscription) {
+      this.subscription.remove();
+      this.subscription = null;
+    }
+  }
+}
+```
+
+## Type Safety with TypeScript
+
+```typescript
+// TypeScript definitions for native modules
+interface CalculatorInterface {
+  add(a: number, b: number): Promise<number>;
+  multiply(a: number, b: number): number;
+  PI: number;
+  E: number;
+}
+
+interface SensorInterface {
+  startMonitoring(): void;
+}
+
+interface NativeModulesInterface {
+  Calculator: CalculatorInterface;
+  Sensor: SensorInterface;
+}
+
+declare module 'react-native' {
+  interface NativeModulesStatic {
+    Calculator: CalculatorInterface;
+    Sensor: SensorInterface;
+  }
+}
+```
+
+## Performance Considerations
+
+```javascript
+class BridgeOptimization {
+  // Batch multiple native calls
+  static async batchOperations() {
+    const results = await Promise.all([
+      NativeModules.Calculator.add(1, 2),
+      NativeModules.Calculator.add(3, 4),
+      NativeModules.Calculator.add(5, 6),
+    ]);
+    return results;
+  }
+
+  // Minimize data transfer
+  static transferData() {
+    // Bad: Sending large objects
+    NativeModules.DataHandler.process({
+      // Large object with unnecessary data
+      entireObject: largeObject,
+    });
+
+    // Good: Send only required data
+    NativeModules.DataHandler.process({
+      id: largeObject.id,
+      timestamp: largeObject.timestamp,
+    });
+  }
+
+  // Use appropriate thread
+  static handleOperation() {
+    if (this.isHeavyComputation()) {
+      // Run on background thread
+      NativeModules.Calculator.computeAsync();
+    } else {
+      // Run on main thread
+      NativeModules.UI.updateView();
+    }
+  }
+}
+```
+
+## Debugging Bridge Communication
+
+```javascript
+class BridgeDebugger {
+  static enableBridgeSpying() {
+    if (__DEV__) {
+      const MessageQueue = require('react-native/Libraries/BatchedBridge/MessageQueue');
+      const spyFunction = (msg) => {
+        console.log('Bridge message:', msg);
+      };
+
+      MessageQueue.spy(spyFunction);
+    }
+  }
+
+  static async measureBridgeLatency() {
+    const start = Date.now();
+    await NativeModules.Calculator.add(1, 1);
+    const duration = Date.now() - start;
+    console.log('Bridge latency:', duration, 'ms');
+  }
+}
+```
+
+## Related Topics
+
+- [Architecture Overview](/docs/react-native/core/architecture)
+- [Performance Fundamentals](/docs/react-native/core/performance)
+- [Platform Integration](/docs/react-native/platform/native-modules)

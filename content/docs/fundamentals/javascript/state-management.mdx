@@ -1,0 +1,343 @@
+---
+title: 'State Management in JavaScript'
+description: 'A comprehensive guide to managing state in vanilla JavaScript applications'
+---
+
+# State Management in JavaScript
+
+## Patterns for Managing State
+
+### 1. Simple State Store
+
+```javascript
+class Store {
+  constructor(initialState = {}) {
+    this.state = initialState;
+    this.listeners = new Set();
+  }
+
+  getState() {
+    return { ...this.state };
+  }
+
+  setState(newState) {
+    this.state = { ...this.state, ...newState };
+    this.notify();
+  }
+
+  subscribe(listener) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  notify() {
+    this.listeners.forEach((listener) => listener(this.state));
+  }
+}
+
+// Example usage:
+const store = new Store({ count: 0 });
+const unsubscribe = store.subscribe((state) => {
+  console.log('State updated:', state);
+});
+
+store.setState({ count: store.getState().count + 1 });
+unsubscribe();
+```
+
+### 2. Observable Pattern
+
+```javascript
+class Observable {
+  constructor() {
+    this.observers = new Set();
+  }
+
+  subscribe(observer) {
+    this.observers.add(observer);
+    return () => this.observers.delete(observer);
+  }
+
+  notify(data) {
+    this.observers.forEach((observer) => observer(data));
+  }
+}
+
+class Subject extends Observable {
+  constructor(initialValue) {
+    super();
+    this._value = initialValue;
+  }
+
+  get value() {
+    return this._value;
+  }
+
+  set value(newValue) {
+    this._value = newValue;
+    this.notify(newValue);
+  }
+}
+
+// Example usage:
+const counter = new Subject(0);
+const unsubscribe = counter.subscribe((value) => {
+  console.log('Counter changed:', value);
+});
+
+counter.value++; // Logs: Counter changed: 1
+unsubscribe();
+```
+
+## Implementing Pub/Sub Pattern
+
+### 1. Event Bus Implementation
+
+```javascript
+class EventBus {
+  constructor() {
+    this.events = new Map();
+  }
+
+  on(event, callback) {
+    if (!this.events.has(event)) {
+      this.events.set(event, new Set());
+    }
+    this.events.get(event).add(callback);
+
+    return () => this.off(event, callback);
+  }
+
+  off(event, callback) {
+    if (this.events.has(event)) {
+      this.events.get(event).delete(callback);
+    }
+  }
+
+  emit(event, data) {
+    if (this.events.has(event)) {
+      this.events.get(event).forEach((callback) => callback(data));
+    }
+  }
+}
+
+// Example usage:
+const eventBus = new EventBus();
+const unsubscribe = eventBus.on('userLoggedIn', (user) => {
+  console.log('User logged in:', user);
+});
+
+eventBus.emit('userLoggedIn', { id: 1, name: 'John' });
+unsubscribe();
+```
+
+### 2. Advanced Event System
+
+```javascript
+class EventEmitter {
+  constructor() {
+    this.events = new Map();
+    this.onceCallbacks = new WeakMap();
+  }
+
+  on(event, callback) {
+    if (!this.events.has(event)) {
+      this.events.set(event, new Set());
+    }
+    this.events.get(event).add(callback);
+    return this;
+  }
+
+  once(event, callback) {
+    const wrapper = (...args) => {
+      this.off(event, wrapper);
+      callback.apply(this, args);
+    };
+    this.onceCallbacks.set(callback, wrapper);
+    return this.on(event, wrapper);
+  }
+
+  off(event, callback) {
+    if (this.events.has(event)) {
+      const callbacks = this.events.get(event);
+      const wrapper = this.onceCallbacks.get(callback);
+      callbacks.delete(wrapper || callback);
+      if (callbacks.size === 0) {
+        this.events.delete(event);
+      }
+    }
+    return this;
+  }
+
+  emit(event, ...args) {
+    if (this.events.has(event)) {
+      this.events.get(event).forEach((callback) => callback.apply(this, args));
+    }
+    return this;
+  }
+}
+
+// Example usage:
+const emitter = new EventEmitter();
+
+emitter.on('message', (message) => {
+  console.log('Received:', message);
+});
+
+emitter.once('init', () => {
+  console.log('Initialized once');
+});
+
+emitter.emit('message', 'Hello');
+emitter.emit('init');
+emitter.emit('init'); // Won't trigger the callback again
+```
+
+## State Machines in JavaScript
+
+### 1. Simple State Machine
+
+```javascript
+class StateMachine {
+  constructor(config) {
+    this.state = config.initial;
+    this.transitions = config.transitions;
+    this.states = config.states;
+  }
+
+  transition(event) {
+    const currentStateConfig = this.transitions[this.state];
+    const nextState = currentStateConfig?.[event];
+
+    if (!nextState) {
+      throw new Error(`Invalid transition: ${event} from state ${this.state}`);
+    }
+
+    const { onExit } = this.states[this.state];
+    const { onEnter } = this.states[nextState];
+
+    if (onExit) onExit();
+    this.state = nextState;
+    if (onEnter) onEnter();
+
+    return this.state;
+  }
+
+  getState() {
+    return this.state;
+  }
+}
+
+// Example usage:
+const trafficLight = new StateMachine({
+  initial: 'red',
+  states: {
+    red: {
+      onEnter: () => console.log('Stop!'),
+      onExit: () => console.log('Preparing to go...'),
+    },
+    yellow: {
+      onEnter: () => console.log('Get ready...'),
+      onExit: () => console.log('Changing...'),
+    },
+    green: {
+      onEnter: () => console.log('Go!'),
+      onExit: () => console.log('Slowing down...'),
+    },
+  },
+  transitions: {
+    red: { NEXT: 'green' },
+    yellow: { NEXT: 'red' },
+    green: { NEXT: 'yellow' },
+  },
+});
+
+trafficLight.transition('NEXT'); // red -> green
+```
+
+### 2. Advanced State Machine with Actions
+
+```javascript
+class AdvancedStateMachine {
+  constructor(config) {
+    this.state = config.initial;
+    this.transitions = config.transitions;
+    this.actions = config.actions || {};
+    this.context = config.context || {};
+  }
+
+  dispatch(event, payload) {
+    const currentStateConfig = this.transitions[this.state];
+    const transition = currentStateConfig?.[event];
+
+    if (!transition) {
+      throw new Error(`Invalid transition: ${event} from state ${this.state}`);
+    }
+
+    const { target, action } = transition;
+
+    if (action && this.actions[action]) {
+      this.context = this.actions[action](this.context, payload);
+    }
+
+    this.state = target;
+    return {
+      state: this.state,
+      context: this.context,
+    };
+  }
+}
+
+// Example usage:
+const userStateMachine = new AdvancedStateMachine({
+  initial: 'idle',
+  context: {
+    user: null,
+    error: null,
+  },
+  actions: {
+    setUser: (context, user) => ({
+      ...context,
+      user,
+      error: null,
+    }),
+    setError: (context, error) => ({
+      ...context,
+      error,
+      user: null,
+    }),
+    clearUser: (context) => ({
+      ...context,
+      user: null,
+      error: null,
+    }),
+  },
+  transitions: {
+    idle: {
+      LOGIN: { target: 'loading', action: null },
+      RESET: { target: 'idle', action: 'clearUser' },
+    },
+    loading: {
+      SUCCESS: { target: 'authenticated', action: 'setUser' },
+      ERROR: { target: 'error', action: 'setError' },
+    },
+    authenticated: {
+      LOGOUT: { target: 'idle', action: 'clearUser' },
+    },
+    error: {
+      RETRY: { target: 'loading', action: null },
+    },
+  },
+});
+
+// Using the state machine
+userStateMachine.dispatch('LOGIN');
+userStateMachine.dispatch('SUCCESS', { id: 1, name: 'John' });
+console.log(userStateMachine.context); // { user: { id: 1, name: 'John' }, error: null }
+```
+
+## Related Topics
+
+- [Event Loop](/docs/fundamentals/javascript/event-loop)
+- [Advanced Concepts](/docs/fundamentals/javascript/advanced-concepts)
+- [Design Patterns](/docs/fundamentals/javascript/design-patterns)

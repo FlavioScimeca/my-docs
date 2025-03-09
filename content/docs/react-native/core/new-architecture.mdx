@@ -1,0 +1,933 @@
+---
+title: 'React Native New Architecture (0.76+)'
+description: 'Understanding and implementing React Native New Architecture with JSI, TurboModules, and Fabric'
+---
+
+# React Native New Architecture (0.76+)
+
+## Overview
+
+React Native 0.76+ introduces a new architecture that fundamentally changes how JavaScript interacts with native code. The key components are:
+
+1. JSI (JavaScript Interface)
+2. TurboModules
+3. Fabric Renderer
+4. Codegen
+
+```typescript
+// High-level architecture visualization
+interface NewArchitecture {
+  jsi: {
+    directCommunication: boolean; // true - No more bridge
+    synchronousCalls: boolean; // true - Direct method calls
+    typeChecking: boolean; // true - Compile-time type safety
+  };
+  components: {
+    fabric: string[]; // ['Concurrent Rendering', 'Synchronous Layout']
+    turboModules: string[]; // ['Lazy Loading', 'Direct JSI Access']
+    codegen: string[]; // ['Type Definitions', 'C++ Bindings']
+  };
+}
+```
+
+## JSI (JavaScript Interface)
+
+JSI replaces the old bridge with direct, synchronous communication between JavaScript and native code:
+
+```typescript
+// Example of JSI-powered native module
+import type { TurboModule } from 'react-native/Libraries/TurboModule/RCTExport';
+import { TurboModuleRegistry } from 'react-native';
+
+interface Spec extends TurboModule {
+  // Synchronous method - Not possible in old architecture
+  multiply(a: number, b: number): number;
+
+  // Asynchronous method
+  addAsync(a: number, b: number): Promise<number>;
+
+  // Direct native object reference
+  getObject(): Object;
+}
+
+export default TurboModuleRegistry.get<Spec>('MathOperations');
+
+// Usage
+const result = MathOperations.multiply(2, 3); // Instant result
+const asyncResult = await MathOperations.addAsync(2, 3); // For long operations
+```
+
+### Native Implementation (iOS)
+
+```objective-c
+// MathOperations.h
+#import <React/RCTTurboModule.h>
+
+@interface MathOperations : NSObject <RCTTurboModule>
+@end
+
+// MathOperations.mm
+#import "MathOperations.h"
+
+@implementation MathOperations
+
+RCT_EXPORT_METHOD(multiply:(double)a b:(double)b
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject)
+{
+  NSNumber *result = @(a * b);
+  resolve(result);
+}
+
+// Direct synchronous method
+RCT_EXPORT_SYNCHRONOUS_TYPED_METHOD(NSNumber *, multiply:(double)a withB:(double)b)
+{
+  return @(a * b);
+}
+
+@end
+```
+
+### Native Implementation (Android)
+
+```kotlin
+// MathOperations.kt
+class MathOperations(context: ReactApplicationContext) :
+    TurboModule(context) {
+
+    @ReactMethod(isBlockingSynchronousMethod = true)
+    fun multiply(a: Double, b: Double): Double {
+        return a * b
+    }
+
+    @ReactMethod
+    fun addAsync(a: Double, b: Double, promise: Promise) {
+        promise.resolve(a + b)
+    }
+}
+```
+
+## TurboModules
+
+TurboModules provide lazy loading and direct JSI access to native modules:
+
+```typescript
+// TurboModule definition
+interface CameraModule extends TurboModule {
+  // Methods are loaded only when accessed
+  initialize(): Promise<void>;
+  capturePhoto(): Promise<string>;
+  startRecording(): Promise<void>;
+  stopRecording(): Promise<string>;
+}
+
+// Usage with lazy loading
+const Camera = TurboModuleRegistry.get<CameraModule>('Camera');
+if (Camera) {
+  await Camera.initialize(); // Module loaded on first use
+}
+```
+
+### Codegen Integration
+
+```typescript
+// Codegen type definitions
+interface Spec extends TurboModule {
+  // Codegen will create C++ bindings for these methods
+  readonly getConstants: () => {
+    DEFAULT_QUALITY: number;
+    SUPPORTED_FORMATS: string[];
+  };
+
+  setQuality(quality: number): void;
+  getPhotoData(format: string): Promise<string>;
+}
+
+// Generated C++ header (automatic)
+struct Spec : TurboModule {
+  static constexpr auto kModuleName = "Camera";
+
+  // Type-safe method declarations
+  virtual jsi::Value getConstants(jsi::Runtime& runtime) = 0;
+  virtual void setQuality(double quality) = 0;
+  virtual jsi::Value getPhotoData(jsi::String format) = 0;
+};
+```
+
+## Fabric Renderer
+
+Fabric is the new rendering system that enables concurrent rendering and better performance:
+
+```typescript
+// Component using Fabric features
+import { createReactNativeComponentClass } from 'react-native';
+
+interface Props {
+  onLayout?: (event: LayoutEvent) => void;
+  style?: ViewStyle;
+}
+
+// Fabric component with direct native props
+const FabricView = createReactNativeComponentClass<Props>('RCTView', {
+  validAttributes: {
+    style: true,
+    onLayout: true,
+  },
+  uiViewClassName: 'RCTView',
+});
+
+// Usage with Concurrent features
+function ConcurrentComponent() {
+  const [isPending, startTransition] = useTransition();
+
+  const handlePress = () => {
+    // Non-urgent UI updates
+    startTransition(() => {
+      // Heavy computation or state updates
+      setComplexData(computeNewData());
+    });
+  };
+
+  return (
+    <FabricView style={styles.container} onPress={handlePress}>
+      {isPending ? <LoadingSpinner /> : <Content />}
+    </FabricView>
+  );
+}
+```
+
+## Performance Optimizations
+
+The new architecture enables several performance optimizations:
+
+```typescript
+// 1. Synchronous Operations
+class PerformanceOptimizations {
+  // Direct synchronous calls
+  static measureLayout(): Layout {
+    return UIManager.measure(nodeHandle); // Synchronous with JSI
+  }
+
+  // 2. Concurrent Rendering
+  static handleHeavyOperation() {
+    startTransition(() => {
+      // Low-priority updates
+      setData(heavyComputation());
+    });
+  }
+
+  // 3. Memory Management
+  static optimizeMemoryUsage() {
+    // TurboModules are loaded on demand
+    const HeavyModule = TurboModuleRegistry.get('HeavyFeature');
+    if (HeavyModule) {
+      HeavyModule.initialize();
+    }
+
+    // Cleanup when done
+    return () => {
+      HeavyModule?.cleanup();
+    };
+  }
+
+  // 4. Batched Updates
+  static batchUpdates() {
+    ReactNative.unstable_batchedUpdates(() => {
+      // Multiple state updates batched together
+      setState1(newValue1);
+      setState2(newValue2);
+      setState3(newValue3);
+    });
+  }
+}
+```
+
+## Migration Guide
+
+To enable the new architecture in your app:
+
+```typescript
+// 1. Enable in android/gradle.properties
+// newArchEnabled=true
+
+// 2. Enable in iOS Podfile
+// :hermes_enabled => true
+// :fabric_enabled => true
+
+// 3. Update native modules
+interface ModernNativeModule extends TurboModule {
+  // Add type definitions
+  method(): void;
+}
+
+// 4. Generate code
+// Run: yarn react-native codegen
+
+// 5. Test compatibility
+class CompatibilityCheck {
+  static verifyModule(moduleName: string) {
+    const module = TurboModuleRegistry.get(moduleName);
+    return {
+      isTurboModule: !!module,
+      hasJSIInterface: typeof module?.nativeCall === 'function',
+    };
+  }
+}
+```
+
+## Related Topics
+
+- [Performance Fundamentals](/docs/react-native/core/performance)
+- [Platform Integration](/docs/react-native/platform/native-modules)
+- [Debugging Techniques](/docs/react-native/testing/debugging)
+
+## Real-World Examples
+
+### 1. Native Image Processing with TurboModules
+
+```typescript
+// ImageProcessor.ts
+interface ImageProcessorModule extends TurboModule {
+  // Synchronous operations
+  getImageSize(uri: string): { width: number; height: number };
+  rotateImage(uri: string, degrees: number): string;
+
+  // Asynchronous operations
+  applyFilter(uri: string, filterType: string): Promise<string>;
+  compressImage(uri: string, quality: number): Promise<string>;
+}
+
+// Usage
+const ImageProcessor =
+  TurboModuleRegistry.get<ImageProcessorModule>('ImageProcessor');
+
+function ImageEditor() {
+  const [imageUri, setImageUri] = useState<string>('');
+
+  const processImage = async () => {
+    try {
+      // Synchronous call - immediate response
+      const size = ImageProcessor.getImageSize(imageUri);
+      console.log('Image size:', size);
+
+      // Parallel async operations
+      const [filteredUri, compressedUri] = await Promise.all([
+        ImageProcessor.applyFilter(imageUri, 'SEPIA'),
+        ImageProcessor.compressImage(imageUri, 0.8),
+      ]);
+
+      setImageUri(filteredUri);
+    } catch (error) {
+      console.error('Image processing failed:', error);
+    }
+  };
+
+  return (
+    <View>
+      <Image source={{ uri: imageUri }} />
+      <Button title='Process' onPress={processImage} />
+    </View>
+  );
+}
+```
+
+### 2. Fabric Custom Component
+
+```typescript
+// CustomChart.tsx
+import { createReactNativeComponentClass } from 'react-native';
+import type { HostComponent } from 'react-native';
+
+interface ChartProps {
+  data: number[];
+  style?: ViewStyle;
+  onPointSelected?: (point: number) => void;
+}
+
+// Define native component props
+export interface NativeProps extends ViewProps {
+  data: number[];
+  onPointSelected?: (event: SyntheticEvent<{}, { point: number }>) => void;
+}
+
+// Create native component
+export const NativeCustomChart: HostComponent<NativeProps> =
+  createReactNativeComponentClass('CustomChart', {
+    validAttributes: {
+      data: true,
+      onPointSelected: true,
+    },
+    interfaceOnly: true,
+  });
+
+// React component wrapper
+export function CustomChart({ data, onPointSelected, style }: ChartProps) {
+  const handlePointSelected = useCallback(
+    (event: SyntheticEvent<{}, { point: number }>) => {
+      onPointSelected?.(event.nativeEvent.point);
+    },
+    [onPointSelected]
+  );
+
+  return (
+    <NativeCustomChart
+      style={style}
+      data={data}
+      onPointSelected={handlePointSelected}
+    />
+  );
+}
+```
+
+### 3. Performance-Optimized List with Fabric
+
+```typescript
+// OptimizedList.tsx
+import { createReactNativeComponentClass } from 'react-native';
+
+interface ListProps<T> {
+  data: T[];
+  renderItem: (item: T) => React.ReactNode;
+  onEndReached?: () => void;
+}
+
+function OptimizedList<T>({ data, renderItem, onEndReached }: ListProps<T>) {
+  const [isPending, startTransition] = useTransition();
+
+  // Batch load more data
+  const handleEndReached = useCallback(() => {
+    startTransition(() => {
+      onEndReached?.();
+    });
+  }, [onEndReached]);
+
+  // Memoize rendered items
+  const renderedItems = useMemo(
+    () => data.map((item) => renderItem(item)),
+    [data, renderItem]
+  );
+
+  return (
+    <FabricScrollView
+      onEndReached={handleEndReached}
+      onEndReachedThreshold={0.5}
+    >
+      {isPending ? <LoadingIndicator /> : renderedItems}
+    </FabricScrollView>
+  );
+}
+```
+
+## Troubleshooting Guide
+
+### Common Issues and Solutions
+
+```typescript
+// 1. TurboModule Not Found
+class TurboModuleDebugger {
+  static diagnoseModule(moduleName: string) {
+    const module = TurboModuleRegistry.get(moduleName);
+
+    if (!module) {
+      console.error(`
+        TurboModule '${moduleName}' not found. Check:
+        1. Module is properly registered in native code
+        2. Codegen was run: yarn react-native codegen
+        3. Native build was cleaned: cd ios && pod install
+      `);
+      return false;
+    }
+
+    return true;
+  }
+}
+
+// 2. Fabric Component Issues
+class FabricDebugger {
+  static checkFabricEnabled() {
+    if (!global.nativeFabricUIManager) {
+      console.error(`
+        Fabric not enabled. Verify:
+        1. iOS: RCTFabricSurface is used
+        2. Android: fabric flag is enabled
+        3. Clean build performed
+      `);
+    }
+  }
+
+  static validateProps(props: any) {
+    // Check for unsupported prop types
+    const unsupportedProps = Object.keys(props).filter(
+      (key) => typeof props[key] === 'function' && key !== 'onLayout'
+    );
+
+    if (unsupportedProps.length > 0) {
+      console.warn(`
+        Unsupported props found: ${unsupportedProps.join(', ')}
+        Fabric components should avoid function props except for specific events
+      `);
+    }
+  }
+}
+
+// 3. Performance Issues
+class PerformanceDebugger {
+  static monitorBridgeCrossing() {
+    if (__DEV__) {
+      const startTime = performance.now();
+
+      return {
+        end: () => {
+          const duration = performance.now() - startTime;
+          if (duration > 16) {
+            // 1 frame at 60fps
+            console.warn(`
+              Bridge crossing took ${duration}ms
+              Consider using synchronous methods or batching updates
+            `);
+          }
+        },
+      };
+    }
+    return { end: () => {} };
+  }
+
+  static async profileTurboModule(
+    module: TurboModule,
+    methodName: string,
+    args: any[]
+  ) {
+    console.time(`${methodName} execution`);
+    try {
+      const result = await module[methodName](...args);
+      console.timeEnd(`${methodName} execution`);
+      return result;
+    } catch (error) {
+      console.timeEnd(`${methodName} execution`);
+      throw error;
+    }
+  }
+}
+```
+
+### Migration Checklist
+
+```typescript
+class MigrationValidator {
+  static async validateSetup() {
+    const checks = {
+      hermes: global.HermesInternal !== undefined,
+      fabric: global.nativeFabricUIManager !== undefined,
+      turboModules: TurboModuleRegistry !== undefined,
+    };
+
+    console.table({
+      'Hermes Enabled': checks.hermes ? '✅' : '❌',
+      'Fabric Enabled': checks.fabric ? '✅' : '❌',
+      'TurboModules Available': checks.turboModules ? '✅' : '❌',
+    });
+
+    return Object.values(checks).every(Boolean);
+  }
+
+  static validateNativeModule(module: any) {
+    const requirements = [
+      { name: 'TurboModule Extension', check: module instanceof TurboModule },
+      { name: 'Synchronous Methods', check: module.syncMethods?.length > 0 },
+      { name: 'Type Definitions', check: module.getTypedExports !== undefined },
+    ];
+
+    requirements.forEach(({ name, check }) => {
+      console.log(`${name}: ${check ? '✅' : '❌'}`);
+    });
+  }
+}
+```
+
+## Best Practices
+
+```typescript
+class NewArchitectureBestPractices {
+  // 1. Efficient Data Transfer
+  static optimizeDataTransfer(data: any) {
+    // Minimize bridge crossings
+    const serializedData = JSON.stringify(data);
+    if (serializedData.length > 1024) {
+      console.warn('Large data transfer detected, consider chunking');
+    }
+    return data;
+  }
+
+  // 2. Component Optimization
+  static optimizeComponent<P extends object>(
+    Component: React.ComponentType<P>
+  ) {
+    return React.memo(Component, (prev, next) => {
+      // Custom comparison for Fabric components
+      return !Object.keys(prev).some((key) => prev[key] !== next[key]);
+    });
+  }
+
+  // 3. Resource Management
+  static manageResources() {
+    const resources = new Set();
+
+    return {
+      acquire: (resource: string) => {
+        resources.add(resource);
+        // Load TurboModule on demand
+        return TurboModuleRegistry.get(resource);
+      },
+      release: (resource: string) => {
+        resources.delete(resource);
+        // Allow garbage collection
+        TurboModuleRegistry.remove(resource);
+      },
+      cleanup: () => {
+        resources.forEach((resource) => {
+          TurboModuleRegistry.remove(resource);
+        });
+        resources.clear();
+      },
+    };
+  }
+}
+```
+
+## Platform-Specific Implementation Examples
+
+### iOS Native Components with Fabric
+
+```objective-c
+// CustomChartManager.h
+#import <React/RCTViewManager.h>
+
+@interface CustomChartManager : RCTViewManager
+@end
+
+// CustomChartManager.mm
+#import "CustomChartManager.h"
+#import "CustomChart.h"
+#import <React/RCTFabricComponentsPlugins.h>
+
+@implementation CustomChartManager
+
+RCT_EXPORT_MODULE(CustomChart)
+
+- (UIView *)view
+{
+  CustomChart *chart = [[CustomChart alloc] init];
+  return chart;
+}
+
+RCT_EXPORT_VIEW_PROPERTY(data, NSArray)
+RCT_EXPORT_VIEW_PROPERTY(onPointSelected, RCTDirectEventBlock)
+
+// Required for Fabric
++ (BOOL)requiresMainQueueSetup
+{
+  return YES;
+}
+
+@end
+
+// Register the component for Fabric
+Class<RCTComponentViewProtocol> CustomChartCls(void)
+{
+  return CustomChartManager.class;
+}
+
+// CustomChart.h
+#import <UIKit/UIKit.h>
+#import <React/RCTView.h>
+
+@interface CustomChart : RCTView
+@property (nonatomic, copy) NSArray *data;
+@property (nonatomic, copy) RCTDirectEventBlock onPointSelected;
+@end
+
+// CustomChart.mm
+#import "CustomChart.h"
+
+@implementation CustomChart
+
+- (void)setData:(NSArray *)data
+{
+  _data = [data copy];
+  [self setNeedsDisplay];
+}
+
+- (void)pointSelected:(NSNumber *)point
+{
+  if (self.onPointSelected) {
+    self.onPointSelected(@{@"point": point});
+  }
+}
+
+@end
+```
+
+### Android Native Components with Fabric
+
+```kotlin
+// CustomChartManager.kt
+class CustomChartManager : ViewManager<CustomChart, CustomChartProps>() {
+    override fun getName() = "CustomChart"
+
+    override fun createViewInstance(context: ThemedReactContext) =
+        CustomChart(context)
+
+    @ReactProp(name = "data")
+    fun setData(view: CustomChart, data: ReadableArray) {
+        view.setData(data.toArrayList().map { (it as Number).toFloat() })
+    }
+
+    override fun onAfterUpdateTransaction(view: CustomChart) {
+        super.onAfterUpdateTransaction(view)
+        view.invalidate()
+    }
+
+    override fun receiveCommand(
+        view: CustomChart,
+        commandName: String,
+        args: ReadableArray?
+    ) {
+        when (commandName) {
+            "updateChart" -> view.updateChart()
+        }
+    }
+}
+
+// CustomChart.kt
+class CustomChart(context: Context) : ReactViewGroup(context) {
+    private var data: List<Float> = emptyList()
+    private val paint = Paint().apply {
+        color = Color.BLUE
+        style = Paint.Style.STROKE
+        strokeWidth = 2f
+    }
+
+    fun setData(newData: List<Float>) {
+        data = newData
+        invalidate()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        // Custom drawing implementation
+    }
+
+    fun updateChart() {
+        // Update logic
+        invalidate()
+    }
+}
+
+// Package registration
+class CustomChartPackage : TurboReactPackage() {
+    override fun createViewManagers(
+        reactContext: ReactApplicationContext
+    ): List<ViewManager<*, *>> = listOf(CustomChartManager())
+}
+```
+
+## Testing Strategies
+
+### 1. Unit Testing TurboModules
+
+```typescript
+// mathOperations.test.ts
+import { TurboModuleRegistry } from 'react-native';
+
+describe('MathOperations TurboModule', () => {
+  const MathOperations = TurboModuleRegistry.get('MathOperations');
+
+  beforeEach(() => {
+    // Mock native module if needed
+    jest.mock('react-native', () => ({
+      TurboModuleRegistry: {
+        get: jest.fn(() => ({
+          multiply: jest.fn((a, b) => a * b),
+          addAsync: jest.fn((a, b) => Promise.resolve(a + b)),
+        })),
+      },
+    }));
+  });
+
+  it('performs synchronous multiplication', () => {
+    const result = MathOperations.multiply(2, 3);
+    expect(result).toBe(6);
+  });
+
+  it('performs asynchronous addition', async () => {
+    const result = await MathOperations.addAsync(2, 3);
+    expect(result).toBe(5);
+  });
+});
+```
+
+### 2. Integration Testing Fabric Components
+
+```typescript
+// CustomChart.test.tsx
+import { render, fireEvent } from '@testing-library/react-native';
+import { CustomChart } from './CustomChart';
+
+describe('CustomChart Fabric Component', () => {
+  it('renders with initial data', () => {
+    const data = [1, 2, 3, 4, 5];
+    const { getByTestId } = render(<CustomChart data={data} testID='chart' />);
+
+    const chart = getByTestId('chart');
+    expect(chart).toBeTruthy();
+  });
+
+  it('handles point selection', () => {
+    const onPointSelected = jest.fn();
+    const { getByTestId } = render(
+      <CustomChart
+        data={[1, 2, 3]}
+        onPointSelected={onPointSelected}
+        testID='chart'
+      />
+    );
+
+    fireEvent(getByTestId('chart'), 'pointSelected', { point: 1 });
+    expect(onPointSelected).toHaveBeenCalledWith(1);
+  });
+});
+```
+
+### 3. Performance Testing
+
+```typescript
+// performanceTests.ts
+class PerformanceTester {
+  static async measureTurboModulePerformance(
+    module: TurboModule,
+    method: string,
+    iterations: number
+  ) {
+    const results: number[] = [];
+
+    for (let i = 0; i < iterations; i++) {
+      const start = performance.now();
+      await module[method]();
+      results.push(performance.now() - start);
+    }
+
+    return {
+      average: results.reduce((a, b) => a + b) / results.length,
+      min: Math.min(...results),
+      max: Math.max(...results),
+      p95: results.sort((a, b) => a - b)[Math.floor(results.length * 0.95)],
+    };
+  }
+
+  static measureFabricRendering(Component: React.ComponentType, props: any) {
+    const measurements: number[] = [];
+
+    const WrappedComponent = () => {
+      const renderStart = performance.now();
+
+      useEffect(() => {
+        const renderTime = performance.now() - renderStart;
+        measurements.push(renderTime);
+      });
+
+      return <Component {...props} />;
+    };
+
+    return {
+      Component: WrappedComponent,
+      getMeasurements: () => ({
+        average: measurements.reduce((a, b) => a + b) / measurements.length,
+        total: measurements.length,
+      }),
+    };
+  }
+}
+```
+
+### 4. E2E Testing with New Architecture
+
+```typescript
+// e2e/newArchitecture.test.ts
+import { device, element, by } from 'detox';
+
+describe('New Architecture E2E Tests', () => {
+  beforeAll(async () => {
+    await device.launchApp({
+      newInstance: true,
+      permissions: { camera: 'YES' },
+    });
+  });
+
+  it('should handle TurboModule camera operations', async () => {
+    await element(by.id('camera-button')).tap();
+    await expect(element(by.id('camera-preview'))).toBeVisible();
+
+    await element(by.id('capture-button')).tap();
+    await expect(element(by.id('photo-result'))).toBeVisible();
+  });
+
+  it('should render Fabric components efficiently', async () => {
+    await element(by.id('chart-container')).tap();
+
+    // Verify smooth scrolling
+    await element(by.id('chart-scroll')).scroll(500, 'down', NaN, 0.85);
+    await expect(element(by.id('chart-point-50'))).toBeVisible();
+  });
+});
+```
+
+## Advanced Performance Optimizations
+
+```typescript
+class AdvancedOptimizations {
+  // 1. Batch Native Module Calls
+  static async batchNativeOperations<T>(
+    operations: (() => Promise<T>)[],
+    batchSize = 5
+  ) {
+    const results: T[] = [];
+
+    for (let i = 0; i < operations.length; i += batchSize) {
+      const batch = operations.slice(i, i + batchSize);
+      const batchResults = await Promise.all(batch.map((op) => op()));
+      results.push(...batchResults);
+    }
+
+    return results;
+  }
+
+  // 2. Optimize Memory Usage
+  static createMemoryEfficientList<T>() {
+    return {
+      data: [] as T[],
+      viewportItems: new Set<T>(),
+
+      addItem(item: T) {
+        this.data.push(item);
+        this.optimizeMemory();
+      },
+
+      optimizeMemory() {
+        if (this.data.length > 1000) {
+          // Keep only visible and nearby items in memory
+          const visibleItems = Array.from(this.viewportItems);
+          this.data = this.data.filter((item) => visibleItems.includes(item));
+        }
+      },
+    };
+  }
+
+  // 3. Fabric Rendering Optimization
+  static optimizeFabricRendering(Component: React.ComponentType) {
+    return React.memo(Component, (prev, next) => {
+      // Custom deep comparison for complex props
+      return JSON.stringify(prev) === JSON.stringify(next);
+    });
+  }
+}
+```

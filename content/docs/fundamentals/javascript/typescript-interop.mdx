@@ -1,0 +1,306 @@
+---
+title: 'JavaScript and TypeScript Interoperability'
+description: 'A comprehensive guide to using JavaScript and TypeScript together effectively'
+---
+
+# JavaScript and TypeScript Interoperability
+
+## Gradual Migration Strategies
+
+### 1. Adding TypeScript to JavaScript Projects
+
+```javascript
+// Original JavaScript file (user.js)
+class User {
+  constructor(name, age) {
+    this.name = name;
+    this.age = age;
+  }
+
+  getInfo() {
+    return `${this.name} is ${this.age} years old`;
+  }
+}
+
+// TypeScript declaration file (user.d.ts)
+declare class User {
+  name: string;
+  age: number;
+  constructor(name: string, age: number);
+  getInfo(): string;
+}
+```
+
+### 2. Mixed JavaScript and TypeScript
+
+```typescript
+// config.ts
+interface Config {
+  apiUrl: string;
+  timeout: number;
+  retries?: number;
+}
+
+export const defaultConfig: Config = {
+  apiUrl: 'https://api.example.com',
+  timeout: 5000,
+};
+
+// main.js
+import { defaultConfig } from './config';
+
+// TypeScript type information is preserved
+console.log(defaultConfig.apiUrl);
+```
+
+## Using TypeScript Declarations with JavaScript
+
+### 1. Creating Declaration Files
+
+```typescript
+// api-client.d.ts
+declare module 'api-client' {
+  export interface ApiResponse<T> {
+    data: T;
+    status: number;
+    message: string;
+  }
+
+  export interface ApiClient {
+    get<T>(url: string): Promise<ApiResponse<T>>;
+    post<T>(url: string, data: any): Promise<ApiResponse<T>>;
+  }
+
+  export function createClient(config: {
+    baseUrl: string;
+    timeout?: number;
+  }): ApiClient;
+}
+
+// Using in JavaScript (api-usage.js)
+import { createClient } from 'api-client';
+
+const client = createClient({
+  baseUrl: 'https://api.example.com',
+  timeout: 5000,
+});
+
+// TypeScript will provide type checking and autocompletion
+client.get('/users').then((response) => {
+  console.log(response.data);
+});
+```
+
+### 2. Ambient Declarations
+
+```typescript
+// globals.d.ts
+declare global {
+  interface Window {
+    analytics: {
+      track(event: string, properties?: object): void;
+      identify(userId: string, traits?: object): void;
+    };
+  }
+}
+
+// Using in JavaScript (analytics.js)
+window.analytics.track('Page View', {
+  page: window.location.pathname,
+});
+```
+
+## JavaScript with JSDoc Type Annotations
+
+### 1. Basic Type Annotations
+
+```javascript
+/**
+ * @typedef {Object} UserProfile
+ * @property {string} id
+ * @property {string} name
+ * @property {number} age
+ * @property {string[]} interests
+ */
+
+/**
+ * Creates a new user profile
+ * @param {string} name - The user's name
+ * @param {number} age - The user's age
+ * @param {string[]} [interests] - The user's interests
+ * @returns {UserProfile} The created user profile
+ */
+function createProfile(name, age, interests = []) {
+  return {
+    id: Math.random().toString(36).substr(2, 9),
+    name,
+    age,
+    interests,
+  };
+}
+
+// TypeScript will provide type checking
+const profile = createProfile('John', 30, ['coding', 'reading']);
+```
+
+### 2. Complex Type Annotations
+
+```javascript
+/**
+ * @template T
+ * @typedef {Object} Result
+ * @property {T} data - The result data
+ * @property {boolean} success - Whether the operation was successful
+ * @property {string} [error] - Error message if success is false
+ */
+
+/**
+ * @template T
+ * @param {() => Promise<T>} operation - The async operation to perform
+ * @returns {Promise<Result<T>>} The result of the operation
+ */
+async function withErrorHandling(operation) {
+  try {
+    const data = await operation();
+    return { data, success: true };
+  } catch (error) {
+    return {
+      data: null,
+      success: false,
+      error: error.message,
+    };
+  }
+}
+
+// Example usage with type checking
+/**
+ * @typedef {Object} User
+ * @property {string} id
+ * @property {string} name
+ */
+
+/**
+ * @returns {Promise<User>}
+ */
+async function fetchUser() {
+  const response = await fetch('/api/user');
+  return response.json();
+}
+
+// TypeScript will infer the correct types
+const result = await withErrorHandling(fetchUser);
+if (result.success) {
+  console.log(result.data.name);
+}
+```
+
+## Best Practices for Mixed Projects
+
+### 1. Project Configuration
+
+```javascript
+// tsconfig.json
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "strict": true,
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "declaration": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules"]
+}
+
+// package.json scripts
+{
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit",
+    "start": "node dist/index.js"
+  }
+}
+```
+
+### 2. Hybrid Module Pattern
+
+```javascript
+// utils.js
+/**
+ * @template T
+ * @typedef {Object} ValidationResult
+ * @property {boolean} valid
+ * @property {string[]} errors
+ */
+
+/**
+ * @template T
+ * @param {T} data
+ * @param {(data: T) => boolean} validator
+ * @returns {ValidationResult<T>}
+ */
+export function validate(data, validator) {
+  const errors = [];
+  const valid = validator(data);
+
+  if (!valid) {
+    errors.push('Validation failed');
+  }
+
+  return { valid, errors };
+}
+
+// userValidation.ts
+import { validate } from './utils';
+
+interface User {
+  name: string;
+  email: string;
+  age: number;
+}
+
+const validateUser = (user: User) => {
+  return user.name.length > 0 && user.email.includes('@') && user.age >= 18;
+};
+
+// Both JavaScript and TypeScript can use this
+export function validateUserData(userData: User) {
+  return validate(userData, validateUser);
+}
+```
+
+### 3. Migration Utilities
+
+```typescript
+// typeUtils.ts
+export type Nullable<T> = T | null;
+export type Optional<T> = T | undefined;
+
+// Using in JavaScript (data-service.js)
+/**
+ * @template T
+ * @typedef {import('./typeUtils').Nullable<T>} Nullable
+ */
+
+/**
+ * @template T
+ * @param {T} value
+ * @returns {Nullable<T>}
+ */
+function toNullable(value) {
+  return value === undefined ? null : value;
+}
+
+// Example usage
+/** @type {Nullable<string>} */
+const maybeString = toNullable('hello');
+```
+
+## Related Topics
+
+- [Modern APIs](/docs/fundamentals/javascript/modern-apis)
+- [JavaScript Modules](/docs/fundamentals/javascript/javascript-modules)
+- [Build Tools](/docs/fundamentals/javascript/build-tools)

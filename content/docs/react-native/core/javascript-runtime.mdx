@@ -1,0 +1,326 @@
+---
+title: 'JavaScript Runtime in React Native'
+description: 'Understanding the JavaScript Runtime environment in React Native applications'
+---
+
+# JavaScript Runtime in React Native
+
+## Overview
+
+React Native uses different JavaScript engines depending on the platform and configuration:
+
+1. Hermes (Default and Recommended)
+2. JavaScriptCore (JSC)
+3. V8 (Chrome Debugging)
+
+## Hermes Engine
+
+Hermes is the default JavaScript engine optimized for React Native:
+
+```javascript
+// Check if running on Hermes
+const isHermes = () => global.HermesInternal != null;
+
+class HermesFeatures {
+  static checkEnvironment() {
+    if (isHermes()) {
+      console.log('Running on Hermes');
+      console.log('Engine version:', HermesInternal.getRuntimeProperties());
+    } else {
+      console.log('Not running on Hermes');
+    }
+  }
+
+  // Hermes-specific optimizations
+  static optimizeMemory() {
+    if (isHermes()) {
+      // Collect garbage explicitly
+      global.gc?.();
+
+      // Get memory usage
+      const memory = new Int32Array(1);
+      HermesInternal?.getHeapUsage(memory);
+      console.log('Current heap usage:', memory[0]);
+    }
+  }
+}
+```
+
+## JavaScript Thread Management
+
+```javascript
+class ThreadManagement {
+  static handleHeavyComputation() {
+    // Bad: Blocking the JS thread
+    const result = heavyComputation();
+
+    // Good: Using requestAnimationFrame
+    requestAnimationFrame(() => {
+      const result = heavyComputation();
+      this.updateUI(result);
+    });
+
+    // Better: Using InteractionManager
+    InteractionManager.runAfterInteractions(() => {
+      const result = heavyComputation();
+      this.updateUI(result);
+    });
+  }
+
+  // Batch updates to minimize bridge crossing
+  static batchUpdates() {
+    // Using unstable_batchedUpdates
+    unstable_batchedUpdates(() => {
+      this.setState({ value1: 1 });
+      this.setState({ value2: 2 });
+      this.setState({ value3: 3 });
+    });
+  }
+}
+```
+
+## Memory Management
+
+```javascript
+class MemoryManagement {
+  // Proper cleanup in components
+  componentWillUnmount() {
+    // Clear timeouts
+    clearTimeout(this.timeout);
+
+    // Remove event listeners
+    this.subscription?.remove();
+
+    // Clear references
+    this.heavyData = null;
+  }
+
+  // Handle large lists
+  renderList() {
+    return (
+      <FlatList
+        data={this.data}
+        renderItem={this.renderItem}
+        initialNumToRender={10}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        windowSize={5}
+        removeClippedSubviews={true}
+      />
+    );
+  }
+
+  // Memory leak prevention
+  static preventLeaks() {
+    // Bad: Creating closures in loops
+    for (let i = 0; i < 1000; i++) {
+      setTimeout(() => console.log(i), 1000);
+    }
+
+    // Good: Using proper scope
+    for (let i = 0; i < 1000; i++) {
+      ((index) => {
+        setTimeout(() => console.log(index), 1000);
+      })(i);
+    }
+  }
+}
+```
+
+## Error Handling
+
+```javascript
+class ErrorBoundary extends React.Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    // Log error to service
+    logErrorToService(error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <FallbackComponent />;
+    }
+    return this.props.children;
+  }
+}
+
+// Global error handling
+class GlobalErrorHandler {
+  static initialize() {
+    ErrorUtils.setGlobalHandler((error, isFatal) => {
+      // Handle fatal JS errors
+      if (isFatal) {
+        Alert.alert(
+          'Unexpected Error',
+          'The application has encountered an unexpected error.'
+        );
+      }
+
+      // Log error
+      console.error(error);
+    });
+  }
+}
+```
+
+## Debugging and Profiling
+
+```javascript
+class Debugging {
+  static setupDebugger() {
+    if (__DEV__) {
+      // Enable Chrome debugging
+      global.XMLHttpRequest =
+        global.originalXMLHttpRequest || global.XMLHttpRequest;
+      global.FormData = global.originalFormData || global.FormData;
+
+      // Enable network inspection
+      global.Blob = global.originalBlob || global.Blob;
+      global.FileReader = global.originalFileReader || global.FileReader;
+    }
+  }
+
+  static profilePerformance() {
+    if (__DEV__) {
+      console.time('operation');
+      // Perform operation
+      console.timeEnd('operation');
+
+      // Profile specific function
+      const ProfiledComponent = Profiler(MyComponent, {
+        onRender: (id, phase, actualDuration) => {
+          console.log(`Component ${id} took ${actualDuration}ms to ${phase}`);
+        },
+      });
+    }
+  }
+}
+```
+
+## Timers and Intervals
+
+```javascript
+class TimerManagement {
+  constructor() {
+    this.timers = new Set();
+  }
+
+  // Safe timer creation
+  safeSetTimeout(callback, delay) {
+    const timerId = setTimeout(() => {
+      this.timers.delete(timerId);
+      callback();
+    }, delay);
+    this.timers.add(timerId);
+    return timerId;
+  }
+
+  // Safe interval creation
+  safeSetInterval(callback, delay) {
+    const timerId = setInterval(() => {
+      if (!this.timers.has(timerId)) {
+        clearInterval(timerId);
+        return;
+      }
+      callback();
+    }, delay);
+    this.timers.add(timerId);
+    return timerId;
+  }
+
+  // Cleanup all timers
+  cleanup() {
+    this.timers.forEach((timerId) => {
+      clearTimeout(timerId);
+      clearInterval(timerId);
+    });
+    this.timers.clear();
+  }
+}
+```
+
+## Platform-Specific Code
+
+```javascript
+class PlatformCode {
+  static getPlatformFile() {
+    // Automatically uses index.ios.js or index.android.js
+    return require('./index');
+  }
+
+  static getPlatformStyle() {
+    return {
+      ...Platform.select({
+        ios: {
+          shadowColor: 'black',
+          shadowOffset: { width: 0, height: 2 },
+          shadowOpacity: 0.25,
+          shadowRadius: 4,
+        },
+        android: {
+          elevation: 4,
+        },
+      }),
+    };
+  }
+
+  static getPlatformComponent() {
+    const Component = Platform.select({
+      ios: () => require('./IOSComponent'),
+      android: () => require('./AndroidComponent'),
+    })();
+
+    return <Component />;
+  }
+}
+```
+
+## Performance Optimization
+
+```javascript
+class RuntimeOptimization {
+  // Optimize component updates
+  shouldComponentUpdate(nextProps, nextState) {
+    return !shallowEqual(this.props, nextProps) ||
+           !shallowEqual(this.state, nextState);
+  }
+
+  // Use memo for functional components
+  const MemoizedComponent = React.memo(({ data }) => (
+    <View>
+      <Text>{data.text}</Text>
+    </View>
+  ), (prevProps, nextProps) => {
+    return prevProps.data.id === nextProps.data.id;
+  });
+
+  // Optimize event handlers
+  class OptimizedHandlers extends React.Component {
+    // Bad: Creates new function on each render
+    badRender() {
+      return <Button onPress={() => this.handlePress()} />;
+    }
+
+    // Good: Uses class method
+    handlePress = () => {
+      // Handle press
+    };
+
+    goodRender() {
+      return <Button onPress={this.handlePress} />;
+    }
+  }
+}
+```
+
+## Related Topics
+
+- [Architecture Overview](/docs/react-native/core/architecture)
+- [Performance Fundamentals](/docs/react-native/core/performance)
+- [Debugging Techniques](/docs/react-native/testing/debugging)

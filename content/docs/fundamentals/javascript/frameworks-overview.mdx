@@ -1,0 +1,367 @@
+---
+title: 'JavaScript Frameworks Overview'
+description: 'A comprehensive comparison of popular JavaScript frameworks and when to use them'
+---
+
+# JavaScript Frameworks Overview
+
+## Popular Frontend Frameworks
+
+### 1. React
+
+```javascript
+// Component-Based Architecture
+import React, { useState, useEffect } from 'react';
+
+function UserProfile({ userId }) {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchUser() {
+      try {
+        const response = await fetch(`/api/users/${userId}`);
+        const data = await response.json();
+        setUser(data);
+      } catch (error) {
+        console.error('Error fetching user:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchUser();
+  }, [userId]);
+
+  if (loading) return <div>Loading...</div>;
+  if (!user) return <div>User not found</div>;
+
+  return (
+    <div className='user-profile'>
+      <h2>{user.name}</h2>
+      <p>{user.email}</p>
+    </div>
+  );
+}
+
+// State Management with Context
+const UserContext = React.createContext();
+
+function UserProvider({ children }) {
+  const [user, setUser] = useState(null);
+
+  return (
+    <UserContext.Provider value={{ user, setUser }}>
+      {children}
+    </UserContext.Provider>
+  );
+}
+```
+
+### 2. Vue.js
+
+```javascript
+// Single File Component
+<template>
+  <div class="user-profile">
+    <div v-if="loading">Loading...</div>
+    <div v-else-if="!user">User not found</div>
+    <template v-else>
+      <h2>{{ user.name }}</h2>
+      <p>{{ user.email }}</p>
+    </template>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'UserProfile',
+  props: {
+    userId: {
+      type: String,
+      required: true
+    }
+  },
+  data() {
+    return {
+      user: null,
+      loading: true
+    }
+  },
+  async created() {
+    try {
+      const response = await fetch(`/api/users/${this.userId}`);
+      this.user = await response.json();
+    } catch (error) {
+      console.error('Error fetching user:', error);
+    } finally {
+      this.loading = false;
+    }
+  }
+}
+</script>
+
+<style scoped>
+.user-profile {
+  padding: 1rem;
+}
+</style>
+```
+
+### 3. Angular
+
+```typescript
+// Component with TypeScript
+import { Component, OnInit, Input } from '@angular/core';
+import { UserService } from './user.service';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+@Component({
+  selector: 'app-user-profile',
+  template: `
+    <div class="user-profile">
+      <div *ngIf="loading">Loading...</div>
+      <div *ngIf="!user && !loading">User not found</div>
+      <ng-container *ngIf="user">
+        <h2>{{ user.name }}</h2>
+        <p>{{ user.email }}</p>
+      </ng-container>
+    </div>
+  `,
+  styles: [
+    `
+      .user-profile {
+        padding: 1rem;
+      }
+    `,
+  ],
+})
+export class UserProfileComponent implements OnInit {
+  @Input() userId!: string;
+  user: User | null = null;
+  loading = true;
+
+  constructor(private userService: UserService) {}
+
+  ngOnInit() {
+    this.fetchUser();
+  }
+
+  async fetchUser() {
+    try {
+      this.user = await this.userService.getUser(this.userId);
+    } catch (error) {
+      console.error('Error fetching user:', error);
+    } finally {
+      this.loading = false;
+    }
+  }
+}
+```
+
+## Framework Comparison
+
+### 1. Learning Curve and Development Speed
+
+```javascript
+// React - Minimal API, JSX
+function SimpleComponent() {
+  return <div>Hello World</div>;
+}
+
+// Vue - Template Syntax
+const SimpleComponent = {
+  template: '<div>Hello World</div>',
+};
+
+// Angular - More Boilerplate, TypeScript
+@Component({
+  selector: 'app-simple',
+  template: '<div>Hello World</div>',
+})
+class SimpleComponent {}
+```
+
+### 2. State Management Solutions
+
+```javascript
+// React with Redux
+import { createSlice, configureStore } from '@reduxjs/toolkit';
+
+const userSlice = createSlice({
+  name: 'user',
+  initialState: { data: null, loading: false },
+  reducers: {
+    setUser: (state, action) => {
+      state.data = action.payload;
+    },
+  },
+});
+
+const store = configureStore({
+  reducer: {
+    user: userSlice.reducer,
+  },
+});
+
+// Vue with Vuex
+const store = new Vuex.Store({
+  state: {
+    user: null,
+    loading: false,
+  },
+  mutations: {
+    setUser(state, user) {
+      state.user = user;
+    },
+  },
+});
+
+// Angular with NgRx
+const userReducer = createReducer(
+  initialState,
+  on(setUser, (state, { user }) => ({ ...state, user }))
+);
+```
+
+## When to Use Different Frameworks
+
+### 1. Project Size and Complexity
+
+```javascript
+// Small Project - Consider Vue or Svelte
+// Simple Component in Svelte
+<script>
+  let count = 0;
+  const increment = () => count += 1;
+</script>
+
+<button on:click={increment}>
+  Count: {count}
+</button>
+
+// Large Enterprise Project - Consider Angular
+@NgModule({
+  declarations: [AppComponent],
+  imports: [
+    BrowserModule,
+    HttpClientModule,
+    RouterModule.forRoot(routes)
+  ],
+  providers: [],
+  bootstrap: [AppComponent]
+})
+export class AppModule { }
+```
+
+### 2. Team Experience and Resources
+
+```javascript
+// React - Large Community, Many Resources
+import { useState, useEffect } from 'react';
+import { useQuery } from 'react-query'; // Popular data fetching library
+import styled from 'styled-components'; // Popular styling solution
+
+// Angular - Enterprise Support, Full Framework
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+```
+
+## Framework-Agnostic Best Practices
+
+### 1. Component Design
+
+```javascript
+// Separation of Concerns
+class DataService {
+  async fetchData() {
+    const response = await fetch('/api/data');
+    return response.json();
+  }
+}
+
+// Reusable UI Components
+class Button {
+  constructor(props) {
+    this.props = props;
+  }
+
+  render() {
+    return `
+      <button 
+        class="button ${this.props.variant}" 
+        onclick="${this.props.onClick}"
+      >
+        ${this.props.children}
+      </button>
+    `;
+  }
+}
+```
+
+### 2. Performance Optimization
+
+```javascript
+// Code Splitting
+const LazyComponent = React.lazy(() => import('./LazyComponent'));
+const route = {
+  component: () => import('./PageComponent'),
+};
+
+// Virtual DOM Implementation
+class VirtualDOM {
+  static createElement(type, props, ...children) {
+    return {
+      type,
+      props: { ...props, children },
+    };
+  }
+
+  static diff(oldNode, newNode) {
+    // Implement diffing algorithm
+  }
+
+  static patch(dom, patches) {
+    // Apply patches to real DOM
+  }
+}
+```
+
+### 3. Testing Strategies
+
+```javascript
+// Unit Testing
+describe('UserComponent', () => {
+  it('should render user data', () => {
+    const user = { name: 'John', email: 'john@example.com' };
+    const component = renderComponent(UserComponent, { user });
+    expect(component.querySelector('h2').textContent).toBe(user.name);
+  });
+});
+
+// Integration Testing
+describe('UserFlow', () => {
+  it('should handle user login flow', async () => {
+    const { getByText, getByLabelText } = render(App);
+    fireEvent.change(getByLabelText('Email'), {
+      target: { value: 'test@example.com' },
+    });
+    fireEvent.click(getByText('Login'));
+    await waitFor(() => {
+      expect(getByText('Welcome')).toBeInTheDocument();
+    });
+  });
+});
+```
+
+## Related Topics
+
+- [Modern APIs](/docs/fundamentals/javascript/modern-apis)
+- [Build Tools](/docs/fundamentals/javascript/build-tools)
+- [Performance Optimization](/docs/fundamentals/javascript/performance-optimization)

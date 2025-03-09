@@ -1,0 +1,465 @@
+---
+description: A comprehensive guide to creating TCP servers in Node.js, including connection handling, data streaming, and socket programming
+title: TCP Server Implementation
+---
+
+# TCP Server Implementation
+
+Learn how to create and manage TCP servers in Node.js, handle client connections, implement custom protocols, and manage data streaming.
+
+## Basic TCP Server
+
+### Creating a TCP Server
+
+```javascript
+const net = require('net');
+
+// Create TCP server
+const server = net.createServer((socket) => {
+  console.log('Client connected');
+
+  // Handle data from client
+  socket.on('data', (data) => {
+    console.log('Received:', data.toString());
+    // Echo back
+    socket.write(`Server received: ${data}`);
+  });
+
+  // Handle client disconnection
+  socket.on('end', () => {
+    console.log('Client disconnected');
+  });
+
+  // Handle errors
+  socket.on('error', (err) => {
+    console.error('Socket error:', err);
+  });
+});
+
+// Listen on port 8080
+server.listen(8080, () => {
+  console.log('TCP Server listening on port 8080');
+});
+
+// Handle server errors
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error('Port is already in use');
+  } else {
+    console.error('Server error:', err);
+  }
+});
+```
+
+### TCP Client
+
+```javascript
+const net = require('net');
+
+// Create TCP client
+const client = new net.Socket();
+
+client.connect(8080, 'localhost', () => {
+  console.log('Connected to server');
+  client.write('Hello from client!');
+});
+
+client.on('data', (data) => {
+  console.log('Received:', data.toString());
+});
+
+client.on('close', () => {
+  console.log('Connection closed');
+});
+
+client.on('error', (err) => {
+  console.error('Client error:', err);
+});
+```
+
+## Advanced Features
+
+### Custom Protocol Implementation
+
+```javascript
+// Message protocol format:
+// [4 bytes length][payload]
+
+class MessageProtocol {
+  constructor() {
+    this.buffer = Buffer.alloc(0);
+  }
+
+  // Pack message with length prefix
+  static pack(message) {
+    const messageBuffer = Buffer.from(message);
+    const lengthBuffer = Buffer.alloc(4);
+    lengthBuffer.writeUInt32BE(messageBuffer.length);
+    return Buffer.concat([lengthBuffer, messageBuffer]);
+  }
+
+  // Process incoming data
+  process(chunk) {
+    this.buffer = Buffer.concat([this.buffer, chunk]);
+    const messages = [];
+
+    while (this.buffer.length >= 4) {
+      const messageLength = this.buffer.readUInt32BE(0);
+      const totalLength = messageLength + 4;
+
+      if (this.buffer.length >= totalLength) {
+        const message = this.buffer.slice(4, totalLength);
+        messages.push(message);
+        this.buffer = this.buffer.slice(totalLength);
+      } else {
+        break;
+      }
+    }
+
+    return messages;
+  }
+}
+
+// Server using custom protocol
+const server = net.createServer((socket) => {
+  const protocol = new MessageProtocol();
+
+  socket.on('data', (data) => {
+    const messages = protocol.process(data);
+
+    messages.forEach((message) => {
+      console.log('Received message:', message.toString());
+      // Send response
+      socket.write(MessageProtocol.pack('Message received'));
+    });
+  });
+});
+```
+
+### Connection Pool
+
+```javascript
+class ConnectionPool {
+  constructor(maxConnections = 10) {
+    this.maxConnections = maxConnections;
+    this.connections = new Set();
+  }
+
+  add(socket) {
+    if (this.connections.size >= this.maxConnections) {
+      socket.end('Server is at capacity');
+      return false;
+    }
+
+    this.connections.add(socket);
+
+    socket.on('close', () => {
+      this.connections.delete(socket);
+    });
+
+    return true;
+  }
+
+  broadcast(message, except = null) {
+    for (const socket of this.connections) {
+      if (socket !== except && socket.writable) {
+        socket.write(message);
+      }
+    }
+  }
+
+  closeAll() {
+    for (const socket of this.connections) {
+      socket.end();
+    }
+    this.connections.clear();
+  }
+}
+
+// Usage
+const pool = new ConnectionPool();
+
+const server = net.createServer((socket) => {
+  if (!pool.add(socket)) {
+    return;
+  }
+
+  socket.on('data', (data) => {
+    // Broadcast to all other clients
+    pool.broadcast(data, socket);
+  });
+});
+```
+
+### Socket Timeouts
+
+```javascript
+const server = net.createServer((socket) => {
+  // Set timeout to 5 minutes
+  socket.setTimeout(5 * 60 * 1000);
+
+  socket.on('timeout', () => {
+    console.log('Socket timeout');
+    socket.end('Connection timed out');
+  });
+
+  // Keep connection alive
+  socket.setKeepAlive(true, 60000);
+});
+
+// Client with reconnection
+class ReconnectingClient {
+  constructor(port, host, options = {}) {
+    this.port = port;
+    this.host = host;
+    this.options = {
+      reconnectDelay: 5000,
+      maxRetries: 10,
+      ...options,
+    };
+
+    this.socket = null;
+    this.retries = 0;
+    this.connected = false;
+  }
+
+  connect() {
+    this.socket = new net.Socket();
+
+    this.socket.connect(this.port, this.host, () => {
+      console.log('Connected to server');
+      this.connected = true;
+      this.retries = 0;
+    });
+
+    this.socket.on('close', () => {
+      this.connected = false;
+      this.reconnect();
+    });
+
+    this.socket.on('error', (err) => {
+      console.error('Socket error:', err);
+    });
+  }
+
+  reconnect() {
+    if (this.retries >= this.options.maxRetries) {
+      console.error('Max retries reached');
+      return;
+    }
+
+    this.retries++;
+    console.log(`Reconnecting... (${this.retries}/${this.options.maxRetries})`);
+
+    setTimeout(() => {
+      this.connect();
+    }, this.options.reconnectDelay);
+  }
+
+  send(data) {
+    if (this.connected && this.socket.writable) {
+      this.socket.write(data);
+    }
+  }
+
+  close() {
+    if (this.socket) {
+      this.socket.end();
+    }
+  }
+}
+```
+
+## Performance Optimization
+
+### Buffer Management
+
+```javascript
+class BufferPool {
+  constructor(size = 1024, count = 10) {
+    this.size = size;
+    this.pool = Array.from({ length: count }, () => Buffer.alloc(size));
+  }
+
+  acquire() {
+    return this.pool.pop() || Buffer.alloc(this.size);
+  }
+
+  release(buffer) {
+    if (buffer.length === this.size) {
+      this.pool.push(buffer);
+    }
+  }
+}
+
+// Usage with TCP server
+const bufferPool = new BufferPool();
+
+const server = net.createServer((socket) => {
+  const buffer = bufferPool.acquire();
+
+  socket.on('data', (data) => {
+    // Copy data to pooled buffer
+    data.copy(buffer);
+    processData(buffer.slice(0, data.length));
+  });
+
+  socket.on('close', () => {
+    bufferPool.release(buffer);
+  });
+});
+```
+
+### Backpressure Handling
+
+```javascript
+function handleBackpressure(socket) {
+  let paused = false;
+
+  return {
+    write(data) {
+      if (!socket.writable) return false;
+
+      // Check if socket is ready for more data
+      const canWrite = socket.write(data);
+
+      if (!canWrite && !paused) {
+        paused = true;
+        console.log('Backpressure: pausing writes');
+
+        socket.once('drain', () => {
+          paused = false;
+          console.log('Backpressure: resuming writes');
+        });
+      }
+
+      return canWrite;
+    },
+  };
+}
+
+// Usage
+const server = net.createServer((socket) => {
+  const writer = handleBackpressure(socket);
+
+  // Simulate large data transfer
+  let count = 0;
+  const interval = setInterval(() => {
+    const canWrite = writer.write(Buffer.alloc(65536)); // 64KB
+
+    if (!canWrite) {
+      clearInterval(interval);
+    }
+
+    if (++count >= 100) {
+      clearInterval(interval);
+      socket.end();
+    }
+  }, 10);
+});
+```
+
+## Best Practices
+
+### Error Handling
+
+```javascript
+function setupErrorHandling(socket) {
+  // Handle socket errors
+  socket.on('error', (err) => {
+    console.error('Socket error:', err);
+
+    if (err.code === 'ECONNRESET') {
+      console.log('Connection reset by peer');
+    } else if (err.code === 'EPIPE') {
+      console.log('Broken pipe');
+    } else if (err.code === 'ETIMEDOUT') {
+      console.log('Connection timed out');
+    }
+
+    socket.destroy();
+  });
+
+  // Handle uncaught errors
+  socket.on('uncaughtException', (err) => {
+    console.error('Uncaught exception:', err);
+    socket.destroy();
+  });
+}
+
+// Graceful shutdown
+function setupGracefulShutdown(server) {
+  const connections = new Set();
+
+  server.on('connection', (socket) => {
+    connections.add(socket);
+    socket.on('close', () => {
+      connections.delete(socket);
+    });
+  });
+
+  process.on('SIGTERM', () => {
+    console.log('Received SIGTERM. Closing server...');
+
+    server.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
+
+    // Close existing connections
+    for (const socket of connections) {
+      socket.end();
+    }
+
+    // Force close after timeout
+    setTimeout(() => {
+      console.error('Could not close connections in time, forcing shut down');
+      process.exit(1);
+    }, 30000);
+  });
+}
+```
+
+### Security
+
+```javascript
+const tls = require('tls');
+const fs = require('fs');
+
+// Create secure TCP server
+const options = {
+  key: fs.readFileSync('server-key.pem'),
+  cert: fs.readFileSync('server-cert.pem'),
+  // Require client certificate
+  requestCert: true,
+  // Only allow clients with valid certificates
+  rejectUnauthorized: true,
+};
+
+const server = tls.createServer(options, (socket) => {
+  // Verify client certificate
+  const cert = socket.getPeerCertificate();
+
+  if (socket.authorized) {
+    console.log('Client authorized');
+    console.log('Client certificate subject:', cert.subject);
+  } else {
+    console.log('Client not authorized');
+    socket.end();
+    return;
+  }
+
+  // Handle data
+  socket.on('data', (data) => {
+    // Process encrypted data
+    console.log('Received:', data.toString());
+  });
+});
+```
+
+## Related Topics
+
+- [HTTP Server](./http-server) - HTTP server implementation
+- [WebSocket Server](./websocket-server) - WebSocket communication
+- [Network Security](./security) - Network security best practices
+- [Performance](./performance) - Performance optimization techniques

@@ -1,0 +1,1106 @@
+---
+description: Understanding JavaScript Proxies and the Reflect API, their capabilities for metaprogramming, practical use cases, and advanced patterns
+title: JavaScript Proxies and Reflect
+---
+
+# JavaScript Proxies and Reflect
+
+JavaScript Proxies and the Reflect API are powerful features introduced in ES6 (ES2015) that enable advanced metaprogramming capabilities. Proxies allow you to intercept and customize operations on objects, while the Reflect API provides methods for object operations with additional functionality. Together, they provide a way to implement custom behaviors for fundamental language operations.
+
+## Introduction to Proxies
+
+A Proxy in JavaScript wraps an object and intercepts operations like property access, assignment, enumeration, function invocation, and more. This interception allows you to customize or extend the object's behavior.
+
+### Basic Proxy Syntax
+
+```javascript
+const target = {}; // The object to wrap
+
+const handler = {
+  // Traps (interceptors) go here
+  get(target, property, receiver) {
+    console.log(`Getting property "${property}"`);
+    return target[property];
+  },
+
+  set(target, property, value, receiver) {
+    console.log(`Setting property "${property}" to ${value}`);
+    target[property] = value;
+    return true; // Indicate success
+  },
+};
+
+const proxy = new Proxy(target, handler);
+
+// Using the proxy
+proxy.name = 'John'; // Logs: Setting property "name" to John
+console.log(proxy.name); // Logs: Getting property "name", then "John"
+```
+
+### Available Proxy Traps
+
+Proxies support the following traps:
+
+```javascript
+const handler = {
+  // Object property operations
+  get(target, prop, receiver) {},
+  set(target, prop, value, receiver) {},
+  has(target, prop) {}, // for 'prop' in proxy
+  deleteProperty(target, prop) {}, // for delete proxy.prop
+  ownKeys(target) {}, // for Object.keys(), Object.getOwnPropertyNames(), etc.
+  getOwnPropertyDescriptor(target, prop) {}, // for Object.getOwnPropertyDescriptor()
+  defineProperty(target, prop, descriptor) {}, // for Object.defineProperty()
+
+  // Object operations
+  getPrototypeOf(target) {}, // for Object.getPrototypeOf()
+  setPrototypeOf(target, prototype) {}, // for Object.setPrototypeOf()
+  isExtensible(target) {}, // for Object.isExtensible()
+  preventExtensions(target) {}, // for Object.preventExtensions()
+
+  // Function operations
+  apply(target, thisArg, argumentsList) {}, // for proxy(...args)
+  construct(target, args, newTarget) {}, // for new proxy(...args)
+};
+```
+
+## The Reflect API
+
+The Reflect API provides methods that are similar to the proxy traps but can be used outside of proxies. Each method corresponds to an internal operation and provides a more structured way to perform these operations compared to their traditional syntax.
+
+### Basic Reflect Syntax
+
+```javascript
+// Traditional way to get a property
+const value = obj.prop;
+// Reflect way
+const value = Reflect.get(obj, 'prop');
+
+// Traditional way to set a property
+obj.prop = value;
+// Reflect way
+Reflect.set(obj, 'prop', value);
+
+// Traditional way to delete a property
+const deleted = delete obj.prop;
+// Reflect way
+const deleted = Reflect.deleteProperty(obj, 'prop');
+```
+
+### Available Reflect Methods
+
+Reflect provides the following methods, which directly correspond to the proxy traps:
+
+```javascript
+Reflect.get(target, prop, receiver);
+Reflect.set(target, prop, value, receiver);
+Reflect.has(target, prop);
+Reflect.deleteProperty(target, prop);
+Reflect.ownKeys(target);
+Reflect.getOwnPropertyDescriptor(target, prop);
+Reflect.defineProperty(target, prop, descriptor);
+Reflect.getPrototypeOf(target);
+Reflect.setPrototypeOf(target, prototype);
+Reflect.isExtensible(target);
+Reflect.preventExtensions(target);
+Reflect.apply(target, thisArg, argumentsList);
+Reflect.construct(target, args, newTarget);
+```
+
+## Proxies and Reflect Together
+
+Using Proxies and Reflect together provides a powerful combination. The Reflect methods allow you to implement the default behavior in your proxy traps easily:
+
+```javascript
+const target = {
+  name: 'Original',
+};
+
+const handler = {
+  get(target, prop, receiver) {
+    console.log(`Getting property "${prop}"`);
+    // Using Reflect.get to implement the default behavior
+    return Reflect.get(target, prop, receiver);
+  },
+
+  set(target, prop, value, receiver) {
+    console.log(`Setting property "${prop}" to ${value}`);
+    // Using Reflect.set to implement the default behavior
+    return Reflect.set(target, prop, value, receiver);
+  },
+};
+
+const proxy = new Proxy(target, handler);
+
+proxy.name = 'Modified'; // Logs: Setting property "name" to Modified
+console.log(proxy.name); // Logs: Getting property "name", then "Modified"
+```
+
+## Practical Use Cases for Proxies
+
+### Property Validation
+
+Using proxies to validate property values before they're set:
+
+```javascript
+function createValidatedObject(validations) {
+  return new Proxy(
+    {},
+    {
+      set(target, property, value, receiver) {
+        // Check if we have a validation for this property
+        if (validations[property]) {
+          const validation = validations[property];
+
+          // Run the validation function
+          if (!validation.validator(value)) {
+            throw new Error(
+              `Invalid value for ${property}: ${validation.message}`
+            );
+          }
+        }
+
+        // If valid or no validation specified, set the property
+        return Reflect.set(target, property, value, receiver);
+      },
+    }
+  );
+}
+
+// Usage
+const user = createValidatedObject({
+  age: {
+    validator: (value) => Number.isInteger(value) && value >= 0 && value <= 120,
+    message: 'Age must be an integer between 0 and 120',
+  },
+  email: {
+    validator: (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value),
+    message: 'Email must be a valid email address',
+  },
+});
+
+user.name = 'John'; // No validation, works fine
+user.age = 30; // Valid, works fine
+// user.age = -5; // Throws: Invalid value for age: Age must be an integer between 0 and 120
+// user.email = 'invalid'; // Throws: Invalid value for email: Email must be a valid email address
+user.email = 'john@example.com'; // Valid, works fine
+```
+
+### Auto-Binding Methods
+
+Using proxies to automatically bind methods to an object:
+
+```javascript
+function autoBind(obj) {
+  return new Proxy(obj, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+
+      // If the property is a method, bind it to the original object
+      if (typeof value === 'function') {
+        return value.bind(target);
+      }
+
+      // Otherwise, return it as is
+      return value;
+    },
+  });
+}
+
+class Counter {
+  constructor() {
+    this.count = 0;
+    // No need for manual binding with this.increment = this.increment.bind(this)
+    return autoBind(this);
+  }
+
+  increment() {
+    this.count++;
+    return this.count;
+  }
+}
+
+const counter = new Counter();
+const increment = counter.increment; // No binding needed
+
+console.log(increment()); // 1
+console.log(increment()); // 2
+```
+
+### Property Access Tracking
+
+Using proxies to track property access:
+
+```javascript
+function trackProperties(obj) {
+  const accessed = new Set();
+  const modified = new Set();
+
+  return {
+    proxy: new Proxy(obj, {
+      get(target, property, receiver) {
+        accessed.add(property);
+        return Reflect.get(target, property, receiver);
+      },
+
+      set(target, property, value, receiver) {
+        modified.add(property);
+        return Reflect.set(target, property, value, receiver);
+      },
+    }),
+
+    getAccessed() {
+      return [...accessed];
+    },
+
+    getModified() {
+      return [...modified];
+    },
+  };
+}
+
+// Usage
+const { proxy, getAccessed, getModified } = trackProperties({ a: 1, b: 2 });
+
+proxy.a; // Read a
+proxy.b = 3; // Write to b
+proxy.c = 4; // Write to new property c
+
+console.log(getAccessed()); // ["a"]
+console.log(getModified()); // ["b", "c"]
+```
+
+### Creating a Revocable Proxy
+
+JavaScript provides a way to create a proxy that can be disabled:
+
+```javascript
+const object = { a: 1, b: 2 };
+
+// Create a revocable proxy
+const { proxy, revoke } = Proxy.revocable(object, {
+  get(target, property, receiver) {
+    console.log(`Accessing property: ${property}`);
+    return Reflect.get(target, property, receiver);
+  },
+});
+
+console.log(proxy.a); // Logs "Accessing property: a", then 1
+
+// Revoke the proxy
+revoke();
+
+// The proxy is now disabled
+// console.log(proxy.a); // Throws TypeError: Cannot perform 'get' on a proxy that has been revoked
+```
+
+This is useful for creating temporary access to an object that can be turned off.
+
+### Implementing Default Property Values
+
+Using a proxy to provide default values for missing properties:
+
+```javascript
+function withDefaults(target, defaults) {
+  return new Proxy(target, {
+    get(target, property, receiver) {
+      if (Reflect.has(target, property)) {
+        return Reflect.get(target, property, receiver);
+      }
+      return defaults[property];
+    },
+  });
+}
+
+// Usage
+const defaults = { name: 'Guest', level: 1, health: 100 };
+const player = withDefaults({}, defaults);
+
+console.log(player.name); // "Guest"
+player.name = 'Player 1';
+console.log(player.name); // "Player 1"
+console.log(player.level); // 1
+```
+
+### Negative Array Indices
+
+Using proxies to implement Python-like negative array indices:
+
+```javascript
+function createArrayWithNegativeIndices(array) {
+  return new Proxy(array, {
+    get(target, property, receiver) {
+      // Convert string indices to numbers
+      if (typeof property === 'string') {
+        const index = parseInt(property);
+        if (!isNaN(index) && index < 0) {
+          // Handle negative indices
+          return target[target.length + index];
+        }
+      }
+      return Reflect.get(target, property, receiver);
+    },
+
+    set(target, property, value, receiver) {
+      // Also support setting with negative indices
+      if (typeof property === 'string') {
+        const index = parseInt(property);
+        if (!isNaN(index) && index < 0) {
+          return Reflect.set(target, target.length + index, value, receiver);
+        }
+      }
+      return Reflect.set(target, property, value, receiver);
+    },
+  });
+}
+
+// Usage
+const arr = createArrayWithNegativeIndices([1, 2, 3, 4, 5]);
+console.log(arr[1]); // 2
+console.log(arr[-1]); // 5 (last element)
+console.log(arr[-2]); // 4 (second-to-last element)
+
+arr[-1] = 10;
+console.log(arr); // [1, 2, 3, 4, 10]
+```
+
+## Advanced Proxy Patterns
+
+### Deep Proxies
+
+Creating a proxy that applies interception to nested objects:
+
+```javascript
+function deepProxy(obj, handler) {
+  if (typeof obj !== 'object' || obj === null) {
+    return obj;
+  }
+
+  // Proxy each property that is an object
+  const proxyHandler = {
+    get(target, property, receiver) {
+      const result = Reflect.get(target, property, receiver);
+
+      // Apply the handler for the get operation
+      const intercepted = handler.get
+        ? handler.get(target, property, receiver, result)
+        : result;
+
+      // If the result is an object, proxy it too
+      if (typeof intercepted === 'object' && intercepted !== null) {
+        return deepProxy(intercepted, handler);
+      }
+
+      return intercepted;
+    },
+
+    set(target, property, value, receiver) {
+      // Apply the handler for the set operation
+      if (handler.set) {
+        const shouldSet = handler.set(target, property, value, receiver);
+        if (!shouldSet) return false;
+      }
+
+      return Reflect.set(target, property, value, receiver);
+    },
+
+    // Add other traps as needed
+  };
+
+  return new Proxy(obj, proxyHandler);
+}
+
+// Example usage for deep property tracking
+const obj = {
+  a: 1,
+  b: {
+    c: 2,
+    d: {
+      e: 3,
+    },
+  },
+};
+
+const accessedPaths = [];
+
+const trackingProxy = deepProxy(obj, {
+  get(target, property, receiver, result) {
+    accessedPaths.push(property);
+    return result;
+  },
+});
+
+console.log(trackingProxy.b.d.e); // 3
+console.log(accessedPaths); // ["b", "d", "e"]
+```
+
+### Caching Expensive Operations
+
+Using proxies to cache results of expensive function calls:
+
+```javascript
+function memoize(fn) {
+  const cache = new Map();
+
+  return new Proxy(fn, {
+    apply(target, thisArg, argsList) {
+      // Create a key from the arguments
+      const key = JSON.stringify(argsList);
+
+      if (cache.has(key)) {
+        console.log('Cache hit!');
+        return cache.get(key);
+      }
+
+      const result = Reflect.apply(target, thisArg, argsList);
+      cache.set(key, result);
+      return result;
+    },
+  });
+}
+
+// Example expensive function
+function expensiveOperation(a, b) {
+  console.log('Performing expensive calculation...');
+  // Simulate expensive work
+  let result = 0;
+  for (let i = 0; i < 1000000; i++) {
+    result += i;
+  }
+  return a + b + result;
+}
+
+const memoizedFn = memoize(expensiveOperation);
+
+console.log(memoizedFn(1, 2)); // Logs: Performing expensive calculation...
+console.log(memoizedFn(1, 2)); // Logs: Cache hit!
+console.log(memoizedFn(3, 4)); // Logs: Performing expensive calculation...
+```
+
+### Private Properties Simulation
+
+Using proxies to simulate private properties (before ES2022 private fields):
+
+```javascript
+function createObjectWithPrivates(publicProperties, privateProperties) {
+  // Store private properties in a WeakMap for proper encapsulation
+  const privates = new WeakMap();
+
+  // Create the base object with public properties
+  const obj = { ...publicProperties };
+  privates.set(obj, { ...privateProperties });
+
+  return new Proxy(obj, {
+    get(target, property, receiver) {
+      // Special getter for private properties
+      if (property.startsWith('_get_')) {
+        const privateKey = property.slice(5); // Remove '_get_'
+        const privateProps = privates.get(target);
+        if (privateKey in privateProps) {
+          return privateProps[privateKey];
+        }
+        return undefined;
+      }
+
+      return Reflect.get(target, property, receiver);
+    },
+
+    set(target, property, value, receiver) {
+      // Special setter for private properties
+      if (property.startsWith('_set_')) {
+        const privateKey = property.slice(5); // Remove '_set_'
+        const privateProps = privates.get(target);
+        privateProps[privateKey] = value;
+        return true;
+      }
+
+      return Reflect.set(target, property, value, receiver);
+    },
+
+    // Prevent private properties from showing up in enumerations
+    ownKeys(target) {
+      return Reflect.ownKeys(target);
+    },
+
+    getOwnPropertyDescriptor(target, prop) {
+      return Reflect.getOwnPropertyDescriptor(target, prop);
+    },
+  });
+}
+
+// Usage
+const user = createObjectWithPrivates(
+  { name: 'John' }, // Public
+  { password: '1234' } // Private
+);
+
+console.log(user.name); // "John"
+console.log(user.password); // undefined
+console.log(user._get_password); // "1234"
+
+user._set_password = 'securepassword';
+console.log(user._get_password); // "securepassword"
+
+console.log(Object.keys(user)); // ["name"] - password is not enumerable
+```
+
+### Observable Objects
+
+Creating objects that notify subscribers when properties change:
+
+```javascript
+function observable(target) {
+  const handlers = new Map();
+
+  function on(property, handler) {
+    if (!handlers.has(property)) {
+      handlers.set(property, new Set());
+    }
+    handlers.get(property).add(handler);
+  }
+
+  function off(property, handler) {
+    if (handlers.has(property)) {
+      handlers.get(property).delete(handler);
+    }
+  }
+
+  const proxy = new Proxy(target, {
+    set(obj, prop, value, receiver) {
+      const oldValue = obj[prop];
+      const result = Reflect.set(obj, prop, value, receiver);
+
+      // If the value changed, notify handlers
+      if (oldValue !== value && handlers.has(prop)) {
+        handlers.get(prop).forEach((handler) => {
+          handler(value, oldValue, prop);
+        });
+      }
+
+      return result;
+    },
+  });
+
+  return { proxy, on, off };
+}
+
+// Usage
+const { proxy: user, on, off } = observable({ name: 'John', age: 30 });
+
+// Subscribe to name changes
+const handler = (newValue, oldValue, prop) => {
+  console.log(`${prop} changed from ${oldValue} to ${newValue}`);
+};
+on('name', handler);
+
+user.name = 'Jane'; // Logs: name changed from John to Jane
+user.age = 31; // No handler for age
+
+// Unsubscribe
+off('name', handler);
+user.name = 'Bob'; // No log - we unsubscribed
+```
+
+## Reflect API Use Cases
+
+### Safer Property Access
+
+Using Reflect for safer property access with default values:
+
+```javascript
+function getProperty(obj, prop, defaultValue) {
+  if (Reflect.has(obj, prop)) {
+    return Reflect.get(obj, prop);
+  }
+  return defaultValue;
+}
+
+const user = { name: 'John' };
+console.log(getProperty(user, 'name', 'Unknown')); // "John"
+console.log(getProperty(user, 'age', 30)); // 30
+```
+
+### Dynamic Property Manipulation
+
+Using Reflect to dynamically define properties:
+
+```javascript
+function addGettersSetters(obj, properties) {
+  for (const [prop, config] of Object.entries(properties)) {
+    // Define getter
+    Reflect.defineProperty(obj, prop, {
+      get() {
+        console.log(`Getting ${prop}`);
+        return config.value;
+      },
+      set(newValue) {
+        console.log(`Setting ${prop} to ${newValue}`);
+        config.value = newValue;
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  }
+  return obj;
+}
+
+const user = {};
+addGettersSetters(user, {
+  name: { value: 'John' },
+  age: { value: 30 },
+});
+
+console.log(user.name); // Logs: Getting name, then "John"
+user.age = 31; // Logs: Setting age to 31
+```
+
+### Constructing Objects Dynamically
+
+Using Reflect.construct for dynamic object creation:
+
+```javascript
+function createInstance(constructor, args) {
+  return Reflect.construct(constructor, args);
+}
+
+class Person {
+  constructor(name, age) {
+    this.name = name;
+    this.age = age;
+  }
+
+  greet() {
+    return `Hello, I'm ${this.name}`;
+  }
+}
+
+// Dynamically create an instance with arguments from elsewhere
+const args = ['John', 30];
+const person = createInstance(Person, args);
+
+console.log(person.greet()); // "Hello, I'm John"
+console.log(person instanceof Person); // true
+```
+
+### Function Application with Dynamic Context
+
+Using Reflect.apply for more flexible function calling:
+
+```javascript
+function callWithContext(fn, context, ...args) {
+  return Reflect.apply(fn, context, args);
+}
+
+const calculator = {
+  value: 0,
+  add(a, b) {
+    this.value = a + b;
+    return this.value;
+  },
+};
+
+// Call calculator.add with calculator as context
+console.log(callWithContext(calculator.add, calculator, 5, 3)); // 8
+console.log(calculator.value); // 8
+
+// Call with a different context
+const otherContext = { value: 10 };
+console.log(callWithContext(calculator.add, otherContext, 1, 2)); // 3
+console.log(otherContext.value); // 3
+```
+
+## Performance Considerations
+
+### Proxy Overhead
+
+Proxies introduce performance overhead:
+
+```javascript
+function benchmarkAccess(iterations) {
+  const direct = { prop: 'value' };
+  const proxy = new Proxy(direct, {
+    get(target, prop, receiver) {
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+
+  console.time('Direct access');
+  for (let i = 0; i < iterations; i++) {
+    const x = direct.prop;
+  }
+  console.timeEnd('Direct access');
+
+  console.time('Proxy access');
+  for (let i = 0; i < iterations; i++) {
+    const x = proxy.prop;
+  }
+  console.timeEnd('Proxy access');
+}
+
+benchmarkAccess(10000000);
+// Example output (times will vary):
+// Direct access: 5.26ms
+// Proxy access: 21.18ms
+```
+
+### When to Use Proxies vs. Other Techniques
+
+Proxies are powerful but come with overhead. Consider these guidelines:
+
+- Use proxies when you need to intercept fundamental operations like property access, property setting, or function calls.
+- For simple property observation, consider using getters and setters defined with Object.defineProperty instead.
+- For data binding in frameworks, proxies can be more convenient than property descriptors but may be slower.
+- Avoid proxies in performance-critical code paths unless the benefits outweigh the performance cost.
+
+```javascript
+// Property observation with Object.defineProperty
+function observableWithDescriptors(obj) {
+  const result = {};
+  const handlers = {};
+
+  Object.keys(obj).forEach((key) => {
+    let value = obj[key];
+    Object.defineProperty(result, key, {
+      get() {
+        return value;
+      },
+      set(newValue) {
+        const oldValue = value;
+        value = newValue;
+
+        if (handlers[key]) {
+          handlers[key].forEach((handler) => handler(newValue, oldValue, key));
+        }
+      },
+      enumerable: true,
+      configurable: true,
+    });
+  });
+
+  function on(property, handler) {
+    if (!handlers[property]) {
+      handlers[property] = [];
+    }
+    handlers[property].push(handler);
+  }
+
+  return { target: result, on };
+}
+
+// Usage
+const { target: user, on } = observableWithDescriptors({ name: 'John' });
+on('name', (newValue, oldValue) => {
+  console.log(`Name changed from ${oldValue} to ${newValue}`);
+});
+
+user.name = 'Jane'; // Logs: Name changed from John to Jane
+```
+
+## Best Practices
+
+### Keep Proxy Handlers Simple
+
+Avoid complex logic in proxy handlers to reduce debugging difficulty:
+
+```javascript
+// Bad: Complex handler with mixed responsibilities
+const badProxy = new Proxy(target, {
+  get(target, property, receiver) {
+    // Too many responsibilities and side effects
+    logAccess(property);
+    validateType(target[property]);
+    if (isComputed(property)) {
+      return computeValue(target, property);
+    }
+    insertIntoCache(property, target[property]);
+    return Reflect.get(target, property, receiver);
+  },
+});
+
+// Better: Simple handler with focused responsibility
+function createLoggingProxy(target) {
+  return new Proxy(target, {
+    get(target, property, receiver) {
+      console.log(`Accessing property: ${String(property)}`);
+      return Reflect.get(target, property, receiver);
+    },
+  });
+}
+
+function createValidatingProxy(target, validations) {
+  return new Proxy(target, {
+    set(target, property, value, receiver) {
+      if (validations[property] && !validations[property](value)) {
+        throw new Error(`Invalid value for ${String(property)}`);
+      }
+      return Reflect.set(target, property, value, receiver);
+    },
+  });
+}
+
+// Compose proxies if needed
+const loggingProxy = createLoggingProxy(target);
+const validatedProxy = createValidatingProxy(loggingProxy, validations);
+```
+
+### Use Reflect Methods in Proxy Traps
+
+Always use Reflect methods in proxy traps to preserve built-in behavior:
+
+```javascript
+// Bad: Not using Reflect
+const badProxy = new Proxy(target, {
+  get(target, property, receiver) {
+    return target[property]; // Doesn't respect getters, prototype chain, and other details
+  },
+  set(target, property, value) {
+    target[property] = value; // Doesn't handle receiver correctly
+    return true; // Always returns success
+  },
+});
+
+// Good: Using Reflect
+const goodProxy = new Proxy(target, {
+  get(target, property, receiver) {
+    return Reflect.get(target, property, receiver); // Proper implementation
+  },
+  set(target, property, value, receiver) {
+    return Reflect.set(target, property, value, receiver); // Returns actual success/failure
+  },
+});
+```
+
+### Defensive Programming with Proxies
+
+Use defensive programming techniques when working with proxies:
+
+```javascript
+// Defensive proxy creation
+function safeProxy(target, handler) {
+  // Ensure we have handler methods
+  const safeHandler = { ...handler };
+
+  // Add safety checks to each trap
+  if (safeHandler.get) {
+    const original = safeHandler.get;
+    safeHandler.get = function (target, property, receiver) {
+      try {
+        return original.call(this, target, property, receiver);
+      } catch (error) {
+        console.error(
+          `Error in get trap for property '${String(property)}':`,
+          error
+        );
+        return Reflect.get(target, property, receiver);
+      }
+    };
+  }
+
+  // Add similar checks for other traps
+
+  return new Proxy(target, safeHandler);
+}
+
+// Usage
+const proxy = safeProxy(target, {
+  get(target, property, receiver) {
+    // This code could throw, but the safe proxy will handle it
+    validateAccess(property);
+    return Reflect.get(target, property, receiver);
+  },
+});
+```
+
+### Documenting Proxy Behavior
+
+Since proxies can modify default behavior in non-obvious ways, document their behavior clearly:
+
+```javascript
+/**
+ * Creates a logging proxy that tracks property access.
+ *
+ * @param {Object} target - The object to wrap.
+ * @param {Object} options - Configuration options.
+ * @param {boolean} options.logReads - Whether to log property reads.
+ * @param {boolean} options.logWrites - Whether to log property writes.
+ * @param {Function} options.logger - Custom logging function.
+ * @returns {Proxy} A proxy that logs operations according to options.
+ */
+function createLoggingProxy(target, options = {}) {
+  const { logReads = true, logWrites = true, logger = console.log } = options;
+
+  return new Proxy(target, {
+    get(target, property, receiver) {
+      if (logReads && typeof property !== 'symbol') {
+        logger(`Reading property: ${String(property)}`);
+      }
+      return Reflect.get(target, property, receiver);
+    },
+
+    set(target, property, value, receiver) {
+      if (logWrites && typeof property !== 'symbol') {
+        logger(`Writing property: ${String(property)} = ${value}`);
+      }
+      return Reflect.set(target, property, value, receiver);
+    },
+  });
+}
+
+// Usage with documentation
+const user = createLoggingProxy(
+  { name: 'John' },
+  {
+    logWrites: false, // Only log reads
+    logger: (msg) => console.warn(`[DEBUG] ${msg}`),
+  }
+);
+```
+
+## Proxies in Modern JavaScript Frameworks
+
+Proxies are used in modern frameworks for reactivity systems:
+
+### Vue.js Reactivity System (Simplified)
+
+```javascript
+// Simplified version of Vue 3's reactivity system
+function reactive(target) {
+  const handlers = {
+    get(target, property, receiver) {
+      const result = Reflect.get(target, property, receiver);
+      track(target, property); // Track dependency
+      return isObject(result) ? reactive(result) : result;
+    },
+
+    set(target, property, value, receiver) {
+      const oldValue = target[property];
+      const result = Reflect.set(target, property, value, receiver);
+      if (oldValue !== value) {
+        trigger(target, property); // Trigger updates
+      }
+      return result;
+    },
+  };
+
+  return new Proxy(target, handlers);
+}
+
+// Mock implementation of dependency tracking
+const targetMap = new WeakMap();
+let activeEffect = null;
+
+function track(target, property) {
+  if (activeEffect) {
+    let depsMap = targetMap.get(target);
+    if (!depsMap) {
+      targetMap.set(target, (depsMap = new Map()));
+    }
+
+    let dep = depsMap.get(property);
+    if (!dep) {
+      depsMap.set(property, (dep = new Set()));
+    }
+
+    dep.add(activeEffect);
+  }
+}
+
+function trigger(target, property) {
+  const depsMap = targetMap.get(target);
+  if (!depsMap) return;
+
+  const effects = depsMap.get(property);
+  if (effects) {
+    effects.forEach((effect) => effect());
+  }
+}
+
+// Example usage
+function effect(fn) {
+  activeEffect = fn;
+  fn(); // Initial execution
+  activeEffect = null;
+}
+
+const user = reactive({ name: 'John', age: 30 });
+
+effect(() => {
+  console.log(`User name is ${user.name}`);
+});
+
+user.name = 'Jane'; // Logs: User name is Jane
+```
+
+### MobX Observable System (Simplified)
+
+```javascript
+// Simplified MobX-like observable
+function observable(target) {
+  const listeners = new Map();
+
+  return new Proxy(target, {
+    get(target, property, receiver) {
+      if (observable.currentComputation) {
+        // Register dependency
+        if (!listeners.has(property)) {
+          listeners.set(property, new Set());
+        }
+        listeners.get(property).add(observable.currentComputation);
+      }
+
+      return Reflect.get(target, property, receiver);
+    },
+
+    set(target, property, value, receiver) {
+      const result = Reflect.set(target, property, value, receiver);
+
+      // Notify listeners
+      if (listeners.has(property)) {
+        listeners.get(property).forEach((listener) => listener());
+      }
+
+      return result;
+    },
+  });
+}
+
+// Static property to track current computation
+observable.currentComputation = null;
+
+// Autorun function
+function autorun(fn) {
+  const wrappedFn = () => {
+    observable.currentComputation = wrappedFn;
+    fn();
+    observable.currentComputation = null;
+  };
+
+  wrappedFn();
+  return wrappedFn;
+}
+
+// Usage
+const user = observable({ name: 'John' });
+
+const dispose = autorun(() => {
+  console.log(`User name: ${user.name}`);
+});
+
+user.name = 'Jane'; // Logs: User name: Jane
+
+// Stop observing
+dispose();
+user.name = 'Bob'; // No log
+```
+
+## Related Topics
+
+- [JavaScript Metaprogramming](./metaprogramming) - Advanced techniques for modifying program behavior
+- [The 'this' Keyword](./this-keyword) - Understanding execution context in JavaScript
+- [Object-Oriented JavaScript](./object-oriented) - Working with objects and inheritance in JavaScript
+- [ES6 Features](./es6-features) - Modern JavaScript capabilities
+- [Design Patterns](./design-patterns) - Common patterns for structuring JavaScript code
+
+```
+
+```

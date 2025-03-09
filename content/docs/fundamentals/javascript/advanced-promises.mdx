@@ -1,0 +1,1345 @@
+---
+description: Exploring advanced JavaScript Promise patterns including composition, error handling, cancellation strategies, and complex asynchronous workflows
+title: Advanced Promise Patterns in JavaScript
+---
+
+# Advanced Promise Patterns in JavaScript
+
+Promises form the backbone of asynchronous programming in modern JavaScript. While the basics of promises are straightforward, mastering advanced promise patterns can dramatically improve your ability to handle complex asynchronous workflows.
+
+## Promise Composition
+
+### Chaining Promises
+
+Promise chaining allows you to perform sequential asynchronous operations where each step depends on the previous one:
+
+```javascript
+function getUserInfo(userId) {
+  return fetchUser(userId).then((user) => {
+    return fetchUserPosts(user.id).then((posts) => {
+      user.posts = posts;
+      return user;
+    });
+  });
+}
+```
+
+This can be flattened for better readability:
+
+```javascript
+function getUserInfo(userId) {
+  return fetchUser(userId).then((user) => {
+    return fetchUserPosts(user.id).then((posts) => {
+      user.posts = posts;
+      return user;
+    });
+  });
+}
+
+// Better with flattened chains
+function getUserInfo(userId) {
+  let userData;
+  return fetchUser(userId)
+    .then((user) => {
+      userData = user;
+      return fetchUserPosts(user.id);
+    })
+    .then((posts) => {
+      userData.posts = posts;
+      return userData;
+    });
+}
+```
+
+### Promise.all for Parallel Operations
+
+When you need to perform multiple asynchronous operations in parallel:
+
+```javascript
+function getUserInfo(userId) {
+  return fetchUser(userId).then((user) => {
+    return Promise.all([
+      fetchUserPosts(user.id),
+      fetchUserFollowers(user.id),
+      fetchUserSettings(user.id),
+    ]).then(([posts, followers, settings]) => {
+      return {
+        ...user,
+        posts,
+        followers,
+        settings,
+      };
+    });
+  });
+}
+```
+
+### Promise.allSettled for Operation Status
+
+When you want to execute multiple promises and get the status of each one:
+
+```javascript
+function attemptOperations(operations) {
+  return Promise.allSettled(operations.map((op) => op())).then((results) => {
+    return {
+      successful: results
+        .filter((r) => r.status === 'fulfilled')
+        .map((r) => r.value),
+      failed: results
+        .filter((r) => r.status === 'rejected')
+        .map((r) => r.reason),
+    };
+  });
+}
+
+// Usage
+attemptOperations([
+  () => fetchUserData(1),
+  () => fetchUserData(2),
+  () => fetchUserData(3), // This might fail
+]).then(({ successful, failed }) => {
+  console.log(`${successful.length} operations succeeded`);
+  console.log(`${failed.length} operations failed`);
+});
+```
+
+### Promise.race for Timeout Patterns
+
+When you want to implement timeouts or take the fastest response:
+
+```javascript
+function fetchWithTimeout(url, timeout = 5000) {
+  const fetchPromise = fetch(url).then((response) => {
+    if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+    return response.json();
+  });
+
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Request timed out')), timeout);
+  });
+
+  return Promise.race([fetchPromise, timeoutPromise]);
+}
+
+// Usage
+fetchWithTimeout('https://api.example.com/data', 3000)
+  .then((data) => console.log('Data:', data))
+  .catch((error) => console.error('Error:', error.message));
+```
+
+### Promise.any for First Success
+
+When you want to get the first successful result (ES2021):
+
+```javascript
+function fetchFromMirrors(mirrors) {
+  return Promise.any(mirrors.map((url) => fetch(url)))
+    .then((response) => {
+      if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+      return response.json();
+    })
+    .catch((error) => {
+      if (error instanceof AggregateError) {
+        throw new Error(
+          'All mirrors failed: ' + error.errors.map((e) => e.message).join(', ')
+        );
+      }
+      throw error;
+    });
+}
+
+// Usage
+fetchFromMirrors([
+  'https://mirror1.example.com/data',
+  'https://mirror2.example.com/data',
+  'https://mirror3.example.com/data',
+])
+  .then((data) => console.log('Data:', data))
+  .catch((error) => console.error('Error:', error.message));
+```
+
+## Advanced Error Handling
+
+### Error Propagation in Promise Chains
+
+Errors in promise chains propagate to the nearest catch handler:
+
+```javascript
+function processUserData(userId) {
+  return fetchUser(userId)
+    .then((user) => {
+      if (!user.isActive) {
+        throw new Error('User account is inactive');
+      }
+      return fetchUserPosts(user.id);
+    })
+    .then((posts) => {
+      return processPosts(posts);
+    })
+    .catch((error) => {
+      // This catches errors from fetchUser, the isActive check,
+      // fetchUserPosts, and processPosts
+      console.error('Processing failed:', error);
+      return { error: error.message };
+    });
+}
+```
+
+### Intermediate Error Handling
+
+You can catch errors at intermediate steps to implement recovery strategies:
+
+```javascript
+function getUserData(userId) {
+  return fetchUser(userId)
+    .catch((error) => {
+      console.warn(`Failed to fetch user ${userId}:`, error);
+      return { id: userId, name: 'Unknown User', isPlaceholder: true };
+    })
+    .then((user) => {
+      return fetchUserPosts(user.id)
+        .catch((error) => {
+          console.warn(`Failed to fetch posts for user ${user.id}:`, error);
+          return []; // Return empty posts array on error
+        })
+        .then((posts) => {
+          user.posts = posts;
+          return user;
+        });
+    });
+}
+```
+
+### Error Classification and Handling
+
+Different types of errors may require different handling strategies:
+
+```javascript
+class NetworkError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.name = 'NetworkError';
+    this.status = status;
+  }
+}
+
+class ValidationError extends Error {
+  constructor(message, field) {
+    super(message);
+    this.name = 'ValidationError';
+    this.field = field;
+  }
+}
+
+function saveUserData(userId, data) {
+  // Validate data first
+  if (!data.name) {
+    return Promise.reject(new ValidationError('Name is required', 'name'));
+  }
+
+  return fetch(`/api/users/${userId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new NetworkError('Failed to save user data', response.status);
+      }
+      return response.json();
+    })
+    .catch((error) => {
+      if (error instanceof ValidationError) {
+        // Handle validation errors
+        console.error(`Validation error in ${error.field}: ${error.message}`);
+        return { success: false, error: error.message, field: error.field };
+      } else if (error instanceof NetworkError) {
+        // Handle network errors
+        if (error.status === 401) {
+          // Authentication error
+          redirectToLogin();
+        } else if (error.status === 403) {
+          // Permission error
+          return {
+            success: false,
+            error: 'You do not have permission to update this user',
+          };
+        } else {
+          // Other network errors
+          return { success: false, error: `Server error: ${error.message}` };
+        }
+      } else {
+        // Unknown errors
+        console.error('Unexpected error:', error);
+        return { success: false, error: 'An unexpected error occurred' };
+      }
+    });
+}
+```
+
+### Retry Logic for Failed Promises
+
+Implement automated retry for transient failures:
+
+```javascript
+function fetchWithRetry(url, options = {}, maxRetries = 3, delay = 1000) {
+  return new Promise((resolve, reject) => {
+    function attempt(retryCount) {
+      fetch(url, options)
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`HTTP error: ${response.status}`);
+          }
+          resolve(response.json());
+        })
+        .catch((error) => {
+          if (retryCount < maxRetries) {
+            console.warn(
+              `Attempt ${retryCount + 1} failed, retrying...`,
+              error
+            );
+            setTimeout(
+              () => attempt(retryCount + 1),
+              delay * Math.pow(2, retryCount)
+            ); // Exponential backoff
+          } else {
+            reject(
+              new Error(`Failed after ${maxRetries} attempts: ${error.message}`)
+            );
+          }
+        });
+    }
+
+    attempt(0);
+  });
+}
+
+// Usage
+fetchWithRetry('https://api.example.com/data', {}, 3, 1000)
+  .then((data) => console.log('Data:', data))
+  .catch((error) => console.error('Error:', error.message));
+```
+
+## Promise Cancellation Patterns
+
+JavaScript Promises don't have built-in cancellation, but there are several patterns to implement it:
+
+### Cancellation with AbortController
+
+Modern browsers and Node.js support the AbortController API for cancellation:
+
+```javascript
+function fetchWithCancellation(url) {
+  const controller = new AbortController();
+  const signal = controller.signal;
+
+  const promise = fetch(url, { signal }).then((response) => {
+    if (!response.ok) throw new Error(`HTTP error: ${response.status}`);
+    return response.json();
+  });
+
+  return {
+    promise,
+    cancel: () => controller.abort(),
+  };
+}
+
+// Usage
+const { promise, cancel } = fetchWithCancellation(
+  'https://api.example.com/data'
+);
+
+promise
+  .then((data) => console.log('Data:', data))
+  .catch((error) => {
+    if (error.name === 'AbortError') {
+      console.log('Fetch was cancelled');
+    } else {
+      console.error('Error:', error);
+    }
+  });
+
+// Cancel after 2 seconds
+setTimeout(cancel, 2000);
+```
+
+### Cancellation Token Pattern
+
+For older environments or more complex cases:
+
+```javascript
+class CancellationToken {
+  constructor() {
+    this.cancelled = false;
+    this.callbacks = [];
+  }
+
+  cancel() {
+    this.cancelled = true;
+    this.callbacks.forEach((cb) => cb());
+  }
+
+  onCancel(callback) {
+    this.callbacks.push(callback);
+  }
+
+  throwIfCancelled() {
+    if (this.cancelled) {
+      const error = new Error('Operation cancelled');
+      error.name = 'CancellationError';
+      throw error;
+    }
+  }
+}
+
+function longOperation(token) {
+  return new Promise((resolve, reject) => {
+    // Check if already cancelled
+    try {
+      token.throwIfCancelled();
+    } catch (e) {
+      reject(e);
+      return;
+    }
+
+    // Set up cancellation handler
+    token.onCancel(() => {
+      clearTimeout(timer);
+      reject(new Error('Operation cancelled'));
+    });
+
+    // Simulate long operation
+    const timer = setTimeout(() => {
+      try {
+        token.throwIfCancelled();
+        resolve('Operation completed');
+      } catch (e) {
+        reject(e);
+      }
+    }, 5000);
+  });
+}
+
+// Usage
+const token = new CancellationToken();
+
+longOperation(token)
+  .then((result) => console.log(result))
+  .catch((error) => {
+    if (error.name === 'CancellationError') {
+      console.log('Operation was cancelled');
+    } else {
+      console.error('Error:', error);
+    }
+  });
+
+// Cancel after 2 seconds
+setTimeout(() => token.cancel(), 2000);
+```
+
+### Promise Pool with Cancellation
+
+When managing multiple concurrent operations with cancellation:
+
+```javascript
+class PromisePool {
+  constructor(maxConcurrent = 3) {
+    this.maxConcurrent = maxConcurrent;
+    this.running = 0;
+    this.queue = [];
+    this.cancellationToken = new CancellationToken();
+  }
+
+  add(promiseFactory) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ promiseFactory, resolve, reject });
+      this.processQueue();
+    });
+  }
+
+  processQueue() {
+    if (this.running >= this.maxConcurrent || this.queue.length === 0) {
+      return;
+    }
+
+    try {
+      this.cancellationToken.throwIfCancelled();
+    } catch (e) {
+      // If cancelled, reject all queued operations
+      this.queue.forEach(({ reject }) => reject(e));
+      this.queue = [];
+      return;
+    }
+
+    const { promiseFactory, resolve, reject } = this.queue.shift();
+    this.running++;
+
+    try {
+      promiseFactory(this.cancellationToken)
+        .then(resolve)
+        .catch(reject)
+        .finally(() => {
+          this.running--;
+          this.processQueue();
+        });
+    } catch (e) {
+      reject(e);
+      this.running--;
+      this.processQueue();
+    }
+  }
+
+  cancelAll() {
+    this.cancellationToken.cancel();
+  }
+}
+
+// Usage
+const pool = new PromisePool(2); // Max 2 concurrent operations
+
+for (let i = 1; i <= 5; i++) {
+  pool
+    .add((token) => {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          resolve(`Task ${i} completed`);
+        }, 1000 * i);
+
+        token.onCancel(() => {
+          clearTimeout(timer);
+          reject(new Error(`Task ${i} cancelled`));
+        });
+      });
+    })
+    .then((result) => console.log(result))
+    .catch((error) => console.error(`Task ${i} error:`, error.message));
+}
+
+// Cancel all operations after 2.5 seconds
+setTimeout(() => pool.cancelAll(), 2500);
+```
+
+## Progress Tracking and Notifications
+
+JavaScript Promises don't natively support progress, but we can implement it:
+
+### Promise with Progress Callbacks
+
+```javascript
+function fetchWithProgress(url, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url);
+    xhr.responseType = 'blob';
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(xhr.response);
+      } else {
+        reject(new Error(`HTTP Error: ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Network Error'));
+
+    xhr.onprogress = (event) => {
+      if (event.lengthComputable && onProgress) {
+        const progress = (event.loaded / event.total) * 100;
+        onProgress(progress);
+      }
+    };
+
+    xhr.send();
+  });
+}
+
+// Usage
+fetchWithProgress('https://example.com/largefile.zip', (progress) => {
+  console.log(`Download progress: ${progress.toFixed(2)}%`);
+})
+  .then((blob) => console.log('Download complete, blob size:', blob.size))
+  .catch((error) => console.error('Download failed:', error));
+```
+
+### Promises with Observable Progress
+
+A more structured approach using an observer pattern:
+
+```javascript
+class ProgressPromise extends Promise {
+  constructor(executor) {
+    const observers = [];
+
+    super((resolve, reject) => {
+      const onProgress = (progress) => {
+        observers.forEach((observer) => observer(progress));
+      };
+
+      return executor(resolve, reject, onProgress);
+    });
+
+    this.onProgress = (callback) => {
+      observers.push(callback);
+      return this;
+    };
+  }
+}
+
+function downloadFile(url) {
+  return new ProgressPromise((resolve, reject, onProgress) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', url);
+    xhr.responseType = 'blob';
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(xhr.response);
+      } else {
+        reject(new Error(`HTTP Error: ${xhr.status}`));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Network Error'));
+
+    xhr.onprogress = (event) => {
+      if (event.lengthComputable) {
+        const progress = (event.loaded / event.total) * 100;
+        onProgress(progress);
+      }
+    };
+
+    xhr.send();
+  });
+}
+
+// Usage
+downloadFile('https://example.com/largefile.zip')
+  .onProgress((progress) => {
+    console.log(`Download progress: ${progress.toFixed(2)}%`);
+    updateProgressBar(progress);
+  })
+  .then((blob) => {
+    console.log('Download complete, blob size:', blob.size);
+    displayDownloadedFile(blob);
+  })
+  .catch((error) => {
+    console.error('Download failed:', error);
+    showErrorMessage(error.message);
+  });
+```
+
+## Promise Queuing and Rate Limiting
+
+When you need to limit the concurrency of asynchronous operations:
+
+### Sequential Promise Queue
+
+```javascript
+class PromiseQueue {
+  constructor() {
+    this.queue = [];
+    this.running = false;
+  }
+
+  add(promiseFactory) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ promiseFactory, resolve, reject });
+      this.processNext();
+    });
+  }
+
+  processNext() {
+    if (this.running || this.queue.length === 0) {
+      return;
+    }
+
+    this.running = true;
+    const { promiseFactory, resolve, reject } = this.queue.shift();
+
+    try {
+      promiseFactory()
+        .then(resolve)
+        .catch(reject)
+        .finally(() => {
+          this.running = false;
+          this.processNext();
+        });
+    } catch (e) {
+      reject(e);
+      this.running = false;
+      this.processNext();
+    }
+  }
+}
+
+// Usage
+const queue = new PromiseQueue();
+
+// Add operations to the queue
+for (let i = 1; i <= 5; i++) {
+  queue
+    .add(() => {
+      console.log(`Starting task ${i}`);
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          console.log(`Completing task ${i}`);
+          resolve(`Result from task ${i}`);
+        }, 1000);
+      });
+    })
+    .then((result) => console.log(result))
+    .catch((error) => console.error(`Task ${i} error:`, error));
+}
+```
+
+### Rate-Limited Promise Queue
+
+```javascript
+class RateLimitedQueue {
+  constructor(maxRequestsPerInterval, interval) {
+    this.queue = [];
+    this.maxRequestsPerInterval = maxRequestsPerInterval;
+    this.interval = interval;
+    this.requestTimes = [];
+    this.processing = false;
+  }
+
+  add(promiseFactory) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ promiseFactory, resolve, reject });
+      this.processQueue();
+    });
+  }
+
+  processQueue() {
+    if (this.processing) return;
+    this.processing = true;
+
+    setTimeout(() => {
+      this.processNext();
+    }, 0);
+  }
+
+  processNext() {
+    if (this.queue.length === 0) {
+      this.processing = false;
+      return;
+    }
+
+    // Clean up old timestamps
+    const now = Date.now();
+    this.requestTimes = this.requestTimes.filter(
+      (time) => now - time < this.interval
+    );
+
+    if (this.requestTimes.length >= this.maxRequestsPerInterval) {
+      // Wait for next cycle
+      const oldestRequest = this.requestTimes[0];
+      const timeToWait = this.interval - (now - oldestRequest);
+
+      setTimeout(() => this.processNext(), timeToWait + 10);
+      return;
+    }
+
+    // Process the next item
+    const { promiseFactory, resolve, reject } = this.queue.shift();
+    this.requestTimes.push(now);
+
+    try {
+      promiseFactory()
+        .then(resolve)
+        .catch(reject)
+        .finally(() => {
+          setTimeout(() => this.processNext(), 0);
+        });
+    } catch (e) {
+      reject(e);
+      setTimeout(() => this.processNext(), 0);
+    }
+  }
+}
+
+// Usage - limit to 2 requests per second
+const rateLimitedQueue = new RateLimitedQueue(2, 1000);
+
+// Add 10 API calls to the queue
+for (let i = 1; i <= 10; i++) {
+  rateLimitedQueue
+    .add(() => {
+      console.log(`Making API call ${i} at ${new Date().toISOString()}`);
+      return fetch(`https://api.example.com/data/${i}`).then((response) =>
+        response.json()
+      );
+    })
+    .then((data) => console.log(`API call ${i} result:`, data))
+    .catch((error) => console.error(`API call ${i} failed:`, error));
+}
+```
+
+## Promise Patterns with Async/Await
+
+Async/await provides more readable syntax for promise-based code:
+
+### Sequential Operations
+
+```javascript
+async function processUserData(userId) {
+  try {
+    // Sequential async operations
+    const user = await fetchUser(userId);
+    const posts = await fetchUserPosts(user.id);
+    const comments = await fetchPostComments(posts[0].id);
+
+    return {
+      user,
+      posts,
+      recentComments: comments,
+    };
+  } catch (error) {
+    console.error('Failed to process user data:', error);
+    throw error;
+  }
+}
+```
+
+### Parallel Operations
+
+```javascript
+async function getUserProfile(userId) {
+  try {
+    const user = await fetchUser(userId);
+
+    // Parallel async operations
+    const [posts, followers, activities] = await Promise.all([
+      fetchUserPosts(user.id),
+      fetchUserFollowers(user.id),
+      fetchUserActivities(user.id),
+    ]);
+
+    return {
+      ...user,
+      posts,
+      followers,
+      activities,
+    };
+  } catch (error) {
+    console.error('Failed to get user profile:', error);
+    throw error;
+  }
+}
+```
+
+### Conditional Retry Logic
+
+```javascript
+async function fetchWithRetry(url, maxRetries = 3) {
+  let lastError;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.warn(`Attempt ${attempt + 1} failed:`, error);
+      lastError = error;
+
+      // Only retry for specific errors
+      if (error.message.includes('network') || error.message.includes('5')) {
+        // Wait before retry (exponential backoff)
+        await new Promise((resolve) =>
+          setTimeout(resolve, 1000 * Math.pow(2, attempt))
+        );
+        continue;
+      } else {
+        // Don't retry for client errors
+        throw error;
+      }
+    }
+  }
+
+  throw new Error(`Failed after ${maxRetries} attempts: ${lastError.message}`);
+}
+```
+
+### Timeout Pattern with Async/Await
+
+```javascript
+async function fetchWithTimeout(url, timeout = 5000) {
+  const controller = new AbortController();
+  const { signal } = controller;
+
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, { signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    clearTimeout(timeoutId);
+
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out');
+    }
+
+    throw error;
+  }
+}
+```
+
+## Advanced Promise Patterns with ES2022+ Features
+
+### Top-Level Await
+
+ES2022 enables using `await` at the top level in modules:
+
+```javascript
+// database.js - ES Module
+// Top-level await for initialization
+const dbConnection = await initDatabase();
+
+export function getUser(id) {
+  return dbConnection.query('SELECT * FROM users WHERE id = ?', [id]);
+}
+
+export function updateUser(id, data) {
+  return dbConnection.query('UPDATE users SET ? WHERE id = ?', [data, id]);
+}
+
+// This module only exports once the database is connected
+```
+
+### Using Promise-Specific Methods
+
+```javascript
+// Check if a value is a promise
+function isPromise(value) {
+  return Boolean(
+    value && typeof value === 'object' && typeof value.then === 'function'
+  );
+}
+
+// Convert a value to a promise if it isn't already
+function ensurePromise(value) {
+  return isPromise(value) ? value : Promise.resolve(value);
+}
+
+// Add timeout to any promise
+function withTimeout(promise, timeoutMs) {
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => reject(new Error('Operation timed out')), timeoutMs);
+  });
+
+  return Promise.race([ensurePromise(promise), timeoutPromise]);
+}
+```
+
+### Promise Pipelining
+
+Creating a chain of transformations:
+
+```javascript
+function createPipeline(...transformers) {
+  return async function (initialValue) {
+    let result = initialValue;
+
+    for (const transform of transformers) {
+      result = await transform(result);
+    }
+
+    return result;
+  };
+}
+
+// Example transformers
+const fetchUserData = (userId) =>
+  fetch(`/api/users/${userId}`).then((r) => r.json());
+const enrichWithPosts = (user) => {
+  return fetchPosts(user.id).then((posts) => ({ ...user, posts }));
+};
+const calculateEngagement = (user) => {
+  const engagement = user.posts.reduce((sum, post) => sum + post.likes, 0);
+  return { ...user, engagement };
+};
+
+// Create and use the pipeline
+const userProcessor = createPipeline(
+  fetchUserData,
+  enrichWithPosts,
+  calculateEngagement
+);
+
+userProcessor(123)
+  .then((result) => console.log('Processed user:', result))
+  .catch((error) => console.error('Processing failed:', error));
+```
+
+## Promise Interoperability Patterns
+
+### Working with Callback-Based APIs
+
+Converting callback-based APIs to promises:
+
+```javascript
+function promisify(fn) {
+  return function (...args) {
+    return new Promise((resolve, reject) => {
+      fn(...args, (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(result);
+        }
+      });
+    });
+  };
+}
+
+// Node.js-style callback functions
+const fs = require('fs');
+const readFilePromise = promisify(fs.readFile);
+
+// Usage
+readFilePromise('config.json', 'utf8')
+  .then((data) => JSON.parse(data))
+  .then((config) => console.log('Config loaded:', config))
+  .catch((error) => console.error('Failed to load config:', error));
+```
+
+### Converting Between Promise Libraries
+
+When working with different promise implementations:
+
+```javascript
+// Convert a third-party promise to a native Promise
+function toNativePromise(foreignPromise) {
+  return new Promise((resolve, reject) => {
+    foreignPromise.then(resolve).catch(reject);
+  });
+}
+
+// Example with a hypothetical library
+const thirdPartyLibrary = {
+  getData() {
+    return {
+      then(onResolve, onReject) {
+        // Some custom promise implementation
+        setTimeout(() => onResolve('data'), 1000);
+      },
+      catch(onReject) {
+        // Custom catch implementation
+      },
+    };
+  },
+};
+
+// Convert and use with native Promise methods
+const nativePromise = toNativePromise(thirdPartyLibrary.getData());
+
+nativePromise
+  .then((data) => console.log('Data:', data))
+  .catch((error) => console.error('Error:', error));
+```
+
+## Complex Real-World Promise Patterns
+
+### Implementing a Cache with TTL
+
+```javascript
+class PromiseCache {
+  constructor(ttl = 60000) {
+    // Default TTL: 1 minute
+    this.cache = new Map();
+    this.ttl = ttl;
+  }
+
+  async getOrCreate(key, promiseFactory) {
+    const now = Date.now();
+    const cached = this.cache.get(key);
+
+    // If cached and not expired, use it
+    if (cached && now < cached.expiry) {
+      return cached.promise;
+    }
+
+    // Create new promise, but handle race conditions
+    const promise = promiseFactory().catch((error) => {
+      // If this promise fails, remove it from cache to allow retry
+      if (this.cache.get(key)?.promise === promise) {
+        this.cache.delete(key);
+      }
+      throw error;
+    });
+
+    this.cache.set(key, {
+      promise,
+      expiry: now + this.ttl,
+    });
+
+    return promise;
+  }
+
+  // Invalidate a specific cache entry
+  invalidate(key) {
+    this.cache.delete(key);
+  }
+
+  // Clear all cache
+  clear() {
+    this.cache.clear();
+  }
+}
+
+// Usage
+const apiCache = new PromiseCache(5 * 60 * 1000); // 5 minute TTL
+
+async function fetchUserWithCache(userId) {
+  return apiCache.getOrCreate(`user:${userId}`, () => {
+    console.log(`Actually fetching user ${userId} from API`);
+    return fetch(`/api/users/${userId}`).then((r) => r.json());
+  });
+}
+
+// First call fetches from API
+fetchUserWithCache(123).then((user) => console.log('User:', user));
+
+// Second call uses cache
+setTimeout(() => {
+  fetchUserWithCache(123).then((user) =>
+    console.log('User (from cache):', user)
+  );
+}, 1000);
+
+// Force refresh
+apiCache.invalidate('user:123');
+fetchUserWithCache(123).then((user) => console.log('User (refreshed):', user));
+```
+
+### Dependency Resolution with Promises
+
+For situations where operations have dependencies on each other:
+
+```javascript
+class DependencyResolver {
+  constructor() {
+    this.operations = new Map();
+    this.results = new Map();
+    this.inProgress = new Set();
+  }
+
+  registerOperation(name, dependencies, operationFn) {
+    this.operations.set(name, { dependencies, operationFn });
+  }
+
+  async execute(name) {
+    // Check if we already have the result
+    if (this.results.has(name)) {
+      return this.results.get(name);
+    }
+
+    // Check if operation is registered
+    if (!this.operations.has(name)) {
+      throw new Error(`Unknown operation: ${name}`);
+    }
+
+    // Check for circular dependencies
+    if (this.inProgress.has(name)) {
+      throw new Error(`Circular dependency detected for ${name}`);
+    }
+
+    // Mark as in progress
+    this.inProgress.add(name);
+
+    try {
+      const { dependencies, operationFn } = this.operations.get(name);
+
+      // Resolve dependencies
+      const resolvedDeps = await Promise.all(
+        dependencies.map((dep) => this.execute(dep))
+      );
+
+      // Execute the operation with resolved dependencies
+      const result = await operationFn(...resolvedDeps);
+
+      // Store result
+      this.results.set(name, result);
+      return result;
+    } finally {
+      // Mark as no longer in progress
+      this.inProgress.delete(name);
+    }
+  }
+
+  async executeAll() {
+    const operations = Array.from(this.operations.keys());
+    const results = {};
+
+    for (const op of operations) {
+      results[op] = await this.execute(op);
+    }
+
+    return results;
+  }
+}
+
+// Usage
+const resolver = new DependencyResolver();
+
+// Register operations with dependencies
+resolver.registerOperation('fetchUser', [], () =>
+  fetch('/api/user/123').then((r) => r.json())
+);
+
+resolver.registerOperation('fetchPosts', ['fetchUser'], (user) =>
+  fetch(`/api/posts?userId=${user.id}`).then((r) => r.json())
+);
+
+resolver.registerOperation('fetchComments', ['fetchPosts'], (posts) => {
+  const postIds = posts.map((p) => p.id);
+  return fetch(`/api/comments?postIds=${postIds.join(',')}`).then((r) =>
+    r.json()
+  );
+});
+
+// Resolving a specific operation (with dependencies)
+resolver
+  .execute('fetchComments')
+  .then((comments) => console.log('Comments:', comments))
+  .catch((error) => console.error('Failed to fetch comments:', error));
+
+// Or execute everything
+resolver
+  .executeAll()
+  .then((results) => console.log('All results:', results))
+  .catch((error) => console.error('Failed to execute all:', error));
+```
+
+### Stateful Promise Chains
+
+Creating stateful, chainable async processing pipelines:
+
+```javascript
+class AsyncPipeline {
+  constructor(initialValue) {
+    this.promise = Promise.resolve(initialValue);
+    this.state = { initialValue };
+  }
+
+  pipe(fn) {
+    this.promise = this.promise.then((value) => {
+      return fn(value, this.state);
+    });
+    return this;
+  }
+
+  pipeIf(condition, fn) {
+    return this.pipe((value, state) => {
+      const shouldExecute =
+        typeof condition === 'function' ? condition(value, state) : condition;
+
+      if (shouldExecute) {
+        return fn(value, state);
+      }
+      return value;
+    });
+  }
+
+  pipeParallel(fns) {
+    return this.pipe(async (value, state) => {
+      const results = await Promise.all(fns.map((fn) => fn(value, state)));
+      return results;
+    });
+  }
+
+  tapState(fn) {
+    return this.pipe((value, state) => {
+      fn(state, value);
+      return value;
+    });
+  }
+
+  catch(fn) {
+    this.promise = this.promise.catch((error) => fn(error, this.state));
+    return this;
+  }
+
+  finally(fn) {
+    this.promise = this.promise.finally(() => fn(this.state));
+    return this;
+  }
+
+  // Execute the pipeline and get the result
+  async execute() {
+    return this.promise;
+  }
+}
+
+// Usage
+async function processOrder(orderId) {
+  return new AsyncPipeline(orderId)
+    .tapState((state) => {
+      state.startTime = Date.now();
+      state.logs = [];
+    })
+    .pipe(async (orderId, state) => {
+      state.logs.push('Fetching order');
+      const order = await fetchOrder(orderId);
+      state.order = order;
+      return order;
+    })
+    .pipeIf(
+      (order) => order.status === 'PENDING',
+      async (order, state) => {
+        state.logs.push('Processing payment');
+        await processPayment(order.paymentDetails);
+        order.status = 'PAID';
+        return order;
+      }
+    )
+    .pipe(async (order, state) => {
+      state.logs.push('Updating inventory');
+      await updateInventory(order.items);
+      return order;
+    })
+    .pipeParallel([
+      async (order, state) => {
+        state.logs.push('Sending confirmation email');
+        return sendEmail(order.customerEmail, 'Order Confirmation');
+      },
+      async (order, state) => {
+        state.logs.push('Generating invoice');
+        return generateInvoice(order);
+      },
+    ])
+    .tapState((state) => {
+      state.processingTime = Date.now() - state.startTime;
+      state.logs.push(`Processing completed in ${state.processingTime}ms`);
+    })
+    .catch((error, state) => {
+      state.logs.push(`Error: ${error.message}`);
+      console.error('Order processing failed:', error);
+      throw error;
+    })
+    .finally((state) => {
+      console.log('Order processing logs:', state.logs);
+    })
+    .execute();
+}
+```
+
+## Related Topics
+
+- [Asynchronous JavaScript](./async-javascript) - Fundamentals of async programming in JavaScript
+- [Error Handling](./error-handling) - Detailed strategies for handling errors
+- [Performance Optimization](./performance-optimization) - Techniques for improving JavaScript execution
+- [JavaScript Design Patterns](./design-patterns) - Common patterns for structuring JavaScript code
+- [Functional Programming](./functional-programming) - Functional patterns for asynchronous operations

@@ -1,0 +1,466 @@
+---
+description: Understanding JavaScript type coercion, type conversion, and equality comparisons
+title: JavaScript Type Coercion
+---
+
+# JavaScript Type Coercion
+
+Type coercion is the automatic or implicit conversion of values from one data type to another. JavaScript is a weakly-typed language, which means variables can change types and values are frequently converted between types automatically.
+
+## Implicit vs. Explicit Coercion
+
+JavaScript has two forms of type conversion:
+
+1. **Implicit Coercion**: Happens automatically when an operation involves mismatched types
+2. **Explicit Coercion**: When we intentionally convert from one type to another
+
+## Type Conversion Rules
+
+### To String
+
+Values are converted to strings in contexts where a string is expected:
+
+```javascript
+// Implicit string conversion
+console.log('The answer is ' + 42); // 'The answer is 42'
+console.log(`Value: ${true}`); // 'Value: true'
+
+// What happens behind the scenes
+String(42); // '42'
+String(true); // 'true'
+String(null); // 'null'
+String(undefined); // 'undefined'
+String([1, 2, 3]); // '1,2,3'
+String({ a: 1 }); // '[object Object]'
+String(Symbol('s')); // TypeError: Cannot convert a Symbol value to a string
+```
+
+### To Number
+
+Values are converted to numbers in numeric contexts:
+
+```javascript
+// Implicit number conversion
+console.log('5' - 2); // 3
+console.log('5' * '2'); // 10
+console.log(true + 1); // 2
+console.log('5' > 4); // true (string '5' becomes number 5)
+
+// What happens behind the scenes
+Number('42'); // 42
+Number('42px'); // NaN
+Number(''); // 0
+Number(true); // 1
+Number(false); // 0
+Number(null); // 0
+Number(undefined); // NaN
+Number([]); // 0
+Number(['5']); // 5
+Number(['5', '2']); // NaN
+Number({}); // NaN
+```
+
+### To Boolean
+
+Values are converted to booleans in boolean contexts:
+
+```javascript
+// Implicit boolean conversion
+if ('hello') console.log('truthy'); // Logs 'truthy'
+console.log(!0); // true
+console.log(!!'hello'); // true (explicit coercion)
+
+// Falsy values (convert to false)
+Boolean(false); // false
+Boolean(0); // false
+Boolean(-0); // false
+Boolean(''); // false
+Boolean(null); // false
+Boolean(undefined); // false
+Boolean(NaN); // false
+Boolean(0n); // false (BigInt zero)
+
+// Truthy values (everything else converts to true)
+Boolean(true); // true
+Boolean(42); // true
+Boolean('hello'); // true
+Boolean([]); // empty array is truthy!
+Boolean({}); // true
+Boolean(function () {}); // true
+```
+
+## Conversion in Operators
+
+### The + Operator
+
+The `+` operator is special because it handles both addition and string concatenation:
+
+```javascript
+// String concatenation takes precedence over addition
+console.log('5' + 3); // '53' (string concatenation)
+console.log(5 + '3'); // '53' (string concatenation)
+console.log(5 + 3 + '2'); // '82' (addition first, then concatenation)
+console.log('5' + 3 + 2); // '532' (left-to-right evaluation)
+console.log(5 + true); // 6 (true becomes 1)
+console.log(5 + null); // 5 (null becomes 0)
+console.log(5 + undefined); // NaN (undefined becomes NaN)
+console.log(5 + [1, 2]); // '51,2' (array becomes string)
+```
+
+### Arithmetic Operators (-,\*,/,%)
+
+Other arithmetic operators always convert to numbers:
+
+```javascript
+console.log('10' - 5); // 5 (string '10' becomes number 10)
+console.log('10' * '3'); // 30 (both operands become numbers)
+console.log('10' / 2); // 5 (string '10' becomes number 10)
+console.log('10' % 3); // 1 (string '10' becomes number 10)
+console.log(true - 1); // 0 (true becomes 1)
+console.log(null * 5); // 0 (null becomes 0)
+console.log('5' - undefined); // NaN (undefined becomes NaN)
+```
+
+### Comparison Operators
+
+Comparison operators convert values in various ways:
+
+```javascript
+console.log('10' > 5); // true (string '10' becomes number 10)
+console.log('10' < '5'); // true (alphabetical comparison - '1' comes before '5')
+console.log(true > false); // true (true is 1, false is 0)
+console.log([10] <= 20); // true ([10] becomes '10', then 10)
+```
+
+### Equality Operators
+
+JavaScript has two types of equality operators:
+
+#### Loose Equality (==)
+
+The loose equality operator performs type coercion:
+
+```javascript
+// Number to String comparisons
+console.log(5 == '5'); // true (string '5' becomes number 5)
+console.log(0 == ''); // true ('' becomes 0)
+console.log(0 == '0'); // true ('0' becomes 0)
+
+// Boolean comparisons
+console.log(true == 1); // true (true becomes 1)
+console.log(false == 0); // true (false becomes 0)
+console.log(true == '1'); // true (both become number 1)
+console.log(false == ''); // true (both become 0)
+
+// null and undefined
+console.log(null == undefined); // true (special case)
+console.log(null == 0); // false (null only equals undefined and itself)
+
+// Objects to primitives
+console.log([1] == 1); // true ([1] becomes '1', then 1)
+console.log(['5'] == 5); // true (['5'] becomes '5', then 5)
+console.log([null] == ''); // true ([null] becomes '', both are equal)
+console.log([undefined] == ''); // true ([undefined] becomes '', both are equal)
+```
+
+#### Strict Equality (===)
+
+The strict equality operator does not perform type coercion:
+
+```javascript
+console.log(5 === '5'); // false (different types)
+console.log(true === 1); // false (different types)
+console.log(null === undefined); // false (different types)
+console.log(0 === ''); // false (different types)
+console.log([1] === 1); // false (different types)
+```
+
+## The Abstract Equality Comparison Algorithm
+
+The loose equality operator (`==`) follows the Abstract Equality Comparison Algorithm, which has these key rules:
+
+1. If the types are the same, it's equivalent to strict equality (`===`)
+2. `null == undefined` (and vice versa) returns `true`
+3. When comparing numbers to strings, the string is converted to a number
+4. When comparing booleans to other types, the boolean is converted to a number
+5. When comparing objects to primitives, the object is converted to a primitive
+
+```javascript
+// Simplified logic for x == y
+if (typeof x === typeof y) {
+  return x === y; // If same type, use strict equality
+}
+
+if (x === null && y === undefined) return true;
+if (x === undefined && y === null) return true;
+
+if (typeof x === 'number' && typeof y === 'string') {
+  return x == Number(y); // Convert string to number
+}
+
+if (typeof x === 'string' && typeof y === 'number') {
+  return Number(x) == y; // Convert string to number
+}
+
+if (typeof x === 'boolean') {
+  return Number(x) == y; // Convert boolean to number
+}
+
+if (typeof y === 'boolean') {
+  return x == Number(y); // Convert boolean to number
+}
+
+// Object to primitive conversions...
+```
+
+## Object to Primitive Conversion
+
+When an object is used in a context where a primitive is expected, JavaScript follows these steps:
+
+1. First tries to call the object's `[Symbol.toPrimitive]()` method, if it exists
+2. Otherwise, tries to call object methods in this order:
+   - For string hint: `toString()` and then `valueOf()` if `toString()` didn't return a primitive
+   - For number hint: `valueOf()` and then `toString()` if `valueOf()` didn't return a primitive
+
+```javascript
+const obj = {
+  valueOf() {
+    console.log('valueOf called');
+    return 42;
+  },
+  toString() {
+    console.log('toString called');
+    return 'hello';
+  },
+};
+
+// Number context (valueOf preferred)
+console.log(obj - 1); // valueOf called, 41
+
+// String context (toString preferred)
+console.log(`${obj}`); // toString called, "hello"
+
+// Custom Symbol.toPrimitive
+const customObj = {
+  [Symbol.toPrimitive](hint) {
+    console.log(`hint: ${hint}`);
+    if (hint === 'number') return 10;
+    if (hint === 'string') return 'custom string';
+    return true; // default
+  },
+};
+
+console.log(+customObj); // hint: number, 10
+console.log(`${customObj}`); // hint: string, "custom string"
+console.log(customObj + ''); // hint: default, "true"
+```
+
+## Common Type Coercion Gotchas
+
+### Unexpected String Concatenation
+
+```javascript
+// Intended addition but got concatenation
+function addValues(a, b) {
+  return a + b; // Can lead to string concatenation if inputs are strings
+}
+
+console.log(addValues(5, 10)); // 15
+console.log(addValues('5', 10)); // '510'
+
+// Better approach
+function addValuesFixed(a, b) {
+  return Number(a) + Number(b); // Explicit conversion
+}
+```
+
+### Object Comparisons
+
+```javascript
+// Objects are compared by reference, not by content
+console.log({} == {}); // false (different objects)
+console.log([] == []); // false (different arrays)
+
+// But they can coerce to primitives
+console.log([] == ''); // true ([] becomes '')
+console.log([1] == 1); // true ([1] becomes '1', then 1)
+console.log([1, 2] == '1,2'); // true ([1,2] becomes '1,2')
+```
+
+### Accidental Boolean Conversion
+
+```javascript
+// Condition in an if statement
+const value = 0;
+if (value == false) {
+  console.log('Zero is falsy'); // This runs
+}
+
+// Property existence check gone wrong
+const obj = { count: 0 };
+if (obj.count) {
+  // This won't run because 0 is falsy
+  console.log('Count exists');
+}
+
+// Better property check
+if ('count' in obj || obj.hasOwnProperty('count')) {
+  console.log('Count property exists');
+}
+```
+
+### NaN Comparisons
+
+```javascript
+console.log(NaN == NaN); // false (NaN is not equal to anything, including itself)
+console.log(NaN === NaN); // false
+
+// Proper way to check for NaN
+console.log(isNaN(NaN)); // true
+console.log(Number.isNaN(NaN)); // true (more reliable in ES6+)
+```
+
+## Best Practices
+
+### Use Strict Equality (===)
+
+```javascript
+// Prefer
+if (x === 5) {
+  /* ... */
+}
+
+// Avoid
+if (x == 5) {
+  /* ... */
+}
+```
+
+### Convert Types Explicitly
+
+```javascript
+// Explicit is better than implicit
+const num = parseInt(userInput, 10);
+const bool = Boolean(value);
+const str = String(count);
+
+// Alternative conversion methods
+const num2 = +'42'; // Convert to number using unary plus
+const bool2 = !!value; // Convert to boolean using double negation
+const str2 = '' + 42; // Convert to string (but prefer template literals)
+```
+
+### Check for Specific Types
+
+```javascript
+// Type-specific checks
+if (typeof x === 'string') {
+  /* ... */
+}
+if (Array.isArray(arr)) {
+  /* ... */
+}
+if (obj instanceof Constructor) {
+  /* ... */
+}
+```
+
+### Property Existence Checks
+
+```javascript
+// Check for property existence, not truthiness
+if ('prop' in obj) {
+  /* ... */
+}
+if (obj.hasOwnProperty('prop')) {
+  /* ... */
+}
+
+// Or use optional chaining (ES2020+)
+if (obj?.prop !== undefined) {
+  /* ... */
+}
+```
+
+## Practical Examples
+
+### Form Validation
+
+```javascript
+function validateForm(formData) {
+  // Convert to appropriate types before validation
+  const age = Number(formData.age);
+  const isSubscribed = Boolean(formData.subscribe);
+
+  // Validate
+  if (isNaN(age) || age < 18) {
+    return { valid: false, error: 'Age must be a number and at least 18' };
+  }
+
+  return {
+    valid: true,
+    data: {
+      age,
+      isSubscribed,
+      name: String(formData.name).trim(),
+    },
+  };
+}
+```
+
+### API Data Processing
+
+```javascript
+function processApiResponse(data) {
+  return {
+    id: String(data.id), // Ensure ID is a string
+    count: Number(data.count) || 0, // Convert count to number, default to 0
+    items: Array.isArray(data.items) ? data.items : [], // Ensure items is an array
+    isActive: Boolean(data.status === 'active'), // Convert status to boolean
+    updatedAt: new Date(data.updated_at || Date.now()), // Ensure date is a Date object
+  };
+}
+```
+
+### Utility Functions with Type Handling
+
+```javascript
+// Safe addition that handles different types
+function safeAdd(a, b) {
+  // Convert to numbers explicitly
+  const numA = Number(a);
+  const numB = Number(b);
+
+  // Check for NaN after conversion
+  if (Number.isNaN(numA) || Number.isNaN(numB)) {
+    throw new Error('Invalid number input');
+  }
+
+  return numA + numB;
+}
+
+// Boolean check that handles edge cases
+function isTruthy(value) {
+  // Handle special cases of strings that should be considered falsy
+  if (typeof value === 'string') {
+    const lowered = value.toLowerCase();
+    if (
+      lowered === 'false' ||
+      lowered === 'no' ||
+      lowered === '0' ||
+      lowered === ''
+    ) {
+      return false;
+    }
+  }
+
+  return Boolean(value);
+}
+```
+
+## Related Topics
+
+- [JavaScript Types](./types) - Understanding JavaScript's data types
+- [Equality Comparisons](./equality) - Deep dive into JavaScript equality operators
+- [Operators](./operators) - JavaScript operators and their behaviors
+- [Type Checking](./type-checking) - Methods for checking types in JavaScript

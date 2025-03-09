@@ -1,0 +1,500 @@
+---
+description: A comprehensive guide to JavaScript debugging techniques, including console methods, debugger statements, browser dev tools, and debugging patterns
+title: JavaScript Debugging Techniques
+---
+
+# JavaScript Debugging Techniques
+
+Effective debugging is crucial for JavaScript development. This guide covers various techniques and tools for debugging JavaScript applications.
+
+## Console Methods
+
+### Basic Console Methods
+
+```javascript
+// Simple logging
+console.log('Basic message');
+console.info('Information message');
+console.warn('Warning message');
+console.error('Error message');
+
+// Styled console output
+console.log(
+  '%cStyled text',
+  'color: blue; font-size: 20px; font-weight: bold;'
+);
+
+// Multiple styles
+console.log('%cRed text %cBlue text', 'color: red;', 'color: blue;');
+
+// Logging objects
+const user = { name: 'John', age: 30 };
+console.log('User:', user);
+console.dir(user); // Shows object properties in expandable format
+```
+
+### Advanced Console Methods
+
+```javascript
+// Table format
+const users = [
+  { name: 'John', age: 30 },
+  { name: 'Jane', age: 25 },
+];
+console.table(users);
+
+// Grouping logs
+console.group('User Details');
+console.log('Name: John');
+console.log('Age: 30');
+console.groupEnd();
+
+// Nested groups
+console.group('Main Group');
+console.log('Main level');
+console.group('Sub Group');
+console.log('Sub level');
+console.groupEnd();
+console.groupEnd();
+
+// Time tracking
+console.time('operation');
+// ... some operations
+console.timeEnd('operation');
+
+// Count occurrences
+for (let i = 0; i < 3; i++) {
+  console.count('Loop count');
+}
+
+// Stack trace
+console.trace('Trace message');
+
+// Assert conditions
+console.assert(1 === 2, 'This will show an error');
+```
+
+### Custom Console Methods
+
+```javascript
+// Custom logger with levels
+const Logger = {
+  levels: {
+    DEBUG: 0,
+    INFO: 1,
+    WARN: 2,
+    ERROR: 3,
+  },
+
+  currentLevel: 1, // INFO
+
+  debug(...args) {
+    if (this.currentLevel <= this.levels.DEBUG) {
+      console.log('[DEBUG]', ...args);
+    }
+  },
+
+  info(...args) {
+    if (this.currentLevel <= this.levels.INFO) {
+      console.info('[INFO]', ...args);
+    }
+  },
+
+  warn(...args) {
+    if (this.currentLevel <= this.levels.WARN) {
+      console.warn('[WARN]', ...args);
+    }
+  },
+
+  error(...args) {
+    if (this.currentLevel <= this.levels.ERROR) {
+      console.error('[ERROR]', ...args);
+    }
+  },
+};
+
+// Usage
+Logger.debug('Debug message');
+Logger.info('Info message');
+Logger.warn('Warning message');
+Logger.error('Error message');
+```
+
+## Debugger Statement
+
+### Basic Usage
+
+```javascript
+function calculateTotal(items) {
+  debugger; // Code execution will pause here
+  let total = 0;
+  for (const item of items) {
+    total += item.price;
+  }
+  return total;
+}
+
+// Conditional debugger
+function processUser(user) {
+  if (user.id === 'problematic-id') {
+    debugger;
+  }
+  // Process user
+}
+```
+
+### Source Maps
+
+```javascript
+// Enable source maps in Node.js
+node --enable-source-maps app.js
+
+// Source map in bundled file
+//# sourceMappingURL=app.min.js.map
+
+// Webpack configuration for source maps
+module.exports = {
+  devtool: 'source-map',
+  // ... other config
+};
+```
+
+## Browser DevTools
+
+### Elements Panel
+
+```javascript
+// Inspect element
+const element = document.querySelector('.my-class');
+console.dir(element); // View all properties
+$0; // Reference to currently selected element in Elements panel
+
+// Monitor DOM changes
+const observer = new MutationObserver((mutations) => {
+  console.log('DOM changes:', mutations);
+});
+
+observer.observe(document.body, {
+  childList: true,
+  subtree: true,
+});
+```
+
+### Network Panel
+
+```javascript
+// Track fetch requests
+fetch('/api/data')
+  .then((response) => response.json())
+  .then((data) => console.log('Data:', data))
+  .catch((error) => console.error('Error:', error));
+
+// Custom request timing
+performance.mark('fetchStart');
+fetch('/api/data').then(() => {
+  performance.mark('fetchEnd');
+  performance.measure('fetchDuration', 'fetchStart', 'fetchEnd');
+});
+```
+
+### Performance Panel
+
+```javascript
+// Performance monitoring
+performance.mark('startOperation');
+
+// Expensive operation
+for (let i = 0; i < 1000000; i++) {
+  // Some work
+}
+
+performance.mark('endOperation');
+performance.measure('operationDuration', 'startOperation', 'endOperation');
+
+// CPU profile
+console.profile('MyProfile');
+// Code to profile
+console.profileEnd('MyProfile');
+```
+
+### Memory Panel
+
+```javascript
+// Heap snapshot
+// Take snapshot from DevTools Memory panel
+
+// Memory leak example
+let leakedArray = [];
+setInterval(() => {
+  leakedArray.push(new Array(1000000));
+}, 1000);
+
+// Memory usage tracking
+function checkMemory() {
+  if (performance.memory) {
+    console.log('Memory usage:', {
+      used: performance.memory.usedJSHeapSize,
+      total: performance.memory.totalJSHeapSize,
+      limit: performance.memory.jsHeapSizeLimit,
+    });
+  }
+}
+```
+
+## Common Debugging Patterns
+
+### Error Handling
+
+```javascript
+// Try-catch with detailed error info
+try {
+  throw new Error('Something went wrong');
+} catch (error) {
+  console.error({
+    message: error.message,
+    stack: error.stack,
+    timestamp: new Date(),
+    context: 'Function name or module',
+  });
+}
+
+// Custom error types
+class ValidationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ValidationError';
+  }
+}
+
+// Async error handling
+async function fetchData() {
+  try {
+    const response = await fetch('/api/data');
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Fetch error:', error);
+    throw error; // Re-throw for higher-level handling
+  }
+}
+```
+
+### Debugging Async Code
+
+```javascript
+// Async debugging with async/await
+async function debugAsync() {
+  try {
+    console.log('Start');
+    const result1 = await asyncOperation1();
+    console.log('Result 1:', result1);
+    const result2 = await asyncOperation2();
+    console.log('Result 2:', result2);
+  } catch (error) {
+    console.error('Async error:', error);
+  }
+}
+
+// Promise chain debugging
+Promise.resolve()
+  .then(() => {
+    console.log('Step 1');
+    return step1();
+  })
+  .then((result) => {
+    console.log('Step 2', result);
+    return step2();
+  })
+  .catch((error) => {
+    console.error('Chain error:', error);
+  });
+
+// Event loop visualization
+setTimeout(() => console.log('Timeout 1'), 0);
+Promise.resolve().then(() => console.log('Promise'));
+setTimeout(() => console.log('Timeout 2'), 0);
+console.log('Synchronous');
+```
+
+### Performance Debugging
+
+```javascript
+// Function execution time
+function measureExecutionTime(fn) {
+  return function (...args) {
+    const start = performance.now();
+    const result = fn.apply(this, args);
+    const end = performance.now();
+    console.log(`${fn.name} took ${end - start}ms`);
+    return result;
+  };
+}
+
+// Usage
+const slowFunction = measureExecutionTime(function slow() {
+  // Slow operation
+});
+
+// Memory leak detection
+class MemoryLeakDetector {
+  constructor() {
+    this.heapSizes = [];
+  }
+
+  startMonitoring(interval = 1000) {
+    this.intervalId = setInterval(() => {
+      if (performance.memory) {
+        this.heapSizes.push(performance.memory.usedJSHeapSize);
+        this.analyze();
+      }
+    }, interval);
+  }
+
+  analyze() {
+    if (this.heapSizes.length < 2) return;
+
+    const growth =
+      this.heapSizes[this.heapSizes.length - 1] -
+      this.heapSizes[this.heapSizes.length - 2];
+
+    if (growth > 1000000) {
+      // 1MB
+      console.warn('Possible memory leak detected');
+      console.log('Memory growth:', growth);
+    }
+  }
+
+  stopMonitoring() {
+    clearInterval(this.intervalId);
+  }
+}
+```
+
+### Remote Debugging
+
+```javascript
+// Remote debugging setup
+// Enable remote debugging in Chrome
+// chrome://inspect
+
+// Node.js debugging
+// node --inspect app.js
+// node --inspect-brk app.js (break on first line)
+
+// Debug logging for production
+const DEBUG = process.env.DEBUG === 'true';
+
+function debugLog(...args) {
+  if (DEBUG) {
+    console.log('[DEBUG]', ...args);
+  }
+}
+
+// Remote error tracking
+window.onerror = function (msg, url, lineNo, columnNo, error) {
+  console.error({
+    message: msg,
+    url: url,
+    line: lineNo,
+    column: columnNo,
+    error: error,
+    userAgent: navigator.userAgent,
+    timestamp: new Date(),
+  });
+
+  // Send to error tracking service
+  sendToErrorService({
+    message: msg,
+    stack: error?.stack,
+    context: {
+      url,
+      line: lineNo,
+      column: columnNo,
+    },
+  });
+
+  return false;
+};
+```
+
+## Best Practices
+
+### Debugging Workflow
+
+```javascript
+// 1. Reproduce the bug
+function reproduceIssue() {
+  const steps = [
+    'Navigate to page',
+    'Click button',
+    'Enter data',
+    'Submit form',
+  ];
+
+  console.log('Steps to reproduce:', steps);
+}
+
+// 2. Gather information
+function gatherDebugInfo() {
+  return {
+    url: window.location.href,
+    userAgent: navigator.userAgent,
+    screenSize: {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    },
+    timestamp: new Date(),
+    localStorage: { ...localStorage },
+    sessionStorage: { ...sessionStorage },
+  };
+}
+
+// 3. Isolate the problem
+function isolateIssue(component) {
+  const dependencies = component.getDependencies();
+  const state = component.getState();
+
+  console.log('Component dependencies:', dependencies);
+  console.log('Component state:', state);
+}
+
+// 4. Fix and verify
+function verifyFix(testCase) {
+  const result = runTest(testCase);
+  console.assert(result.success, 'Fix verification failed');
+  return result;
+}
+```
+
+### Debugging Tools
+
+```javascript
+// Browser extensions
+// Chrome DevTools
+// Firefox Developer Tools
+// Safari Web Inspector
+// VS Code Debugger
+
+// Node.js debugging
+// node --inspect
+// node --inspect-brk
+
+// Testing frameworks
+// Jest
+// Mocha
+// Cypress
+
+// Error tracking services
+// Sentry
+// LogRocket
+// Rollbar
+```
+
+## Related Topics
+
+- [Error Handling](./error-handling) - Comprehensive error handling in JavaScript
+- [Testing](./testing) - Testing techniques and frameworks
+- [Performance](./performance) - Performance optimization
+- [DevTools](./devtools) - Browser developer tools guide

@@ -1,0 +1,417 @@
+---
+description: A comprehensive guide to creating and managing HTTP/HTTPS servers in Node.js, including routing, middleware, and security best practices
+title: HTTP/HTTPS Server Implementation
+---
+
+# HTTP/HTTPS Server Implementation
+
+Learn how to create robust HTTP and HTTPS servers in Node.js, handle requests and responses, implement routing, and secure your applications.
+
+## Basic HTTP Server
+
+### Creating a Simple Server
+
+```javascript
+const http = require('http');
+
+// Create basic HTTP server
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Hello World\n');
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}/`);
+});
+
+// Handle server errors
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error('Port is already in use');
+  } else {
+    console.error('Server error:', err);
+  }
+});
+```
+
+### Request Handling
+
+```javascript
+const http = require('http');
+const url = require('url');
+
+const server = http.createServer((req, res) => {
+  // Parse URL and query parameters
+  const parsedUrl = url.parse(req.url, true);
+  const { pathname, query } = parsedUrl;
+
+  // Get request headers
+  console.log('Headers:', req.headers);
+
+  // Get request method
+  console.log('Method:', req.method);
+
+  // Handle different routes
+  if (pathname === '/api/users' && req.method === 'GET') {
+    handleGetUsers(req, res);
+  } else if (pathname === '/api/users' && req.method === 'POST') {
+    handleCreateUser(req, res);
+  } else {
+    // Handle 404
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Not Found' }));
+  }
+});
+
+// Handle GET /api/users
+function handleGetUsers(req, res) {
+  const users = [
+    { id: 1, name: 'John' },
+    { id: 2, name: 'Jane' },
+  ];
+
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(users));
+}
+
+// Handle POST /api/users
+function handleCreateUser(req, res) {
+  let body = '';
+
+  req.on('data', (chunk) => {
+    body += chunk.toString();
+  });
+
+  req.on('end', () => {
+    try {
+      const user = JSON.parse(body);
+      // Process user data...
+
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ message: 'User created', user }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid JSON' }));
+    }
+  });
+}
+```
+
+## HTTPS Server
+
+### Creating a Secure Server
+
+```javascript
+const https = require('https');
+const fs = require('fs');
+
+const options = {
+  key: fs.readFileSync('path/to/private-key.pem'),
+  cert: fs.readFileSync('path/to/certificate.pem'),
+  // Optional: CA certificates
+  ca: [fs.readFileSync('path/to/ca1.pem'), fs.readFileSync('path/to/ca2.pem')],
+};
+
+const server = https.createServer(options, (req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Secure Hello World\n');
+});
+
+server.listen(443, () => {
+  console.log('HTTPS server running on port 443');
+});
+```
+
+### SSL/TLS Configuration
+
+```javascript
+const https = require('https');
+const fs = require('fs');
+
+const options = {
+  key: fs.readFileSync('private-key.pem'),
+  cert: fs.readFileSync('certificate.pem'),
+  // Modern SSL configuration
+  minVersion: 'TLSv1.2',
+  ciphers: [
+    'ECDHE-ECDSA-AES128-GCM-SHA256',
+    'ECDHE-RSA-AES128-GCM-SHA256',
+    'ECDHE-ECDSA-AES256-GCM-SHA384',
+    'ECDHE-RSA-AES256-GCM-SHA384',
+  ].join(':'),
+  honorCipherOrder: true,
+  // HSTS configuration
+  maxAge: 31536000,
+  includeSubDomains: true,
+  preload: true,
+};
+
+const server = https.createServer(options, (req, res) => {
+  // Set HSTS header
+  res.setHeader(
+    'Strict-Transport-Security',
+    'max-age=31536000; includeSubDomains; preload'
+  );
+
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Secure Server\n');
+});
+```
+
+## Advanced Features
+
+### Request Body Parsing
+
+```javascript
+function parseBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+
+    req.on('data', (chunk) => {
+      body += chunk.toString();
+
+      // Check body size to prevent memory attacks
+      if (body.length > 1e6) {
+        // 1MB limit
+        req.destroy();
+        reject(new Error('Payload too large'));
+      }
+    });
+
+    req.on('end', () => {
+      try {
+        const parsed = JSON.parse(body);
+        resolve(parsed);
+      } catch (err) {
+        reject(new Error('Invalid JSON'));
+      }
+    });
+
+    req.on('error', reject);
+  });
+}
+
+// Usage
+async function handlePost(req, res) {
+  try {
+    const body = await parseBody(req);
+    // Process body...
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, data: body }));
+  } catch (err) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: err.message }));
+  }
+}
+```
+
+### File Upload Handling
+
+```javascript
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+function handleFileUpload(req, res) {
+  // Check content type
+  const contentType = req.headers['content-type'];
+  if (!contentType || !contentType.includes('multipart/form-data')) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid content type' }));
+    return;
+  }
+
+  const boundary = contentType.split('boundary=')[1];
+  let fileData = Buffer.from('');
+  let fileName = '';
+
+  req.on('data', (chunk) => {
+    fileData = Buffer.concat([fileData, chunk]);
+  });
+
+  req.on('end', () => {
+    // Extract file data and save
+    const fileContent = extractFileContent(fileData, boundary);
+    if (!fileContent) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Invalid file data' }));
+      return;
+    }
+
+    const uploadPath = path.join(__dirname, 'uploads', fileName);
+    fs.writeFile(uploadPath, fileContent, (err) => {
+      if (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Failed to save file' }));
+        return;
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          message: 'File uploaded successfully',
+          path: uploadPath,
+        })
+      );
+    });
+  });
+}
+```
+
+### Compression
+
+```javascript
+const http = require('http');
+const zlib = require('zlib');
+
+const server = http.createServer((req, res) => {
+  // Check if client accepts gzip
+  const acceptEncoding = req.headers['accept-encoding'] || '';
+
+  if (acceptEncoding.includes('gzip')) {
+    res.writeHead(200, {
+      'Content-Type': 'text/plain',
+      'Content-Encoding': 'gzip',
+    });
+
+    const content = 'Large content to be compressed...';
+    zlib.gzip(content, (err, compressed) => {
+      if (err) {
+        res.writeHead(500);
+        res.end('Internal Server Error');
+        return;
+      }
+      res.end(compressed);
+    });
+  } else {
+    // Send uncompressed response
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Large content to be compressed...');
+  }
+});
+```
+
+## Error Handling
+
+### Global Error Handler
+
+```javascript
+const server = http.createServer((req, res) => {
+  // Wrap request handling in try-catch
+  try {
+    handleRequest(req, res);
+  } catch (err) {
+    handleError(err, res);
+  }
+});
+
+function handleError(err, res) {
+  console.error('Server error:', err);
+
+  // Send appropriate error response
+  const statusCode = err.statusCode || 500;
+  const message = err.statusCode ? err.message : 'Internal Server Error';
+
+  res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: message }));
+}
+
+// Custom error class
+class HTTPError extends Error {
+  constructor(statusCode, message) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+```
+
+## Best Practices
+
+### Security Headers
+
+```javascript
+function setSecurityHeaders(res) {
+  // HSTS
+  res.setHeader(
+    'Strict-Transport-Security',
+    'max-age=31536000; includeSubDomains'
+  );
+
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+
+  // XSS protection
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+
+  // Disable MIME type sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+
+  // Referrer policy
+  res.setHeader('Referrer-Policy', 'no-referrer-when-downgrade');
+
+  // Content Security Policy
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-inline'"
+  );
+}
+```
+
+### Rate Limiting
+
+```javascript
+class RateLimiter {
+  constructor(windowMs = 60000, max = 100) {
+    this.windowMs = windowMs;
+    this.max = max;
+    this.clients = new Map();
+  }
+
+  tryRequest(ip) {
+    const now = Date.now();
+    const client = this.clients.get(ip) || {
+      count: 0,
+      resetTime: now + this.windowMs,
+    };
+
+    // Reset if window has passed
+    if (now > client.resetTime) {
+      client.count = 0;
+      client.resetTime = now + this.windowMs;
+    }
+
+    // Check limit
+    if (client.count >= this.max) {
+      return false;
+    }
+
+    // Increment counter
+    client.count++;
+    this.clients.set(ip, client);
+    return true;
+  }
+}
+
+// Usage
+const limiter = new RateLimiter();
+
+const server = http.createServer((req, res) => {
+  const ip = req.socket.remoteAddress;
+
+  if (!limiter.tryRequest(ip)) {
+    res.writeHead(429, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Too Many Requests' }));
+    return;
+  }
+
+  // Handle request normally...
+});
+```
+
+## Related Topics
+
+- [TCP Server](./tcp-server) - Low-level TCP server implementation
+- [WebSocket Server](./websocket-server) - Real-time bidirectional communication
+- [HTTP/2](./http2-server) - Modern HTTP/2 server implementation
+- [Security](./security) - Network security best practices

@@ -1,0 +1,865 @@
+---
+description: Understanding JavaScript's Event Loop, asynchronous processing, microtasks, and event-driven architecture
+title: JavaScript Event Loop
+---
+
+# JavaScript Event Loop
+
+The Event Loop is the heart of JavaScript's concurrency model. It enables JavaScript, which is single-threaded, to handle asynchronous operations efficiently and perform non-blocking I/O operations. Understanding the Event Loop is crucial for writing performant JavaScript code, especially for applications that handle multiple operations simultaneously.
+
+## JavaScript's Concurrency Model
+
+JavaScript uses an event-driven, non-blocking I/O model with a single execution thread. This means:
+
+- JavaScript can only execute one piece of code at a time (single-threaded)
+- Long-running operations are handled asynchronously through callbacks, promises, or async/await
+- The Event Loop orchestrates when each operation executes
+
+## Event Loop Architecture
+
+The JavaScript runtime environment consists of several components:
+
+```
+┌─────────────────────────┐
+│       Call Stack        │
+└─────────────┬───────────┘
+              │
+┌─────────────▼───────────┐   ┌───────────────────────┐
+│       Event Loop        │◄──┤    Callback Queue     │
+└─────────────┬───────────┘   └───────────────────────┘
+              │
+┌─────────────▼───────────┐   ┌───────────────────────┐
+│        Heap             │   │    Microtask Queue    │
+└─────────────────────────┘   └───────────────────────┘
+              ▲
+              │
+┌─────────────┴───────────┐
+│      Web APIs/C++       │
+│  (Browser/Node.js APIs) │
+└─────────────────────────┘
+```
+
+### Core Components
+
+1. **Call Stack**: Where JavaScript code is executed (one function call at a time)
+2. **Heap**: Memory allocation for variables and objects
+3. **Web APIs / Node.js APIs**: Provided by the environment, not JavaScript itself
+4. **Callback Queue**: Where callbacks from asynchronous operations wait
+5. **Microtask Queue**: Higher priority queue for promises and certain other operations
+6. **Event Loop**: Monitors the Call Stack and Queues, decides which code runs next
+
+## How the Event Loop Works
+
+The Event Loop follows a specific algorithm:
+
+1. Execute code in the Call Stack until it's empty
+2. Process all tasks in the Microtask Queue until it's empty
+3. Render UI updates (in browsers)
+4. Pick the oldest task from the Callback Queue and push it to the Call Stack
+5. Repeat
+
+This can be visualized with pseudocode:
+
+```javascript
+while (true) {
+  // Run until call stack is empty
+  while (callStack.hasItems()) {
+    executeCurrentTask();
+  }
+
+  // Process all microtasks
+  while (microtaskQueue.hasItems()) {
+    executeNextMicrotask();
+  }
+
+  // Render changes (browser only)
+  if (isTimeToRender()) {
+    renderChanges();
+  }
+
+  // If there are tasks in the callback queue, take the oldest one
+  if (callbackQueue.hasItems()) {
+    callStack.add(callbackQueue.getOldest());
+  }
+}
+```
+
+## Call Stack in Action
+
+The Call Stack records where in the program we are:
+
+```javascript
+function first() {
+  console.log('First function');
+  second();
+  console.log('End of first function');
+}
+
+function second() {
+  console.log('Second function');
+  third();
+  console.log('End of second function');
+}
+
+function third() {
+  console.log('Third function');
+}
+
+// Call stack progression
+first();
+```
+
+The Call Stack evolves as follows:
+
+```
+// Initial
+[]
+
+// After calling first()
+[first]
+
+// After first() calls console.log()
+[first, console.log]
+
+// After console.log() completes
+[first]
+
+// After first() calls second()
+[first, second]
+
+// After second() calls console.log()
+[first, second, console.log]
+
+// After console.log() completes
+[first, second]
+
+// After second() calls third()
+[first, second, third]
+
+// After third() calls console.log()
+[first, second, third, console.log]
+
+// After console.log() completes
+[first, second, third]
+
+// After third() completes
+[first, second]
+
+// After second() calls final console.log()
+[first, second, console.log]
+
+// After console.log() completes
+[first, second]
+
+// After second() completes
+[first]
+
+// After first() calls final console.log()
+[first, console.log]
+
+// After console.log() completes
+[first]
+
+// After first() completes
+[]
+```
+
+## Asynchronous Operations
+
+When an asynchronous operation occurs, JavaScript delegates it to the background (Web or Node.js APIs) and continues executing code:
+
+```javascript
+console.log('Start');
+
+setTimeout(function () {
+  console.log('Timeout callback');
+}, 1000);
+
+console.log('End');
+
+// Output:
+// Start
+// End
+// Timeout callback (after approximately 1 second)
+```
+
+Here's what happens:
+
+1. `console.log('Start')` is pushed onto the Call Stack and executed
+2. `setTimeout` is pushed onto the Call Stack
+3. `setTimeout` is processed by the Web API, which starts a timer
+4. `setTimeout` is removed from the Call Stack
+5. `console.log('End')` is pushed onto the Call Stack and executed
+6. After 1 second, the timer completes and the callback is moved to the Callback Queue
+7. When the Call Stack is empty, the Event Loop pushes the callback to the Call Stack
+8. The callback executes and logs "Timeout callback"
+
+## Zero-Delay Timeouts
+
+Even with a timeout of 0ms, the callback still follows the Event Loop rules:
+
+```javascript
+console.log('Start');
+
+// Zero delay
+setTimeout(function () {
+  console.log('Timeout callback');
+}, 0);
+
+console.log('End');
+
+// Output:
+// Start
+// End
+// Timeout callback
+```
+
+This happens because the callback must wait for:
+
+1. The current synchronous code to finish (the Call Stack to empty)
+2. Any microtasks to process
+3. Any rendering updates (in browsers)
+
+## Microtasks vs. Macrotasks
+
+JavaScript has two types of tasks processed by the Event Loop:
+
+### Macrotasks (or Tasks)
+
+Includes:
+
+- `setTimeout` and `setInterval` callbacks
+- I/O operations
+- UI rendering events
+- `postMessage` and `MessageChannel`
+- `setImmediate` (in Node.js)
+
+### Microtasks
+
+Includes:
+
+- Promise callbacks (`.then()`, `.catch()`, `.finally()`)
+- Mutation Observer callbacks
+- `queueMicrotask()` callbacks
+- `process.nextTick()` (in Node.js, processed before other microtasks)
+
+Microtasks have higher priority - all microtasks are processed before the next macrotask:
+
+```javascript
+console.log('Script start');
+
+setTimeout(() => {
+  console.log('setTimeout');
+}, 0);
+
+Promise.resolve()
+  .then(() => console.log('Promise 1'))
+  .then(() => console.log('Promise 2'));
+
+console.log('Script end');
+
+// Output:
+// Script start
+// Script end
+// Promise 1
+// Promise 2
+// setTimeout
+```
+
+## Visualizing the Process
+
+Let's walk through a more complex example:
+
+```javascript
+console.log('Script start'); // 1
+
+setTimeout(() => {
+  console.log('setTimeout 1'); // 5
+  Promise.resolve().then(() => {
+    console.log('Promise inside setTimeout'); // 6
+  });
+}, 0);
+
+Promise.resolve()
+  .then(() => {
+    console.log('Promise 1'); // 3
+    setTimeout(() => {
+      console.log('setTimeout 2'); // 7
+    }, 0);
+  })
+  .then(() => {
+    console.log('Promise 2'); // 4
+  });
+
+console.log('Script end'); // 2
+
+// Output execution order:
+// 1. Script start
+// 2. Script end
+// 3. Promise 1
+// 4. Promise 2
+// 5. setTimeout 1
+// 6. Promise inside setTimeout
+// 7. setTimeout 2
+```
+
+Here's the step-by-step execution:
+
+1. "Script start" logs immediately
+2. `setTimeout` callback is scheduled
+3. First Promise is created and its `.then` callback is scheduled as a microtask
+4. "Script end" logs immediately
+5. Call Stack is now empty, so the Event Loop processes microtasks
+6. First Promise's `.then` callback executes, logging "Promise 1"
+7. Inside this callback, another `setTimeout` is scheduled
+8. Second `.then` callback is scheduled as a microtask
+9. The second Promise's `.then` callback executes, logging "Promise 2"
+10. Microtask queue is now empty, so the Event Loop picks a task from the task queue
+11. First `setTimeout` callback executes, logging "setTimeout 1"
+12. Inside this callback, another Promise is created and its `.then` is scheduled as a microtask
+13. Call Stack is empty, so the microtask "Promise inside setTimeout" executes
+14. Finally, the second `setTimeout` callback executes, logging "setTimeout 2"
+
+## Promises and the Event Loop
+
+Promises provide a more structured way to handle asynchronous operations, and they integrate with the Event Loop in a specific way:
+
+```javascript
+Promise.resolve()
+  .then(() => console.log('Promise 1'))
+  .then(() => console.log('Promise 2'))
+  .then(() => console.log('Promise 3'));
+
+console.log('End of script');
+
+// Output:
+// End of script
+// Promise 1
+// Promise 2
+// Promise 3
+```
+
+Each `.then()` callback is added to the microtask queue, but because the next `.then()` depends on the previous one resolving, they run sequentially across multiple Event Loop iterations.
+
+## Async/Await and the Event Loop
+
+The `async/await` syntax is built on top of Promises and interacts with the Event Loop in the same way:
+
+```javascript
+async function processData() {
+  console.log('Processing started');
+
+  // Pause execution, but not the event loop!
+  const data = await fetchData();
+
+  console.log('Data received:', data);
+  return data;
+}
+
+console.log('Before calling processData');
+processData().then((result) => console.log('Processing complete'));
+console.log('After calling processData');
+
+// Output:
+// Before calling processData
+// Processing started
+// After calling processData
+// Data received: [fetched data]
+// Processing complete
+```
+
+Here, `await` doesn't block the Event Loop. When execution reaches the `await` statement:
+
+1. The current function is paused
+2. Control returns to the caller (`processData` returns a Promise)
+3. When the awaited Promise resolves, its continuation is scheduled as a microtask
+
+## Real-World Examples
+
+### UI Updates and Event Loop
+
+In browsers, rendering and user interactions are processed as part of the Event Loop:
+
+```javascript
+// Expensive computation that blocks the event loop
+function blockingOperation() {
+  const start = Date.now();
+  while (Date.now() - start < 1000) {
+    // Block for 1 second
+  }
+}
+
+document.getElementById('myButton').addEventListener('click', () => {
+  console.log('Button clicked');
+
+  // This blocks the event loop, freezing the UI
+  blockingOperation();
+
+  console.log('Operation complete');
+});
+```
+
+Better approach using a timeout to not block the UI:
+
+```javascript
+document.getElementById('myButton').addEventListener('click', () => {
+  console.log('Button clicked');
+
+  // Show a loading indicator
+  document.getElementById('loading').style.display = 'block';
+
+  // Schedule the heavy work in a new task
+  setTimeout(() => {
+    // Perform heavy computation
+    const result = expensiveCalculation();
+
+    // Update UI with result
+    document.getElementById('result').textContent = result;
+    document.getElementById('loading').style.display = 'none';
+
+    console.log('Operation complete');
+  }, 0);
+
+  console.log('Event handler complete');
+});
+```
+
+### API Calls with Fetch
+
+Using the Fetch API with the Event Loop:
+
+```javascript
+console.log('Fetching data...');
+
+fetch('https://api.example.com/data')
+  .then((response) => {
+    console.log('Response received');
+    return response.json();
+  })
+  .then((data) => {
+    console.log('Data processed:', data);
+  })
+  .catch((error) => {
+    console.error('Error:', error);
+  });
+
+console.log('Fetch initiated');
+
+// Output:
+// Fetching data...
+// Fetch initiated
+// Response received
+// Data processed: [data]
+```
+
+## Event Loop in Node.js
+
+Node.js has a similar Event Loop to browsers, with some differences:
+
+```javascript
+const fs = require('fs');
+
+console.log('Start');
+
+// I/O operation (uses the thread pool)
+fs.readFile('file.txt', 'utf8', (err, data) => {
+  if (err) throw err;
+  console.log('File data:', data);
+});
+
+// Immediate operation (check phase of event loop)
+setImmediate(() => {
+  console.log('Immediate callback');
+});
+
+// Timer (timer phase of event loop)
+setTimeout(() => {
+  console.log('Timeout callback');
+}, 0);
+
+// Process next tick (highest priority)
+process.nextTick(() => {
+  console.log('Next tick callback');
+});
+
+console.log('End');
+
+// Output (approximate, might vary):
+// Start
+// End
+// Next tick callback
+// Timeout callback
+// Immediate callback
+// File data: [content of file.txt]
+```
+
+### Node.js Event Loop Phases
+
+The Node.js Event Loop has specific phases:
+
+1. **Timers**: Executes callbacks scheduled by `setTimeout()` and `setInterval()`
+2. **Pending callbacks**: Executes I/O callbacks deferred to the next loop iteration
+3. **Idle, prepare**: Used internally
+4. **Poll**: Retrieves new I/O events; executes I/O related callbacks
+5. **Check**: Executes `setImmediate()` callbacks
+6. **Close callbacks**: Executes close event callbacks (e.g., `socket.on('close', ...)`)
+
+Between each phase, Node.js checks the microtask queue (for `process.nextTick()` and Promise callbacks).
+
+## Common Patterns and Best Practices
+
+### Avoiding Blocking the Event Loop
+
+```javascript
+// BAD: This blocks the event loop
+function calculateSum(n) {
+  let sum = 0;
+  for (let i = 0; i < n; i++) {
+    sum += i;
+  }
+  return sum;
+}
+
+const result = calculateSum(1_000_000_000); // Blocks for seconds
+console.log(result);
+
+// GOOD: Break up the work
+function calculateSumAsync(n, callback) {
+  let sum = 0;
+  let i = 0;
+
+  function processChunk() {
+    // Process only a chunk at a time
+    const chunkSize = 1_000_000;
+    const end = Math.min(i + chunkSize, n);
+
+    for (; i < end; i++) {
+      sum += i;
+    }
+
+    if (i < n) {
+      // Schedule the next chunk
+      setTimeout(processChunk, 0);
+    } else {
+      // Done
+      callback(sum);
+    }
+  }
+
+  // Start processing
+  setTimeout(processChunk, 0);
+}
+
+calculateSumAsync(1_000_000_000, (result) => {
+  console.log(result);
+});
+```
+
+### Debouncing and Throttling
+
+Controlling the rate of function execution:
+
+```javascript
+// Debounce: Execute function only after a specified timeout
+function debounce(func, delay) {
+  let timeout;
+
+  return function (...args) {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      func.apply(this, args);
+    }, delay);
+  };
+}
+
+// Throttle: Execute function at most once per specified period
+function throttle(func, limit) {
+  let inThrottle;
+
+  return function (...args) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => {
+        inThrottle = false;
+      }, limit);
+    }
+  };
+}
+
+// Usage
+const debouncedSearch = debounce(searchAPI, 300);
+const throttledScroll = throttle(updateOnScroll, 100);
+
+// Event handlers
+document.getElementById('search').addEventListener('input', debouncedSearch);
+window.addEventListener('scroll', throttledScroll);
+```
+
+### Staggered Renders
+
+For handling large DOM updates:
+
+```javascript
+function renderLargeList(items) {
+  const container = document.getElementById('container');
+  const fragment = document.createDocumentFragment();
+  let i = 0;
+
+  function renderChunk() {
+    const chunkSize = 20;
+    const end = Math.min(i + chunkSize, items.length);
+
+    for (; i < end; i++) {
+      const item = document.createElement('div');
+      item.textContent = items[i].text;
+      item.className = 'list-item';
+      fragment.appendChild(item);
+    }
+
+    if (i < items.length) {
+      // Schedule next chunk
+      setTimeout(() => {
+        container.appendChild(fragment.cloneNode(true));
+        renderChunk();
+      }, 0);
+    } else {
+      // Done
+      container.appendChild(fragment);
+    }
+  }
+
+  // Start rendering
+  renderChunk();
+}
+
+// Usage
+renderLargeList(
+  Array.from({ length: 10000 }, (_, i) => ({ text: `Item ${i}` }))
+);
+```
+
+## Advanced Event Loop Techniques
+
+### Worker Threads (Node.js) and Web Workers (Browser)
+
+For CPU-intensive tasks that would otherwise block the Event Loop:
+
+```javascript
+// In the main thread
+const { Worker } = require('worker_threads'); // Node.js
+
+function factorial(n) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker('./factorial-worker.js');
+
+    worker.on('message', resolve);
+    worker.on('error', reject);
+    worker.on('exit', (code) => {
+      if (code !== 0)
+        reject(new Error(`Worker stopped with exit code ${code}`));
+    });
+
+    worker.postMessage(n);
+  });
+}
+
+// In factorial-worker.js
+const { parentPort } = require('worker_threads');
+
+parentPort.on('message', (n) => {
+  let result = 1;
+  for (let i = 2; i <= n; i++) {
+    result *= i;
+  }
+  parentPort.postMessage(result);
+});
+```
+
+### Custom Scheduling with requestAnimationFrame
+
+For smooth animations:
+
+```javascript
+function animateElement() {
+  const element = document.getElementById('animated');
+  let start = null;
+
+  function step(timestamp) {
+    if (!start) start = timestamp;
+    const progress = timestamp - start;
+
+    // Move the element
+    element.style.transform = `translateX(${Math.min(progress / 10, 300)}px)`;
+
+    // Continue animation if not complete
+    if (progress < 3000) {
+      requestAnimationFrame(step);
+    }
+  }
+
+  // Start the animation
+  requestAnimationFrame(step);
+}
+
+// Trigger animation
+document
+  .getElementById('animate-button')
+  .addEventListener('click', animateElement);
+```
+
+### Scheduling with MessageChannel
+
+For lower-priority tasks than microtasks but higher priority than `setTimeout`:
+
+```javascript
+const channel = new MessageChannel();
+const port1 = channel.port1;
+const port2 = channel.port2;
+
+port1.onmessage = function () {
+  console.log('MessageChannel task executed');
+};
+
+console.log('Script start');
+
+setTimeout(() => console.log('setTimeout'), 0);
+
+Promise.resolve().then(() => console.log('Promise'));
+
+port2.postMessage('ping');
+
+console.log('Script end');
+
+// Output:
+// Script start
+// Script end
+// Promise
+// MessageChannel task executed
+// setTimeout
+```
+
+## Debugging Event Loop Issues
+
+### Identifying Blocking Code
+
+Node.js performance hooks:
+
+```javascript
+const { performance, PerformanceObserver } = require('perf_hooks');
+
+// Create a performance observer
+const obs = new PerformanceObserver((items) => {
+  const entries = items.getEntries();
+  for (const entry of entries) {
+    console.log(`${entry.name}: ${entry.duration.toFixed(2)}ms`);
+  }
+});
+obs.observe({ entryTypes: ['measure'] });
+
+// Measure execution time
+function measureExecution(fn, name, ...args) {
+  const startMark = `${name}_start`;
+  const endMark = `${name}_end`;
+
+  performance.mark(startMark);
+  const result = fn(...args);
+  performance.mark(endMark);
+  performance.measure(name, startMark, endMark);
+
+  return result;
+}
+
+// Usage
+function potentiallySlowFunction(size) {
+  const arr = new Array(size).fill(0).map((_, i) => i);
+  return arr.reduce((sum, val) => sum + val, 0);
+}
+
+measureExecution(potentiallySlowFunction, 'slow_operation', 10_000_000);
+```
+
+### Chrome DevTools Event Loop Monitoring
+
+In Chrome DevTools:
+
+1. Open Performance tab
+2. Record a performance profile
+3. Identify long tasks (red blocks in the Main thread)
+4. Analyze call stacks to find blocking code
+
+## Event Loop in Different JavaScript Environments
+
+### Browser Event Loop vs. Node.js Event Loop
+
+```javascript
+// Browser behavior
+setTimeout(() => console.log('Browser timeout 1'), 0);
+setTimeout(() => console.log('Browser timeout 2'), 0);
+Promise.resolve().then(() => console.log('Browser promise'));
+
+// Browser output:
+// Browser promise
+// Browser timeout 1
+// Browser timeout 2
+
+// Node.js behavior (showing the difference with process.nextTick)
+setTimeout(() => console.log('Node timeout 1'), 0);
+setTimeout(() => console.log('Node timeout 2'), 0);
+Promise.resolve().then(() => console.log('Node promise'));
+process.nextTick(() => console.log('Node nextTick'));
+
+// Node.js output:
+// Node nextTick
+// Node promise
+// Node timeout 1
+// Node timeout 2
+```
+
+## Common Event Loop Misconceptions
+
+### setTimeout is not Guaranteed Time
+
+```javascript
+console.time('Timeout');
+setTimeout(() => {
+  console.timeEnd('Timeout');
+}, 100);
+
+// Block the event loop for 200ms
+const start = Date.now();
+while (Date.now() - start < 200) {}
+
+// Output: Timeout: ~200ms (not 100ms)
+```
+
+### setImmediate vs. setTimeout(fn, 0)
+
+```javascript
+// In Node.js
+setImmediate(() => console.log('Immediate'));
+setTimeout(() => console.log('Timeout'), 0);
+
+// Output may vary:
+// Sometimes: Timeout, Immediate
+// Sometimes: Immediate, Timeout
+
+// Better comparison
+process.nextTick(() => console.log('Next tick'));
+Promise.resolve().then(() => console.log('Promise'));
+setImmediate(() => console.log('Immediate'));
+setTimeout(() => console.log('Timeout'), 0);
+
+// Output:
+// Next tick
+// Promise
+// Timeout / Immediate (order may vary)
+```
+
+## Related Topics
+
+- [Asynchronous JavaScript](./async-javascript) - Understanding promises, async/await, and callbacks
+- [JavaScript Runtime](./javascript-runtime) - How JavaScript code is executed
+- [Performance Optimization](./performance) - Techniques for improving JavaScript performance
+- [Web APIs](./web-apis) - JavaScript interfaces to browser features
+- [Node.js Architecture](./nodejs) - Understanding Node.js internal architecture

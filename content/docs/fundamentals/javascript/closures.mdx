@@ -1,0 +1,463 @@
+---
+description: Understanding JavaScript closures, lexical scope, and practical applications
+title: JavaScript Closures
+---
+
+# JavaScript Closures
+
+A closure is a fundamental JavaScript concept that occurs when a function remembers and accesses its lexical scope even when that function executes outside its original scope. In simpler terms, a closure allows a function to access variables from an enclosing scope — environment — even after it leaves the scope in which it was declared.
+
+## Understanding Lexical Scope
+
+To understand closures, we first need to understand lexical scoping:
+
+```javascript
+function outer() {
+  const message = 'Hello'; // Variable defined in outer function
+
+  function inner() {
+    console.log(message); // Access to variable from outer scope
+  }
+
+  inner(); // Outputs: Hello
+}
+
+outer();
+```
+
+Lexical scoping means that the accessibility of variables is determined by their position in the source code. Inner functions have access to variables declared in their outer scope.
+
+## What Makes a Closure
+
+A closure is formed when a function is defined within another function and the inner function references variables from the outer function. The inner function "closes over" the variables it needs from its containing scope.
+
+The key is that a closure persists even after the outer function has finished executing:
+
+```javascript
+function createGreeting(greeting) {
+  // inner function uses greeting from outer function
+  return function (name) {
+    return `${greeting}, ${name}!`;
+  };
+}
+
+const sayHello = createGreeting('Hello');
+const sayBonjour = createGreeting('Bonjour');
+
+console.log(sayHello('John')); // Outputs: Hello, John!
+console.log(sayBonjour('Marie')); // Outputs: Bonjour, Marie!
+```
+
+In this example:
+
+1. `createGreeting` returns an inner function
+2. The inner function maintains access to the `greeting` parameter
+3. Even after `createGreeting` completes, `sayHello` and `sayBonjour` remember their respective `greeting` values
+
+## Closure Characteristics
+
+### Memory Retention
+
+A closure maintains references to its outer variables, not copies:
+
+```javascript
+function createCounter() {
+  let count = 0;
+
+  return {
+    increment: function () {
+      count++;
+      return count;
+    },
+    decrement: function () {
+      count--;
+      return count;
+    },
+    getValue: function () {
+      return count;
+    },
+  };
+}
+
+const counter = createCounter();
+console.log(counter.increment()); // 1
+console.log(counter.increment()); // 2
+console.log(counter.decrement()); // 1
+console.log(counter.getValue()); // 1
+```
+
+The `count` variable is retained in memory as long as the counter functions exist.
+
+### Multiple Closures are Independent
+
+Each closure captures its own scope:
+
+```javascript
+function createCounter() {
+  let count = 0;
+  return function () {
+    count++;
+    return count;
+  };
+}
+
+const counter1 = createCounter();
+const counter2 = createCounter();
+
+console.log(counter1()); // 1
+console.log(counter1()); // 2
+console.log(counter2()); // 1 (independent from counter1)
+```
+
+## Practical Applications of Closures
+
+### 1. Data Encapsulation and Private Variables
+
+Closures can simulate private variables and encapsulation:
+
+```javascript
+function createBankAccount(initialBalance) {
+  let balance = initialBalance; // Private variable
+
+  return {
+    deposit: function (amount) {
+      if (amount > 0) {
+        balance += amount;
+        return `Deposited ${amount}. New balance: ${balance}`;
+      }
+      return 'Invalid deposit amount';
+    },
+    withdraw: function (amount) {
+      if (amount > 0 && amount <= balance) {
+        balance -= amount;
+        return `Withdrew ${amount}. New balance: ${balance}`;
+      }
+      return 'Invalid withdrawal amount';
+    },
+    getBalance: function () {
+      return `Current balance: ${balance}`;
+    },
+  };
+}
+
+const account = createBankAccount(100);
+console.log(account.getBalance()); // Current balance: 100
+console.log(account.deposit(50)); // Deposited 50. New balance: 150
+console.log(account.withdraw(20)); // Withdrew 20. New balance: 130
+console.log(account.getBalance()); // Current balance: 130
+
+// The balance variable is not directly accessible
+console.log(account.balance); // undefined
+```
+
+### 2. Function Factories
+
+Closures are excellent for creating specialized functions:
+
+```javascript
+function multiplyBy(factor) {
+  return function (number) {
+    return number * factor;
+  };
+}
+
+const double = multiplyBy(2);
+const triple = multiplyBy(3);
+const half = multiplyBy(0.5);
+
+console.log(double(5)); // 10
+console.log(triple(5)); // 15
+console.log(half(5)); // 2.5
+```
+
+### 3. Memoization (Caching Results)
+
+Closures can implement memoization to cache function results:
+
+```javascript
+function createMemoizedFunction(fn) {
+  const cache = {};
+
+  return function (...args) {
+    const key = JSON.stringify(args);
+
+    if (key in cache) {
+      console.log('Returning cached result');
+      return cache[key];
+    }
+
+    const result = fn(...args);
+    cache[key] = result;
+    return result;
+  };
+}
+
+// Example with an expensive calculation
+const memoizedFactorial = createMemoizedFunction(function factorial(n) {
+  console.log(`Computing factorial for ${n}`);
+  if (n <= 1) return 1;
+  return n * factorial(n - 1);
+});
+
+console.log(memoizedFactorial(5)); // Computing factorial for 5, 4, 3, 2, 1
+console.log(memoizedFactorial(5)); // Returning cached result
+console.log(memoizedFactorial(6)); // Only computes for 6, reuses cached values for 5-1
+```
+
+### 4. Event Handlers and Callbacks
+
+Closures are widely used in event handling:
+
+```javascript
+function setupButtonHandler(buttonId, message) {
+  // The event handler is a closure that captures 'message'
+  document.getElementById(buttonId).addEventListener('click', function () {
+    alert(message); // Accesses 'message' from outer scope
+  });
+}
+
+// Set up different messages for different buttons
+setupButtonHandler('btn1', 'Button 1 was clicked');
+setupButtonHandler('btn2', 'Button 2 was clicked');
+```
+
+### 5. Iterators and Generators
+
+Closures can create simple iterators:
+
+```javascript
+function createIterator(array) {
+  let index = 0;
+
+  return {
+    next: function () {
+      if (index < array.length) {
+        return { value: array[index++], done: false };
+      } else {
+        return { done: true };
+      }
+    },
+  };
+}
+
+const iter = createIterator([1, 2, 3]);
+console.log(iter.next()); // { value: 1, done: false }
+console.log(iter.next()); // { value: 2, done: false }
+console.log(iter.next()); // { value: 3, done: false }
+console.log(iter.next()); // { done: true }
+```
+
+## Closures in Real-World Production Code
+
+### Module Pattern (Pre-ES6)
+
+Before ES6 modules, closures were used to create module-like structures:
+
+```javascript
+const userModule = (function () {
+  // Private variables and functions
+  let userCount = 0;
+  const users = {};
+
+  function addUserToCache(user) {
+    users[user.id] = user;
+  }
+
+  // Public API
+  return {
+    addUser: function (user) {
+      userCount++;
+      addUserToCache(user);
+      return userCount;
+    },
+    getUser: function (id) {
+      return users[id];
+    },
+    getUserCount: function () {
+      return userCount;
+    },
+  };
+})();
+
+userModule.addUser({ id: 1, name: 'John' });
+console.log(userModule.getUserCount()); // 1
+console.log(userModule.getUser(1)); // { id: 1, name: 'John' }
+```
+
+### Middleware in Express.js
+
+Express.js middleware uses closures to store configuration:
+
+```javascript
+function rateLimiter(maxRequests, timeWindow) {
+  const clients = new Map();
+
+  // The middleware function is a closure that captures maxRequests and timeWindow
+  return function (req, res, next) {
+    const clientIP = req.ip;
+    const now = Date.now();
+
+    if (!clients.has(clientIP)) {
+      clients.set(clientIP, []);
+    }
+
+    const clientRequests = clients.get(clientIP);
+
+    // Clean up old requests
+    while (clientRequests.length > 0 && clientRequests[0] < now - timeWindow) {
+      clientRequests.shift();
+    }
+
+    if (clientRequests.length < maxRequests) {
+      clientRequests.push(now);
+      next();
+    } else {
+      res.status(429).send('Too many requests');
+    }
+  };
+}
+
+// Usage in Express app
+const app = express();
+app.use(rateLimiter(100, 60000)); // 100 requests per minute
+```
+
+### React Hooks Implementation
+
+React hooks like `useState` use closures to maintain state between renders:
+
+```javascript
+// Simplified implementation of useState hook
+function createUseState() {
+  const states = [];
+  let stateIndex = 0;
+
+  return function useState(initialValue) {
+    const currentIndex = stateIndex;
+
+    if (states[currentIndex] === undefined) {
+      states[currentIndex] = initialValue;
+    }
+
+    const setState = (newValue) => {
+      states[currentIndex] = newValue;
+      renderApp(); // Trigger re-render
+    };
+
+    stateIndex++;
+    return [states[currentIndex], setState];
+  };
+}
+```
+
+## Common Closure Pitfalls
+
+### 1. Loop Variable Capture
+
+A classic closure issue occurs when creating functions in a loop:
+
+```javascript
+// Problematic code
+function createButtons() {
+  for (var i = 0; i < 3; i++) {
+    var button = document.createElement('button');
+    button.textContent = 'Button ' + i;
+    button.addEventListener('click', function () {
+      console.log('Button ' + i + ' clicked'); // Always logs "Button 3 clicked"
+    });
+    document.body.appendChild(button);
+  }
+}
+
+// Solution 1: Use let instead of var
+function createButtonsFixed1() {
+  for (let i = 0; i < 3; i++) {
+    // 'let' creates a new binding for each loop iteration
+    var button = document.createElement('button');
+    button.textContent = 'Button ' + i;
+    button.addEventListener('click', function () {
+      console.log('Button ' + i + ' clicked'); // Works correctly
+    });
+    document.body.appendChild(button);
+  }
+}
+
+// Solution 2: Use an IIFE to create a new scope
+function createButtonsFixed2() {
+  for (var i = 0; i < 3; i++) {
+    (function (index) {
+      var button = document.createElement('button');
+      button.textContent = 'Button ' + index;
+      button.addEventListener('click', function () {
+        console.log('Button ' + index + ' clicked'); // Works correctly
+      });
+      document.body.appendChild(button);
+    })(i);
+  }
+}
+```
+
+### 2. Memory Leaks
+
+Closures can cause memory leaks if they're created in large numbers and not released:
+
+```javascript
+function addHandler() {
+  const largeData = new Array(1000000).fill('some data');
+
+  document.getElementById('myButton').addEventListener('click', function () {
+    // This closure captures largeData
+    console.log(largeData.length);
+  });
+}
+
+// Better approach: only capture what you need
+function addHandlerFixed() {
+  const largeData = new Array(1000000).fill('some data');
+  const dataLength = largeData.length; // Extract just what we need
+
+  document.getElementById('myButton').addEventListener('click', function () {
+    // This closure only captures dataLength
+    console.log(dataLength);
+  });
+
+  // largeData can be garbage collected
+}
+```
+
+## Performance Considerations
+
+While closures are powerful, they do come with performance implications:
+
+1. **Memory usage**: Each closure maintains references to its outer scope, which prevents garbage collection
+2. **Creation overhead**: Creating many closures adds some performance overhead
+3. **Scope chain lookup**: Accessing variables through multiple scopes is slower than local variables
+
+For most applications, these concerns are minor compared to the benefits closures provide. However, in performance-critical applications, consider:
+
+```javascript
+// Potentially slower (closure needs to check multiple scopes)
+function createCounter() {
+  let count = 0;
+  return function () {
+    return ++count;
+  };
+}
+
+// Potentially faster (direct property access)
+function createFasterCounter() {
+  return {
+    count: 0,
+    increment() {
+      return ++this.count;
+    },
+  };
+}
+```
+
+## Related Topics
+
+- [Hoisting](./hoisting) - How JavaScript handles variable and function declarations
+- [Scope](./scope) - Understanding variable scope in JavaScript
+- [Function Context](./function-context) - The `this` keyword and execution context
+- [Higher-Order Functions](./higher-order-functions) - Functions that operate on other functions

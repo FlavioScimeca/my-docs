@@ -1,0 +1,596 @@
+---
+description: A comprehensive guide to JavaScript Testing, including unit testing, integration testing, end-to-end testing, and testing best practices
+title: JavaScript Testing
+---
+
+# JavaScript Testing
+
+Testing is crucial for maintaining reliable JavaScript applications. This guide covers various testing approaches and best practices.
+
+## Unit Testing
+
+### Jest Basics
+
+```javascript
+// Basic test structure
+describe('Calculator', () => {
+  test('adds two numbers correctly', () => {
+    expect(add(2, 3)).toBe(5);
+  });
+
+  test('subtracts two numbers correctly', () => {
+    expect(subtract(5, 3)).toBe(2);
+  });
+});
+
+// Async testing
+describe('API Client', () => {
+  test('fetches user data', async () => {
+    const user = await fetchUser(1);
+    expect(user).toEqual({
+      id: 1,
+      name: 'John Doe',
+    });
+  });
+
+  test('handles errors', async () => {
+    await expect(fetchUser(-1)).rejects.toThrow('Invalid ID');
+  });
+});
+
+// Setup and teardown
+describe('Database operations', () => {
+  let db;
+
+  beforeAll(async () => {
+    db = await connectToDatabase();
+  });
+
+  afterAll(async () => {
+    await db.close();
+  });
+
+  beforeEach(async () => {
+    await db.clear();
+  });
+
+  test('inserts data correctly', async () => {
+    await db.insert({ id: 1, value: 'test' });
+    const result = await db.find(1);
+    expect(result.value).toBe('test');
+  });
+});
+```
+
+### Mocking
+
+```javascript
+// Function mocking
+const mockFn = jest.fn();
+mockFn.mockReturnValue(42);
+mockFn.mockImplementation((x) => x * 2);
+mockFn.mockResolvedValue({ data: 'test' });
+mockFn.mockRejectedValue(new Error('Failed'));
+
+// Module mocking
+jest.mock('./api', () => ({
+  fetchData: jest.fn().mockResolvedValue({ data: 'mocked' }),
+}));
+
+// Timer mocking
+jest.useFakeTimers();
+jest.advanceTimersByTime(1000);
+jest.runAllTimers();
+jest.useRealTimers();
+
+// Class mocking
+jest.spyOn(Math, 'random').mockReturnValue(0.5);
+
+// Mock restoration
+afterEach(() => {
+  jest.resetAllMocks();
+  jest.restoreAllMocks();
+});
+
+// Example test with mocks
+describe('UserService', () => {
+  let userService;
+  let apiClient;
+
+  beforeEach(() => {
+    apiClient = {
+      get: jest.fn(),
+      post: jest.fn(),
+    };
+    userService = new UserService(apiClient);
+  });
+
+  test('fetches user by id', async () => {
+    const mockUser = { id: 1, name: 'John' };
+    apiClient.get.mockResolvedValue(mockUser);
+
+    const user = await userService.getUser(1);
+
+    expect(apiClient.get).toHaveBeenCalledWith('/users/1');
+    expect(user).toEqual(mockUser);
+  });
+});
+```
+
+### Snapshot Testing
+
+```javascript
+// Component snapshot
+describe('Button', () => {
+  test('renders correctly', () => {
+    const button = render(<Button label='Click me' />);
+    expect(button).toMatchSnapshot();
+  });
+
+  test('renders with different variants', () => {
+    const variants = ['primary', 'secondary', 'danger'];
+    variants.forEach((variant) => {
+      const button = render(<Button variant={variant} />);
+      expect(button).toMatchSnapshot();
+    });
+  });
+});
+
+// Inline snapshots
+test('formats user data', () => {
+  const user = {
+    name: 'John Doe',
+    email: 'john@example.com',
+  };
+
+  expect(formatUser(user)).toMatchInlineSnapshot(`
+    {
+      "displayName": "John Doe",
+      "emailAddress": "john@example.com"
+    }
+  `);
+});
+
+// Custom serializers
+expect.addSnapshotSerializer({
+  test: (val) => val && val.type === 'custom',
+  print: (val) => `Custom(${val.value})`,
+});
+```
+
+## Integration Testing
+
+### API Testing
+
+```javascript
+// Supertest example
+const request = require('supertest');
+const app = require('./app');
+
+describe('API endpoints', () => {
+  let server;
+  let token;
+
+  beforeAll(async () => {
+    server = app.listen();
+    // Get authentication token
+    const response = await request(app).post('/auth/login').send({
+      username: 'test',
+      password: 'password',
+    });
+    token = response.body.token;
+  });
+
+  afterAll((done) => {
+    server.close(done);
+  });
+
+  describe('GET /users', () => {
+    test('returns list of users', async () => {
+      const response = await request(app)
+        .get('/users')
+        .set('Authorization', `Bearer ${token}`)
+        .expect('Content-Type', /json/)
+        .expect(200);
+
+      expect(response.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: expect.any(Number),
+            name: expect.any(String),
+          }),
+        ])
+      );
+    });
+
+    test('handles errors', async () => {
+      const response = await request(app).get('/users').expect(401);
+
+      expect(response.body).toEqual({
+        error: 'Unauthorized',
+      });
+    });
+  });
+});
+```
+
+### Database Testing
+
+```javascript
+// MongoDB testing
+describe('User Repository', () => {
+  let connection;
+  let db;
+
+  beforeAll(async () => {
+    connection = await MongoClient.connect(globalThis.__MONGO_URI__);
+    db = connection.db(globalThis.__MONGO_DB_NAME__);
+  });
+
+  afterAll(async () => {
+    await connection.close();
+  });
+
+  beforeEach(async () => {
+    await db.collection('users').deleteMany({});
+  });
+
+  test('inserts user successfully', async () => {
+    const userRepo = new UserRepository(db);
+    const user = {
+      name: 'Test User',
+      email: 'test@example.com',
+    };
+
+    const result = await userRepo.insert(user);
+    expect(result.insertedId).toBeDefined();
+
+    const insertedUser = await db
+      .collection('users')
+      .findOne({ _id: result.insertedId });
+    expect(insertedUser).toMatchObject(user);
+  });
+});
+
+// SQL testing with knex
+describe('Product Repository', () => {
+  beforeAll(async () => {
+    await knex.migrate.latest();
+  });
+
+  afterAll(async () => {
+    await knex.destroy();
+  });
+
+  beforeEach(async () => {
+    await knex('products').truncate();
+  });
+
+  test('creates product with categories', async () => {
+    const productRepo = new ProductRepository(knex);
+    const product = {
+      name: 'Test Product',
+      price: 99.99,
+      categories: ['electronics', 'gadgets'],
+    };
+
+    const result = await productRepo.createWithCategories(product);
+
+    const savedProduct = await knex('products').where('id', result.id).first();
+    const categories = await knex('product_categories')
+      .where('product_id', result.id)
+      .select('category');
+
+    expect(savedProduct).toMatchObject({
+      name: product.name,
+      price: product.price,
+    });
+    expect(categories).toHaveLength(2);
+  });
+});
+```
+
+## End-to-End Testing
+
+### Cypress Testing
+
+```javascript
+// Basic navigation test
+describe('Navigation', () => {
+  beforeEach(() => {
+    cy.visit('/');
+  });
+
+  it('navigates through main pages', () => {
+    cy.get('nav').contains('Products').click();
+    cy.url().should('include', '/products');
+    cy.get('h1').should('contain', 'Products');
+
+    cy.get('nav').contains('About').click();
+    cy.url().should('include', '/about');
+    cy.get('h1').should('contain', 'About Us');
+  });
+});
+
+// Form submission test
+describe('Login Form', () => {
+  it('submits login form successfully', () => {
+    cy.visit('/login');
+
+    cy.get('input[name="email"]').type('test@example.com');
+
+    cy.get('input[name="password"]').type('password123');
+
+    cy.get('button[type="submit"]').click();
+
+    cy.url().should('include', '/dashboard');
+    cy.get('.welcome-message').should('contain', 'Welcome back');
+  });
+
+  it('shows validation errors', () => {
+    cy.visit('/login');
+
+    cy.get('button[type="submit"]').click();
+
+    cy.get('.error-message')
+      .should('be.visible')
+      .and('contain', 'Email is required');
+  });
+});
+
+// Custom commands
+Cypress.Commands.add('login', (email, password) => {
+  cy.request({
+    method: 'POST',
+    url: '/api/login',
+    body: { email, password },
+  }).then((response) => {
+    window.localStorage.setItem('token', response.body.token);
+  });
+});
+
+// API testing
+describe('API', () => {
+  beforeEach(() => {
+    cy.login('admin@example.com', 'admin123');
+  });
+
+  it('creates a new product', () => {
+    const product = {
+      name: 'New Product',
+      price: 99.99,
+    };
+
+    cy.request('POST', '/api/products', product).then((response) => {
+      expect(response.status).to.eq(201);
+      expect(response.body).to.have.property('id');
+      expect(response.body.name).to.eq(product.name);
+    });
+  });
+});
+```
+
+### Playwright Testing
+
+```javascript
+// Basic test structure
+const { test, expect } = require('@playwright/test');
+
+test.describe('Authentication', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/login');
+  });
+
+  test('successful login', async ({ page }) => {
+    await page.fill('input[name="email"]', 'user@example.com');
+    await page.fill('input[name="password"]', 'password123');
+    await page.click('button[type="submit"]');
+
+    await expect(page).toHaveURL('/dashboard');
+    await expect(page.locator('.user-name')).toContainText('John');
+  });
+
+  test('handles invalid credentials', async ({ page }) => {
+    await page.fill('input[name="email"]', 'wrong@example.com');
+    await page.fill('input[name="password"]', 'wrongpass');
+    await page.click('button[type="submit"]');
+
+    await expect(page.locator('.error-message')).toContainText(
+      'Invalid credentials'
+    );
+  });
+});
+
+// Multiple browsers
+test('shares data between users', async ({ browser }) => {
+  const userA = await browser.newContext();
+  const userB = await browser.newContext();
+
+  const pageA = await userA.newPage();
+  const pageB = await userB.newPage();
+
+  await pageA.goto('/chat');
+  await pageB.goto('/chat');
+
+  await pageA.fill('.message-input', 'Hello from A');
+  await pageA.click('.send-button');
+
+  await expect(pageB.locator('.message-list')).toContainText('Hello from A');
+});
+
+// API testing
+test('API endpoints', async ({ request }) => {
+  const response = await request.post('/api/login', {
+    data: {
+      email: 'test@example.com',
+      password: 'password123',
+    },
+  });
+
+  expect(response.ok()).toBeTruthy();
+
+  const data = await response.json();
+  expect(data).toHaveProperty('token');
+});
+```
+
+## Testing Best Practices
+
+### Test Organization
+
+```javascript
+// Feature-based organization
+src / features / auth / __tests__ / login.test.js;
+register.test.js;
+__mocks__ / auth - service.js;
+components / services / products / __tests__ / product - list.test.js;
+product - detail.test.js;
+__mocks__ /
+  components /
+  services /
+  // Test file structure
+  describe('ProductService', () => {
+    // Arrange
+    let service;
+    let mockRepo;
+
+    beforeEach(() => {
+      mockRepo = {
+        findById: jest.fn(),
+        save: jest.fn(),
+      };
+      service = new ProductService(mockRepo);
+    });
+
+    describe('getProduct', () => {
+      test('returns product when found', async () => {
+        // Arrange
+        const mockProduct = { id: 1, name: 'Test' };
+        mockRepo.findById.mockResolvedValue(mockProduct);
+
+        // Act
+        const result = await service.getProduct(1);
+
+        // Assert
+        expect(result).toEqual(mockProduct);
+        expect(mockRepo.findById).toHaveBeenCalledWith(1);
+      });
+
+      test('throws error when not found', async () => {
+        // Arrange
+        mockRepo.findById.mockResolvedValue(null);
+
+        // Act & Assert
+        await expect(service.getProduct(1)).rejects.toThrow(
+          'Product not found'
+        );
+      });
+    });
+  });
+```
+
+### Test Coverage
+
+```javascript
+// Jest coverage configuration
+// jest.config.js
+module.exports = {
+  collectCoverage: true,
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov'],
+  coverageThreshold: {
+    global: {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80,
+    },
+  },
+  collectCoverageFrom: [
+    'src/**/*.{js,jsx}',
+    '!src/**/*.test.{js,jsx}',
+    '!src/index.js',
+  ],
+};
+
+// Custom coverage reporter
+class CustomReporter {
+  onRunComplete(contexts, results) {
+    const coverage = results.coverageMap;
+
+    // Generate custom report
+    const report = {
+      summary: this.getSummary(coverage),
+      details: this.getDetails(coverage),
+    };
+
+    // Save report
+    fs.writeFileSync('coverage-report.json', JSON.stringify(report, null, 2));
+  }
+
+  getSummary(coverage) {
+    // Calculate summary statistics
+  }
+
+  getDetails(coverage) {
+    // Extract detailed coverage information
+  }
+}
+```
+
+### Performance Testing
+
+```javascript
+// Performance test setup
+describe('Performance', () => {
+  test('processes large dataset efficiently', () => {
+    const start = performance.now();
+    const result = processLargeDataset(data);
+    const end = performance.now();
+
+    expect(end - start).toBeLessThan(1000); // Should complete within 1s
+    expect(result).toHaveLength(data.length);
+  });
+
+  test('handles concurrent operations', async () => {
+    const operations = Array(100)
+      .fill()
+      .map(() => performOperation());
+
+    const start = performance.now();
+    await Promise.all(operations);
+    const end = performance.now();
+
+    expect(end - start).toBeLessThan(5000); // Should complete within 5s
+  });
+});
+
+// Memory leak testing
+describe('Memory Usage', () => {
+  test('does not leak memory', () => {
+    const getHeapUsed = () => {
+      const used = process.memoryUsage().heapUsed;
+      return Math.round(used / 1024 / 1024);
+    };
+
+    const initialMemory = getHeapUsed();
+
+    // Perform operations that might leak
+    for (let i = 0; i < 1000; i++) {
+      performOperation();
+    }
+
+    const finalMemory = getHeapUsed();
+    const diff = finalMemory - initialMemory;
+
+    expect(diff).toBeLessThan(10); // Should not increase by more than 10MB
+  });
+});
+```
+
+## Related Topics
+
+- [Test Driven Development](./tdd) - TDD practices
+- [Continuous Integration](./ci) - CI/CD setup
+- [Code Coverage](./code-coverage) - Coverage analysis
+- [Performance Testing](./performance-testing) - Load and stress testing

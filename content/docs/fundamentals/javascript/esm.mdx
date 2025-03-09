@@ -1,0 +1,373 @@
+---
+description: An in-depth look at ECMAScript Modules (ESM) in modern JavaScript
+title: ECMAScript Modules (ESM)
+---
+
+# ECMAScript Modules (ESM)
+
+ECMAScript Modules (ESM) is the official standard format for packaging JavaScript code for reuse. ESM was introduced with ES6 (ES2015) and provides a standardized module system for JavaScript.
+
+## Introduction to ESM
+
+ESM offers several advantages over older module systems:
+
+- **Static module structure**: Imports and exports are determined at compile time, not runtime
+- **Tree-shakable**: Unused code can be eliminated during bundling (dead code elimination)
+- **Asynchronous loading**: Modules can be loaded on demand
+- **Better support for static analysis**: Tools can better analyze dependencies
+- **Strict mode by default**: All ESM code runs in strict mode automatically
+
+## Basic Syntax
+
+### Named Exports
+
+Export individual values with names:
+
+```javascript
+// math.js
+export const PI = 3.14159;
+
+export function add(a, b) {
+  return a + b;
+}
+
+export function subtract(a, b) {
+  return a - b;
+}
+
+// Non-exported function (private to this module)
+function multiply(a, b) {
+  return a * b;
+}
+
+// You can also export previously declared items
+const square = (x) => x * x;
+export { square };
+```
+
+### Default Exports
+
+Export a single default value from a module:
+
+```javascript
+// calculator.js
+class Calculator {
+  constructor() {
+    this.value = 0;
+  }
+
+  add(n) {
+    this.value += n;
+    return this;
+  }
+
+  // ... other methods
+}
+
+// Default export
+export default Calculator;
+
+// You can have both named exports and a default export
+export const CALCULATOR_VERSION = '1.0.0';
+```
+
+### Importing Modules
+
+Import both named and default exports:
+
+```javascript
+// Importing named exports
+import { PI, add, subtract } from './math.js';
+
+// Importing default export
+import Calculator from './calculator.js';
+
+// Importing both default and named exports
+import Calculator, { CALCULATOR_VERSION } from './calculator.js';
+
+// Import all exports as a namespace object
+import * as math from './math.js';
+console.log(math.PI); // 3.14159
+console.log(math.add(2, 3)); // 5
+
+// Renaming imports
+import { add as sum, subtract as diff } from './math.js';
+console.log(sum(2, 3)); // 5
+```
+
+### Re-exporting
+
+Export items from other modules:
+
+```javascript
+// utils.js
+export { add, subtract } from './math.js';
+export { default as Calculator } from './calculator.js';
+
+// Re-export everything
+export * from './math.js';
+
+// Re-export everything except default
+export * as math from './math.js';
+
+// Re-export default as named export
+export { default as MathCalculator } from './calculator.js';
+```
+
+## Dynamic Imports
+
+Load modules on demand using dynamic imports:
+
+```javascript
+async function loadModule() {
+  try {
+    // Dynamic import returns a promise
+    const mathModule = await import('./math.js');
+
+    console.log(mathModule.add(2, 3)); // 5
+
+    // Conditionally load modules
+    if (needsCalculator) {
+      const { default: Calculator } = await import('./calculator.js');
+      const calc = new Calculator();
+      // Use calculator...
+    }
+  } catch (error) {
+    console.error('Failed to load module:', error);
+  }
+}
+```
+
+Dynamic imports are useful for:
+
+- Code splitting
+- Lazy loading
+- Conditional loading
+- Reducing initial bundle size
+
+## Module Features and Behavior
+
+### Top-level await
+
+ESM supports top-level await, allowing you to use await without an async function wrapper:
+
+```javascript
+// data-loader.js
+export const data = await fetch('/api/data').then((res) => res.json());
+
+// While waiting for the data, other modules that import this one will wait
+export function processData() {
+  return data.map((item) => item.value);
+}
+```
+
+### Module Scoping
+
+ESM has its own scope - variables declared in a module are not added to the global scope:
+
+```javascript
+// module-a.js
+const privateVar = 'This is private to module-a';
+export const publicVar = 'This can be imported by other modules';
+
+// module-b.js
+import { publicVar } from './module-a.js';
+console.log(publicVar); // Works
+console.log(privateVar); // ReferenceError: privateVar is not defined
+```
+
+### Module Loading
+
+ESM modules:
+
+- Are executed once, when they're first imported
+- Are cached after the first import
+- Cannot be re-evaluated
+
+```javascript
+// counter.js
+console.log('Module initialized');
+let count = 0;
+
+export function increment() {
+  count++;
+  return count;
+}
+
+// main.js
+import { increment } from './counter.js'; // Logs "Module initialized"
+console.log(increment()); // 1
+
+// Even if imported again in the same app, the module is not re-initialized
+import { increment as inc } from './counter.js'; // No log
+console.log(inc()); // 2 (using the same counter)
+```
+
+## ESM in Different Environments
+
+### Browser Support
+
+Modern browsers support ESM natively with the `type="module"` attribute:
+
+```html
+<script type="module">
+  import { add } from './math.js';
+  console.log(add(2, 3));
+</script>
+
+<!-- External module script -->
+<script type="module" src="main.js"></script>
+```
+
+Browser ESM features:
+
+- Automatically deferred (like `defer` attribute)
+- Strict mode by default
+- Cross-Origin Resource Sharing (CORS) required for external modules
+- Loaded asynchronously
+
+### ESM in Node.js
+
+Node.js supports ESM in several ways:
+
+1. **File extension**: Use `.mjs` extension
+2. **Package.json**: Set `"type": "module"` in your package.json
+3. **Import specifiers**: `.js`, `.mjs`, or full paths with extensions
+
+```javascript
+// In Node.js ESM
+import { readFile } from 'fs/promises';
+import { join } from 'path';
+import myPackage from 'my-package';
+
+// Importing CommonJS modules from ESM
+import cjsModule from './commonjs-module.cjs';
+```
+
+### Using ESM with Build Tools
+
+Most modern bundlers fully support ESM:
+
+- **Webpack**: Natively supports ESM
+- **Rollup**: Designed specifically for ESM
+- **Vite**: Uses ESM for development server
+- **esbuild**: Supports ESM and is very fast
+
+## Advanced ESM Features
+
+### Module Specifier Resolution
+
+ESM resolvers follow these patterns:
+
+```javascript
+// Relative paths
+import './relative-path.js';
+import '../parent-directory.js';
+
+// Absolute paths
+import '/absolute-path.js';
+
+// Bare specifiers (from node_modules)
+import 'package-name';
+import 'package-name/sub/path';
+
+// URL specifiers
+import 'https://example.com/module.js';
+```
+
+### Import Assertions
+
+For importing non-JavaScript resources:
+
+```javascript
+// Importing JSON as data
+import data from './data.json' assert { type: 'json' };
+
+// Importing CSS as a module (with appropriate tooling/bundler)
+import styles from './styles.css' assert { type: 'css' };
+```
+
+### Import Maps
+
+Define custom module resolution in browsers:
+
+```html
+<script type="importmap">
+  {
+    "imports": {
+      "lodash": "/node_modules/lodash-es/lodash.js",
+      "react": "https://esm.sh/react@18",
+      "components/": "/src/components/"
+    }
+  }
+</script>
+
+<script type="module">
+  import _ from 'lodash';
+  import React from 'react';
+  import { Button } from 'components/button.js';
+</script>
+```
+
+## ESM Best Practices
+
+1. **Always use explicit extensions** in import paths (especially for Node.js compatibility)
+2. **Prefer named exports** for better tree-shaking, except for component libraries
+3. **Keep modules focused** on a single responsibility
+4. **Avoid side effects** in modules when possible
+5. **Consider circular dependencies** which are supported but can be confusing
+6. **Use path aliases** (with build tools) for cleaner imports from deep directory structures
+
+## Migrating to ESM
+
+### From CommonJS to ESM
+
+```javascript
+// CommonJS (Before)
+const path = require('path');
+const { readFile } = require('fs/promises');
+
+function processFile(filename) {
+  // ...
+}
+
+module.exports = { processFile };
+module.exports.default = processFile;
+
+// ESM (After)
+import path from 'path';
+import { readFile } from 'fs/promises';
+
+function processFile(filename) {
+  // ...
+}
+
+export { processFile };
+export default processFile;
+```
+
+### Dual CommonJS/ESM Packages
+
+For library authors who need to support both:
+
+```json
+// package.json
+{
+  "name": "my-library",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js"
+}
+```
+
+## Related Topics
+
+- [Modules](./modules) - Overview of JavaScript module systems
+- [ESNext Features](./esnext) - Upcoming JavaScript features
+- [Modern JavaScript Patterns](./modern-patterns) - Best practices for JavaScript development

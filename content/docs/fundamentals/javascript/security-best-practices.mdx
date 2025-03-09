@@ -1,0 +1,600 @@
+---
+description: A comprehensive guide to JavaScript security best practices, including input validation, XSS prevention, CSRF protection, and secure coding guidelines
+title: Security Best Practices in JavaScript
+---
+
+# Security Best Practices in JavaScript
+
+Security is crucial in web development. This guide covers essential security practices for JavaScript applications.
+
+## Input Validation
+
+### Client-Side Validation
+
+```javascript
+// Basic input validation
+function validateInput(input) {
+  // Remove potentially dangerous characters
+  const sanitized = input.replace(/[<>'"]/g, '');
+
+  // Check length
+  if (sanitized.length < 3 || sanitized.length > 50) {
+    throw new Error('Input length must be between 3 and 50 characters');
+  }
+
+  return sanitized;
+}
+
+// Email validation
+function validateEmail(email) {
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  if (!emailRegex.test(email)) {
+    throw new Error('Invalid email format');
+  }
+  return email;
+}
+
+// URL validation
+function validateURL(url) {
+  try {
+    const parsedURL = new URL(url);
+    return parsedURL.href;
+  } catch (error) {
+    throw new Error('Invalid URL format');
+  }
+}
+
+// Number validation
+function validateNumber(input, min, max) {
+  const num = Number(input);
+  if (isNaN(num)) {
+    throw new Error('Input must be a number');
+  }
+  if (num < min || num > max) {
+    throw new Error(`Number must be between ${min} and ${max}`);
+  }
+  return num;
+}
+```
+
+### Content Security
+
+```javascript
+// HTML content sanitization
+function sanitizeHTML(html) {
+  const div = document.createElement('div');
+  div.textContent = html;
+  return div.innerHTML;
+}
+
+// Sanitize user input before rendering
+function renderUserContent(content) {
+  const sanitized = DOMPurify.sanitize(content, {
+    ALLOWED_TAGS: ['b', 'i', 'em', 'strong', 'a'],
+    ALLOWED_ATTR: ['href'],
+  });
+  document.getElementById('content').innerHTML = sanitized;
+}
+
+// File type validation
+function validateFileType(file, allowedTypes) {
+  const fileType = file.type;
+  if (!allowedTypes.includes(fileType)) {
+    throw new Error('File type not allowed');
+  }
+  return true;
+}
+
+// File size validation
+function validateFileSize(file, maxSizeInBytes) {
+  if (file.size > maxSizeInBytes) {
+    throw new Error('File size exceeds limit');
+  }
+  return true;
+}
+```
+
+## XSS Prevention
+
+### Output Encoding
+
+```javascript
+// HTML encoding
+function encodeHTML(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// URL encoding
+function encodeURL(url) {
+  return encodeURIComponent(url);
+}
+
+// JavaScript string encoding
+function encodeJavaScriptString(str) {
+  return JSON.stringify(str);
+}
+
+// Safe HTML insertion
+function safeInsertHTML(element, html) {
+  // Use DOMPurify or similar library
+  const clean = DOMPurify.sanitize(html);
+  element.innerHTML = clean;
+}
+```
+
+### Content Security Policy
+
+```javascript
+// CSP header example
+// Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-random123'
+
+// Applying nonce to inline scripts
+function applyNonce(script, nonce) {
+  script.setAttribute('nonce', nonce);
+}
+
+// CSP violation reporting
+document.addEventListener('securitypolicyviolation', (e) => {
+  console.error('CSP violation:', {
+    blockedURI: e.blockedURI,
+    violatedDirective: e.violatedDirective,
+    originalPolicy: e.originalPolicy,
+  });
+
+  // Send to reporting endpoint
+  reportViolation(e);
+});
+
+// Meta tag CSP (fallback)
+const cspMeta = document.createElement('meta');
+cspMeta.httpEquiv = 'Content-Security-Policy';
+cspMeta.content = "default-src 'self'; script-src 'self'";
+document.head.appendChild(cspMeta);
+```
+
+## CSRF Protection
+
+### Token Validation
+
+```javascript
+// Generate CSRF token
+function generateCSRFToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// Add CSRF token to forms
+function addCSRFToken() {
+  document.querySelectorAll('form').forEach((form) => {
+    const token = document.createElement('input');
+    token.type = 'hidden';
+    token.name = '_csrf';
+    token.value = getCsrfToken();
+    form.appendChild(token);
+  });
+}
+
+// Add CSRF token to AJAX requests
+const axios = require('axios');
+axios.interceptors.request.use((config) => {
+  config.headers['X-CSRF-Token'] = getCsrfToken();
+  return config;
+});
+
+// Validate same origin
+function isSameOrigin(url) {
+  try {
+    const current = window.location.origin;
+    const target = new URL(url).origin;
+    return current === target;
+  } catch (e) {
+    return false;
+  }
+}
+```
+
+### Double Submit Cookie
+
+```javascript
+// Set CSRF cookie and token
+function setupCSRFProtection() {
+  const token = generateCSRFToken();
+  document.cookie = `CSRF=${token}; SameSite=Strict; Secure`;
+  return token;
+}
+
+// Validate CSRF token against cookie
+function validateCSRFToken(token) {
+  const cookieToken = getCookie('CSRF');
+  return token === cookieToken;
+}
+
+// Add token to fetch requests
+async function fetchWithCSRF(url, options = {}) {
+  const token = getCookie('CSRF');
+  const headers = {
+    ...options.headers,
+    'X-CSRF-Token': token,
+  };
+
+  return fetch(url, {
+    ...options,
+    headers,
+    credentials: 'include',
+  });
+}
+```
+
+## Secure Authentication
+
+### Password Handling
+
+```javascript
+// Password strength validation
+function validatePassword(password) {
+  const minLength = 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  const hasSpecialChars = /[!@#$%^&*]/.test(password);
+
+  if (password.length < minLength) {
+    throw new Error('Password must be at least 8 characters long');
+  }
+
+  if (!(hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChars)) {
+    throw new Error(
+      'Password must include uppercase, lowercase, numbers, and special characters'
+    );
+  }
+
+  return true;
+}
+
+// Password hash comparison (server-side)
+async function comparePasswords(password, hashedPassword) {
+  return await bcrypt.compare(password, hashedPassword);
+}
+
+// Secure password reset
+async function initiatePasswordReset(email) {
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiryTime = Date.now() + 3600000; // 1 hour
+
+  // Store token and expiry in database
+  await storeResetToken(email, token, expiryTime);
+
+  // Send reset email
+  await sendResetEmail(email, token);
+}
+```
+
+### Session Management
+
+```javascript
+// Secure session handling
+class SessionManager {
+  constructor() {
+    this.sessionTimeout = 30 * 60 * 1000; // 30 minutes
+  }
+
+  createSession(user) {
+    const sessionId = crypto.randomBytes(32).toString('hex');
+    const session = {
+      id: sessionId,
+      userId: user.id,
+      created: Date.now(),
+      lastAccessed: Date.now(),
+    };
+
+    // Store session
+    this.storeSession(session);
+
+    return sessionId;
+  }
+
+  validateSession(sessionId) {
+    const session = this.getSession(sessionId);
+
+    if (!session) {
+      return false;
+    }
+
+    if (Date.now() - session.lastAccessed > this.sessionTimeout) {
+      this.destroySession(sessionId);
+      return false;
+    }
+
+    session.lastAccessed = Date.now();
+    this.updateSession(session);
+
+    return true;
+  }
+
+  destroySession(sessionId) {
+    // Remove session from storage
+    this.removeSession(sessionId);
+  }
+}
+```
+
+## Secure Data Storage
+
+### Local Storage Security
+
+```javascript
+// Encrypted local storage
+class SecureStorage {
+  constructor(secretKey) {
+    this.secretKey = secretKey;
+  }
+
+  async encrypt(data) {
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await this.deriveKey();
+
+    const encrypted = await crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv,
+      },
+      key,
+      new TextEncoder().encode(JSON.stringify(data))
+    );
+
+    return {
+      iv: Array.from(iv),
+      data: Array.from(new Uint8Array(encrypted)),
+    };
+  }
+
+  async decrypt(encryptedData) {
+    const key = await this.deriveKey();
+
+    const decrypted = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: new Uint8Array(encryptedData.iv),
+      },
+      key,
+      new Uint8Array(encryptedData.data)
+    );
+
+    return JSON.parse(new TextDecoder().decode(decrypted));
+  }
+
+  async deriveKey() {
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      new TextEncoder().encode(this.secretKey),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveBits', 'deriveKey']
+    );
+
+    return crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: new TextEncoder().encode('salt'),
+        iterations: 100000,
+        hash: 'SHA-256',
+      },
+      keyMaterial,
+      { name: 'AES-GCM', length: 256 },
+      true,
+      ['encrypt', 'decrypt']
+    );
+  }
+
+  async set(key, value) {
+    const encrypted = await this.encrypt(value);
+    localStorage.setItem(key, JSON.stringify(encrypted));
+  }
+
+  async get(key) {
+    const encrypted = JSON.parse(localStorage.getItem(key));
+    if (!encrypted) return null;
+    return await this.decrypt(encrypted);
+  }
+}
+```
+
+### Sensitive Data Handling
+
+```javascript
+// Secure cookie handling
+function setSecureCookie(name, value, options = {}) {
+  const secure = location.protocol === 'https:';
+  const cookie = [
+    `${name}=${encodeURIComponent(value)}`,
+    'HttpOnly',
+    secure ? 'Secure' : '',
+    'SameSite=Strict',
+    options.expires ? `expires=${options.expires.toUTCString()}` : '',
+    options.path ? `path=${options.path}` : '',
+  ]
+    .filter(Boolean)
+    .join('; ');
+
+  document.cookie = cookie;
+}
+
+// Clear sensitive data
+function clearSensitiveData() {
+  // Clear local storage
+  localStorage.clear();
+
+  // Clear session storage
+  sessionStorage.clear();
+
+  // Clear cookies
+  document.cookie.split(';').forEach((cookie) => {
+    document.cookie = cookie
+      .replace(/^ +/, '')
+      .replace(/=.*/, `=;expires=${new Date(0).toUTCString()};path=/`);
+  });
+
+  // Clear form data
+  document.querySelectorAll('form').forEach((form) => form.reset());
+}
+```
+
+## API Security
+
+### Request Validation
+
+```javascript
+// API request validation
+class APIRequestValidator {
+  validateRequest(req) {
+    // Validate headers
+    this.validateHeaders(req.headers);
+
+    // Validate method
+    this.validateMethod(req.method);
+
+    // Validate content type
+    this.validateContentType(req.headers['content-type']);
+
+    // Validate body
+    if (req.body) {
+      this.validateBody(req.body);
+    }
+  }
+
+  validateHeaders(headers) {
+    const required = ['authorization', 'content-type'];
+    required.forEach((header) => {
+      if (!headers[header]) {
+        throw new Error(`Missing required header: ${header}`);
+      }
+    });
+  }
+
+  validateMethod(method) {
+    const allowed = ['GET', 'POST', 'PUT', 'DELETE'];
+    if (!allowed.includes(method.toUpperCase())) {
+      throw new Error('Invalid HTTP method');
+    }
+  }
+
+  validateContentType(contentType) {
+    if (!contentType || !contentType.includes('application/json')) {
+      throw new Error('Invalid content type');
+    }
+  }
+
+  validateBody(body) {
+    if (typeof body !== 'object' || body === null) {
+      throw new Error('Invalid request body');
+    }
+  }
+}
+```
+
+### Rate Limiting
+
+```javascript
+// Simple rate limiter
+class RateLimiter {
+  constructor(limit, windowMs) {
+    this.limit = limit;
+    this.windowMs = windowMs;
+    this.requests = new Map();
+  }
+
+  isAllowed(clientId) {
+    const now = Date.now();
+    const windowStart = now - this.windowMs;
+
+    // Clean old requests
+    this.requests.forEach((timestamps, id) => {
+      this.requests.set(
+        id,
+        timestamps.filter((time) => time > windowStart)
+      );
+    });
+
+    // Get client's requests
+    const clientRequests = this.requests.get(clientId) || [];
+
+    // Check if limit is exceeded
+    if (clientRequests.length >= this.limit) {
+      return false;
+    }
+
+    // Add new request
+    clientRequests.push(now);
+    this.requests.set(clientId, clientRequests);
+
+    return true;
+  }
+}
+
+// Usage
+const limiter = new RateLimiter(100, 60000); // 100 requests per minute
+
+function makeAPIRequest(clientId) {
+  if (!limiter.isAllowed(clientId)) {
+    throw new Error('Rate limit exceeded');
+  }
+  // Make request
+}
+```
+
+## Error Handling
+
+### Secure Error Handling
+
+```javascript
+// Custom error classes
+class ApplicationError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.name = 'ApplicationError';
+    this.code = code;
+  }
+}
+
+class ValidationError extends ApplicationError {
+  constructor(message) {
+    super(message, 'VALIDATION_ERROR');
+    this.name = 'ValidationError';
+  }
+}
+
+class AuthenticationError extends ApplicationError {
+  constructor(message) {
+    super(message, 'AUTH_ERROR');
+    this.name = 'AuthenticationError';
+  }
+}
+
+// Error handler
+function handleError(error) {
+  // Log error securely
+  console.error({
+    name: error.name,
+    message: error.message,
+    code: error.code,
+    timestamp: new Date().toISOString(),
+  });
+
+  // Return safe error response
+  return {
+    error: {
+      code: error.code || 'UNKNOWN_ERROR',
+      message:
+        error.name === 'ApplicationError' ? error.message : 'An error occurred',
+    },
+  };
+}
+```
+
+## Related Topics
+
+- [Web Security](./web-security) - General web security concepts
+- [Authentication](./authentication) - Authentication best practices
+- [API Security](./api-security) - API security guidelines
+- [Cryptography](./cryptography) - Cryptography in JavaScript

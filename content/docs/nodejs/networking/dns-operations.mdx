@@ -1,0 +1,589 @@
+---
+description: A comprehensive guide to DNS operations in Node.js, including name resolution, reverse lookups, and DNS server implementation
+title: DNS Operations
+---
+
+# DNS Operations
+
+Learn how to perform DNS operations in Node.js, including name resolution, reverse lookups, and implementing custom DNS servers.
+
+## Basic DNS Operations
+
+### Name Resolution
+
+```javascript
+const dns = require('dns');
+const { Resolver } = dns.promises;
+
+// Create custom resolver
+const resolver = new Resolver();
+
+// Set custom DNS servers
+resolver.setServers(['8.8.8.8', '8.8.4.4']);
+
+// Basic lookup
+async function lookupHost(hostname) {
+  try {
+    const result = await resolver.resolve4(hostname);
+    console.log(`IPv4 addresses for ${hostname}:`, result);
+    return result;
+  } catch (err) {
+    console.error('Lookup failed:', err);
+    throw err;
+  }
+}
+
+// Lookup with options
+async function lookupWithOptions(hostname) {
+  try {
+    const result = await dns.promises.lookup(hostname, {
+      all: true, // Return all addresses
+      family: 0, // Return both IPv4 and IPv6
+    });
+
+    console.log('Addresses:', result);
+    return result;
+  } catch (err) {
+    console.error('Lookup failed:', err);
+    throw err;
+  }
+}
+
+// Reverse lookup
+async function reverseLookup(ip) {
+  try {
+    const hostnames = await resolver.reverse(ip);
+    console.log(`Hostnames for ${ip}:`, hostnames);
+    return hostnames;
+  } catch (err) {
+    console.error('Reverse lookup failed:', err);
+    throw err;
+  }
+}
+```
+
+### Record Types
+
+```javascript
+class DNSRecordLookup {
+  constructor() {
+    this.resolver = new dns.promises.Resolver();
+  }
+
+  async lookupAll(domain) {
+    const results = {};
+
+    try {
+      // A records (IPv4)
+      results.a = await this.resolver.resolve4(domain);
+
+      // AAAA records (IPv6)
+      results.aaaa = await this.resolver.resolve6(domain);
+
+      // MX records
+      results.mx = await this.resolver.resolveMx(domain);
+
+      // TXT records
+      results.txt = await this.resolver.resolveTxt(domain);
+
+      // NS records
+      results.ns = await this.resolver.resolveNs(domain);
+
+      // SOA record
+      results.soa = await this.resolver.resolveSoa(domain);
+
+      // SRV records
+      results.srv = await this.resolver.resolveSrv(domain);
+
+      // CAA records
+      results.caa = await this.resolver.resolveCaa(domain);
+
+      return results;
+    } catch (err) {
+      console.error('DNS lookup failed:', err);
+      throw err;
+    }
+  }
+
+  async lookupSpecific(domain, recordType) {
+    try {
+      switch (recordType.toUpperCase()) {
+        case 'A':
+          return await this.resolver.resolve4(domain);
+        case 'AAAA':
+          return await this.resolver.resolve6(domain);
+        case 'MX':
+          return await this.resolver.resolveMx(domain);
+        case 'TXT':
+          return await this.resolver.resolveTxt(domain);
+        case 'NS':
+          return await this.resolver.resolveNs(domain);
+        case 'SOA':
+          return await this.resolver.resolveSoa(domain);
+        case 'SRV':
+          return await this.resolver.resolveSrv(domain);
+        case 'CAA':
+          return await this.resolver.resolveCaa(domain);
+        default:
+          throw new Error(`Unsupported record type: ${recordType}`);
+      }
+    } catch (err) {
+      console.error(`${recordType} lookup failed:`, err);
+      throw err;
+    }
+  }
+}
+```
+
+## Advanced Features
+
+### DNS Cache
+
+```javascript
+class DNSCache {
+  constructor(options = {}) {
+    this.cache = new Map();
+    this.ttl = options.ttl || 300; // 5 minutes default
+    this.maxSize = options.maxSize || 1000;
+    this.resolver = new dns.promises.Resolver();
+  }
+
+  async lookup(hostname, recordType = 'A') {
+    const key = `${hostname}:${recordType}`;
+    const cached = this.cache.get(key);
+
+    if (cached && Date.now() < cached.expires) {
+      return cached.data;
+    }
+
+    // Perform lookup
+    const result = await this.resolver.resolve(hostname, recordType);
+
+    // Cache result
+    this.cache.set(key, {
+      data: result,
+      expires: Date.now() + this.ttl * 1000,
+    });
+
+    // Cleanup if cache is too large
+    if (this.cache.size > this.maxSize) {
+      this.cleanup();
+    }
+
+    return result;
+  }
+
+  cleanup() {
+    const now = Date.now();
+
+    // Remove expired entries
+    for (const [key, value] of this.cache) {
+      if (now >= value.expires) {
+        this.cache.delete(key);
+      }
+    }
+
+    // If still too large, remove oldest entries
+    if (this.cache.size > this.maxSize) {
+      const entries = Array.from(this.cache.entries()).sort(
+        ([, a], [, b]) => a.expires - b.expires
+      );
+
+      const deleteCount = this.cache.size - this.maxSize;
+      for (let i = 0; i < deleteCount; i++) {
+        this.cache.delete(entries[i][0]);
+      }
+    }
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+}
+```
+
+### DNS Server Implementation
+
+```javascript
+const dgram = require('dgram');
+const dnsPacket = require('dns-packet');
+
+class DNSServer {
+  constructor(options = {}) {
+    this.port = options.port || 53;
+    this.socket = dgram.createSocket('udp4');
+    this.records = new Map();
+    this.upstream = options.upstream || '8.8.8.8';
+
+    this.setupHandlers();
+  }
+
+  setupHandlers() {
+    this.socket.on('message', (msg, rinfo) => {
+      try {
+        const packet = dnsPacket.decode(msg);
+        this.handleQuery(packet, rinfo);
+      } catch (err) {
+        console.error('Error processing DNS query:', err);
+      }
+    });
+
+    this.socket.on('error', (err) => {
+      console.error('DNS server error:', err);
+    });
+  }
+
+  async handleQuery(packet, rinfo) {
+    const question = packet.questions[0];
+    const response = {
+      id: packet.id,
+      type: 'response',
+      flags: dnsPacket.RECURSION_DESIRED,
+      questions: packet.questions,
+      answers: [],
+    };
+
+    try {
+      // Check local records first
+      const localAnswer = this.records.get(`${question.name}:${question.type}`);
+
+      if (localAnswer) {
+        response.answers = [localAnswer];
+      } else {
+        // Forward to upstream DNS
+        response.answers = await this.forwardQuery(question);
+      }
+
+      const responseBuffer = dnsPacket.encode(response);
+      this.socket.send(responseBuffer, rinfo.port, rinfo.address);
+    } catch (err) {
+      console.error('Error handling DNS query:', err);
+
+      // Send error response
+      response.flags |= dnsPacket.RCODE_SERVFAIL;
+      const errorBuffer = dnsPacket.encode(response);
+      this.socket.send(errorBuffer, rinfo.port, rinfo.address);
+    }
+  }
+
+  async forwardQuery(question) {
+    return new Promise((resolve, reject) => {
+      const client = dgram.createSocket('udp4');
+      const packet = dnsPacket.encode({
+        type: 'query',
+        id: 1,
+        flags: dnsPacket.RECURSION_DESIRED,
+        questions: [question],
+      });
+
+      client.on('message', (msg) => {
+        const response = dnsPacket.decode(msg);
+        client.close();
+        resolve(response.answers);
+      });
+
+      client.on('error', (err) => {
+        client.close();
+        reject(err);
+      });
+
+      client.send(packet, 53, this.upstream);
+    });
+  }
+
+  addRecord(name, type, data, ttl = 3600) {
+    this.records.set(`${name}:${type}`, {
+      name,
+      type,
+      ttl,
+      data,
+    });
+  }
+
+  start() {
+    return new Promise((resolve, reject) => {
+      this.socket.bind(this.port, () => {
+        console.log(`DNS server listening on port ${this.port}`);
+        resolve();
+      });
+
+      this.socket.on('error', reject);
+    });
+  }
+
+  stop() {
+    return new Promise((resolve) => {
+      this.socket.close(() => resolve());
+    });
+  }
+}
+```
+
+## Performance Optimization
+
+### Parallel Resolution
+
+```javascript
+class ParallelResolver {
+  constructor(options = {}) {
+    this.resolver = new dns.promises.Resolver();
+    this.concurrency = options.concurrency || 10;
+    this.timeout = options.timeout || 5000;
+  }
+
+  async resolveMultiple(hostnames, recordType = 'A') {
+    const results = new Map();
+    const queue = [...hostnames];
+
+    const workers = Array(this.concurrency)
+      .fill()
+      .map(async () => {
+        while (queue.length > 0) {
+          const hostname = queue.shift();
+          if (!hostname) break;
+
+          try {
+            const result = await Promise.race([
+              this.resolver.resolve(hostname, recordType),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout')), this.timeout)
+              ),
+            ]);
+
+            results.set(hostname, {
+              success: true,
+              data: result,
+            });
+          } catch (err) {
+            results.set(hostname, {
+              success: false,
+              error: err.message,
+            });
+          }
+        }
+      });
+
+    await Promise.all(workers);
+    return results;
+  }
+}
+```
+
+### Caching Strategy
+
+```javascript
+class DNSCacheStrategy {
+  constructor() {
+    this.positiveCache = new Map();
+    this.negativeCache = new Map();
+    this.stats = {
+      hits: 0,
+      misses: 0,
+      errors: 0,
+    };
+  }
+
+  async resolve(hostname, options = {}) {
+    const key = this.getCacheKey(hostname, options);
+
+    // Check negative cache first
+    if (this.isInNegativeCache(key)) {
+      this.stats.hits++;
+      throw new Error('Domain previously failed resolution');
+    }
+
+    // Check positive cache
+    const cached = this.positiveCache.get(key);
+    if (cached && !this.isExpired(cached)) {
+      this.stats.hits++;
+      return cached.data;
+    }
+
+    // Perform resolution
+    try {
+      this.stats.misses++;
+      const result = await dns.promises.resolve(hostname, options);
+      this.updatePositiveCache(key, result);
+      return result;
+    } catch (err) {
+      this.stats.errors++;
+      this.updateNegativeCache(key);
+      throw err;
+    }
+  }
+
+  getCacheKey(hostname, options) {
+    return `${hostname}:${JSON.stringify(options)}`;
+  }
+
+  isExpired(entry) {
+    return Date.now() > entry.expires;
+  }
+
+  isInNegativeCache(key) {
+    const entry = this.negativeCache.get(key);
+    if (!entry) return false;
+
+    if (this.isExpired(entry)) {
+      this.negativeCache.delete(key);
+      return false;
+    }
+
+    return true;
+  }
+
+  updatePositiveCache(key, data) {
+    this.positiveCache.set(key, {
+      data,
+      expires: Date.now() + 300 * 1000, // 5 minutes
+      accessed: Date.now(),
+    });
+  }
+
+  updateNegativeCache(key) {
+    this.negativeCache.set(key, {
+      expires: Date.now() + 60 * 1000, // 1 minute
+    });
+  }
+
+  getStats() {
+    return {
+      ...this.stats,
+      cacheSize: this.positiveCache.size,
+      negativeCacheSize: this.negativeCache.size,
+    };
+  }
+}
+```
+
+## Best Practices
+
+### Error Handling
+
+```javascript
+class DNSErrorHandler {
+  static handle(err) {
+    switch (err.code) {
+      case 'ENOTFOUND':
+        console.error('Domain not found');
+        return {
+          error: 'DOMAIN_NOT_FOUND',
+          message: 'The specified domain does not exist',
+        };
+
+      case 'ETIMEDOUT':
+        console.error('DNS lookup timeout');
+        return {
+          error: 'TIMEOUT',
+          message: 'DNS lookup timed out',
+        };
+
+      case 'ESERVFAIL':
+        console.error('DNS server failed');
+        return {
+          error: 'SERVER_FAILURE',
+          message: 'DNS server failed to process the request',
+        };
+
+      default:
+        console.error('Unknown DNS error:', err);
+        return {
+          error: 'UNKNOWN_ERROR',
+          message: 'An unexpected error occurred',
+        };
+    }
+  }
+
+  static async withRetry(operation, options = {}) {
+    const retries = options.retries || 3;
+    const delay = options.delay || 1000;
+
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await operation();
+      } catch (err) {
+        if (i === retries - 1) throw err;
+
+        console.warn(`Retry ${i + 1}/${retries} after error:`, err);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+}
+```
+
+### Security Considerations
+
+```javascript
+class SecureDNSResolver {
+  constructor() {
+    this.resolver = new dns.promises.Resolver();
+    this.resolver.setServers([
+      // Cloudflare's secure DNS servers
+      '1.1.1.1',
+      '1.0.0.1',
+    ]);
+  }
+
+  validateHostname(hostname) {
+    // Check hostname length
+    if (hostname.length > 253) {
+      throw new Error('Hostname too long');
+    }
+
+    // Check for valid characters
+    if (!/^[a-zA-Z0-9.-]+$/.test(hostname)) {
+      throw new Error('Invalid hostname characters');
+    }
+
+    // Check label lengths
+    const labels = hostname.split('.');
+    for (const label of labels) {
+      if (label.length > 63) {
+        throw new Error('Label too long');
+      }
+    }
+
+    return true;
+  }
+
+  async secureLookup(hostname) {
+    try {
+      this.validateHostname(hostname);
+
+      // Perform DNSSEC validation
+      const result = await this.resolver.resolve(hostname, 'A');
+
+      // Verify DNSSEC records
+      await this.verifyDNSSEC(hostname);
+
+      return result;
+    } catch (err) {
+      console.error('Secure DNS lookup failed:', err);
+      throw err;
+    }
+  }
+
+  async verifyDNSSEC(hostname) {
+    try {
+      const dnskey = await this.resolver.resolveDnskey(hostname);
+      const ds = await this.resolver.resolveDs(hostname);
+
+      // Verify DNSSEC chain
+      // Implementation specific
+
+      return true;
+    } catch (err) {
+      console.error('DNSSEC verification failed:', err);
+      throw new Error('DNSSEC verification failed');
+    }
+  }
+}
+```
+
+## Related Topics
+
+- [Network Security](./security) - Network security best practices
+- [HTTP Server](./http-server) - HTTP server implementation
+- [TCP/IP](./tcp-ip) - TCP/IP networking fundamentals
+- [Performance](./performance) - Performance optimization techniques

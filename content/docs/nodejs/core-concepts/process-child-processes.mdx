@@ -1,0 +1,677 @@
+---
+description: A comprehensive guide to Process and Child Processes in Node.js, including process management, IPC communication, and worker threads
+title: Process and Child Processes
+---
+
+# Process and Child Processes
+
+Learn how to work with processes in Node.js, including process management, child processes, IPC communication, and worker threads.
+
+## Main Process Management
+
+### Process Information and Control
+
+```javascript
+// Basic process information
+console.log('Process ID:', process.pid);
+console.log('Node.js version:', process.version);
+console.log('Platform:', process.platform);
+console.log('Architecture:', process.arch);
+
+// Environment variables
+const { NODE_ENV, PORT } = process.env;
+console.log('Environment:', NODE_ENV);
+
+// Memory usage
+const memoryUsage = process.memoryUsage();
+console.log('Memory Usage:', {
+  heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB`,
+  heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`,
+  rss: `${Math.round(memoryUsage.rss / 1024 / 1024)} MB`,
+});
+
+// Process events
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  // Graceful shutdown
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// Graceful shutdown handler
+function gracefulShutdown() {
+  console.log('Received shutdown signal');
+  // Close database connections, servers, etc.
+  process.exit(0);
+}
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
+```
+
+### Process Arguments and Flags
+
+```javascript
+class ProcessArgs {
+  constructor() {
+    this.args = process.argv.slice(2);
+    this.flags = new Map();
+    this.parseArgs();
+  }
+
+  parseArgs() {
+    for (let i = 0; i < this.args.length; i++) {
+      const arg = this.args[i];
+
+      if (arg.startsWith('--')) {
+        const flag = arg.slice(2);
+        const value = this.args[i + 1];
+
+        if (value && !value.startsWith('--')) {
+          this.flags.set(flag, value);
+          i++;
+        } else {
+          this.flags.set(flag, true);
+        }
+      }
+    }
+  }
+
+  getFlag(name, defaultValue = null) {
+    return this.flags.get(name) ?? defaultValue;
+  }
+
+  hasFlag(name) {
+    return this.flags.has(name);
+  }
+}
+
+// Usage
+const processArgs = new ProcessArgs();
+if (processArgs.hasFlag('debug')) {
+  console.log('Debug mode enabled');
+}
+
+const port = processArgs.getFlag('port', '3000');
+console.log('Server port:', port);
+```
+
+## Child Processes
+
+### Spawning Child Processes
+
+```javascript
+const { spawn, exec, execFile, fork } = require('child_process');
+
+class ProcessManager {
+  static spawnProcess(command, args = [], options = {}) {
+    const child = spawn(command, args, {
+      stdio: 'pipe',
+      ...options,
+    });
+
+    child.stdout.on('data', (data) => {
+      console.log(`stdout: ${data}`);
+    });
+
+    child.stderr.on('data', (data) => {
+      console.error(`stderr: ${data}`);
+    });
+
+    child.on('close', (code) => {
+      console.log(`Child process exited with code ${code}`);
+    });
+
+    return child;
+  }
+
+  static executeCommand(command) {
+    return new Promise((resolve, reject) => {
+      exec(command, (error, stdout, stderr) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve({ stdout, stderr });
+      });
+    });
+  }
+
+  static executeFile(file, args = []) {
+    return new Promise((resolve, reject) => {
+      execFile(file, args, (error, stdout, stderr) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve({ stdout, stderr });
+      });
+    });
+  }
+
+  static forkProcess(modulePath, args = [], options = {}) {
+    const child = fork(modulePath, args, options);
+
+    child.on('message', (message) => {
+      console.log('Message from child:', message);
+    });
+
+    child.on('error', (error) => {
+      console.error('Fork error:', error);
+    });
+
+    return child;
+  }
+}
+
+// Usage examples
+async function runProcesses() {
+  // Spawn a long-running process
+  const ls = ProcessManager.spawnProcess('ls', ['-la']);
+
+  // Execute a command
+  try {
+    const { stdout } = await ProcessManager.executeCommand('git status');
+    console.log('Git status:', stdout);
+  } catch (error) {
+    console.error('Git command failed:', error);
+  }
+
+  // Fork a Node.js module
+  const worker = ProcessManager.forkProcess('./worker.js', ['--worker-arg']);
+  worker.send({ type: 'START', data: { task: 'process-data' } });
+}
+```
+
+### IPC Communication
+
+```javascript
+// parent.js
+class ParentProcess {
+  constructor() {
+    this.workers = new Map();
+    this.taskQueue = [];
+  }
+
+  spawnWorker(id) {
+    const worker = fork('./worker.js');
+    this.workers.set(id, worker);
+
+    worker.on('message', (message) => {
+      this.handleWorkerMessage(id, message);
+    });
+
+    worker.on('exit', (code) => {
+      console.log(`Worker ${id} exited with code ${code}`);
+      this.workers.delete(id);
+      this.respawnWorker(id);
+    });
+
+    return worker;
+  }
+
+  respawnWorker(id) {
+    console.log(`Respawning worker ${id}`);
+    this.spawnWorker(id);
+  }
+
+  handleWorkerMessage(workerId, message) {
+    switch (message.type) {
+      case 'READY':
+        this.assignTask(workerId);
+        break;
+      case 'RESULT':
+        console.log(`Worker ${workerId} result:`, message.data);
+        this.assignTask(workerId);
+        break;
+      case 'ERROR':
+        console.error(`Worker ${workerId} error:`, message.error);
+        break;
+    }
+  }
+
+  assignTask(workerId) {
+    const worker = this.workers.get(workerId);
+    const task = this.taskQueue.shift();
+
+    if (task && worker) {
+      worker.send({ type: 'TASK', data: task });
+    }
+  }
+
+  addTask(task) {
+    this.taskQueue.push(task);
+    // Try to assign to available worker
+    for (const [id, worker] of this.workers) {
+      this.assignTask(id);
+    }
+  }
+}
+
+// worker.js
+class Worker {
+  constructor() {
+    process.on('message', this.handleMessage.bind(this));
+    this.sendReady();
+  }
+
+  sendReady() {
+    process.send({ type: 'READY' });
+  }
+
+  async handleMessage(message) {
+    switch (message.type) {
+      case 'TASK':
+        try {
+          const result = await this.processTask(message.data);
+          process.send({ type: 'RESULT', data: result });
+        } catch (error) {
+          process.send({ type: 'ERROR', error: error.message });
+        }
+        break;
+    }
+  }
+
+  async processTask(task) {
+    // Task implementation
+    return task;
+  }
+}
+```
+
+## Worker Threads
+
+### Thread Pool Management
+
+```javascript
+const { Worker, isMainThread, parentPort } = require('worker_threads');
+
+class ThreadPool {
+  constructor(size, workerScript) {
+    this.size = size;
+    this.workerScript = workerScript;
+    this.workers = [];
+    this.taskQueue = [];
+    this.initialize();
+  }
+
+  initialize() {
+    for (let i = 0; i < this.size; i++) {
+      this.addWorker();
+    }
+  }
+
+  addWorker() {
+    const worker = new Worker(this.workerScript);
+
+    worker.on('message', (result) => {
+      this.handleTaskCompletion(worker, result);
+    });
+
+    worker.on('error', (error) => {
+      console.error('Worker error:', error);
+      this.replaceWorker(worker);
+    });
+
+    worker.on('exit', (code) => {
+      if (code !== 0) {
+        console.error(`Worker exited with code ${code}`);
+        this.replaceWorker(worker);
+      }
+    });
+
+    this.workers.push(worker);
+    return worker;
+  }
+
+  replaceWorker(worker) {
+    const index = this.workers.indexOf(worker);
+    if (index !== -1) {
+      this.workers.splice(index, 1);
+      this.addWorker();
+    }
+  }
+
+  async executeTask(task) {
+    return new Promise((resolve, reject) => {
+      const taskWrapper = {
+        task,
+        resolve,
+        reject,
+      };
+
+      this.taskQueue.push(taskWrapper);
+      this.assignTasks();
+    });
+  }
+
+  assignTasks() {
+    const availableWorker = this.workers.find((worker) => !worker.activeTask);
+
+    if (availableWorker && this.taskQueue.length > 0) {
+      const task = this.taskQueue.shift();
+      availableWorker.activeTask = task;
+      availableWorker.postMessage(task.task);
+    }
+  }
+
+  handleTaskCompletion(worker, result) {
+    const task = worker.activeTask;
+    worker.activeTask = null;
+
+    if (task) {
+      task.resolve(result);
+    }
+
+    this.assignTasks();
+  }
+
+  terminate() {
+    return Promise.all(this.workers.map((worker) => worker.terminate()));
+  }
+}
+
+// Example worker script (worker.js)
+if (!isMainThread) {
+  parentPort.on('message', async (task) => {
+    try {
+      const result = await processTask(task);
+      parentPort.postMessage(result);
+    } catch (error) {
+      parentPort.postMessage({ error: error.message });
+    }
+  });
+}
+```
+
+## Performance Optimization
+
+### Process Monitoring
+
+```javascript
+class ProcessMonitor {
+  constructor(options = {}) {
+    this.interval = options.interval || 5000;
+    this.thresholds = {
+      cpu: options.cpuThreshold || 80,
+      memory: options.memoryThreshold || 80,
+      ...options.thresholds,
+    };
+
+    this.metrics = {
+      cpu: [],
+      memory: [],
+      eventLoop: [],
+    };
+  }
+
+  start() {
+    this.timer = setInterval(() => this.collect(), this.interval);
+    this.startEventLoopMonitoring();
+  }
+
+  stop() {
+    clearInterval(this.timer);
+  }
+
+  async collect() {
+    const metrics = {
+      timestamp: Date.now(),
+      cpu: await this.getCPUUsage(),
+      memory: this.getMemoryUsage(),
+      eventLoop: this.getEventLoopLag(),
+    };
+
+    this.updateMetrics(metrics);
+    this.checkThresholds(metrics);
+  }
+
+  getCPUUsage() {
+    return new Promise((resolve) => {
+      const startUsage = process.cpuUsage();
+      const startTime = process.hrtime();
+
+      setTimeout(() => {
+        const endUsage = process.cpuUsage(startUsage);
+        const endTime = process.hrtime(startTime);
+
+        const elapsed = endTime[0] * 1e6 + endTime[1] / 1e3;
+        const usage = ((endUsage.user + endUsage.system) / elapsed) * 100;
+
+        resolve(usage);
+      }, 100);
+    });
+  }
+
+  getMemoryUsage() {
+    const { heapUsed, heapTotal } = process.memoryUsage();
+    return (heapUsed / heapTotal) * 100;
+  }
+
+  startEventLoopMonitoring() {
+    let lastCheck = Date.now();
+
+    setInterval(() => {
+      const now = Date.now();
+      const lag = now - lastCheck - 1000;
+      lastCheck = now;
+
+      this.metrics.eventLoop.push({
+        timestamp: now,
+        lag,
+      });
+    }, 1000);
+  }
+
+  getEventLoopLag() {
+    if (this.metrics.eventLoop.length === 0) return 0;
+    return this.metrics.eventLoop[this.metrics.eventLoop.length - 1].lag;
+  }
+
+  updateMetrics(metrics) {
+    Object.keys(metrics).forEach((key) => {
+      if (Array.isArray(this.metrics[key])) {
+        this.metrics[key].push({
+          timestamp: metrics.timestamp,
+          value: metrics[key],
+        });
+
+        // Keep last hour of metrics
+        const oneHourAgo = Date.now() - 3600000;
+        this.metrics[key] = this.metrics[key].filter(
+          (m) => m.timestamp > oneHourAgo
+        );
+      }
+    });
+  }
+
+  checkThresholds(metrics) {
+    Object.keys(this.thresholds).forEach((key) => {
+      if (metrics[key] > this.thresholds[key]) {
+        this.emitAlert(key, metrics[key]);
+      }
+    });
+  }
+
+  emitAlert(metric, value) {
+    console.warn(`Alert: ${metric} usage is high (${value.toFixed(2)}%)`);
+    // Implement alert mechanism (e.g., send to monitoring service)
+  }
+
+  getMetrics() {
+    return this.metrics;
+  }
+}
+```
+
+## Best Practices
+
+### Error Handling
+
+```javascript
+class ProcessErrorHandler {
+  static setupErrorHandlers() {
+    // Uncaught exceptions
+    process.on('uncaughtException', (error) => {
+      console.error('Uncaught Exception:', error);
+      this.handleFatalError(error);
+    });
+
+    // Unhandled promise rejections
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled Rejection:', reason);
+      this.handleFatalError(reason);
+    });
+
+    // Memory warnings
+    process.on('warning', (warning) => {
+      if (warning.name === 'HeapSizeLimit') {
+        this.handleMemoryWarning(warning);
+      }
+    });
+  }
+
+  static handleFatalError(error) {
+    // Log error details
+    console.error('Fatal error occurred:', {
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Attempt cleanup
+    this.cleanup()
+      .catch((err) => console.error('Cleanup failed:', err))
+      .finally(() => process.exit(1));
+  }
+
+  static async cleanup() {
+    // Close database connections
+    // Shutdown servers
+    // Cancel running tasks
+    // etc.
+  }
+
+  static handleMemoryWarning(warning) {
+    const memoryUsage = process.memoryUsage();
+    console.warn('Memory warning:', {
+      warning: warning.message,
+      heapUsed: memoryUsage.heapUsed,
+      heapTotal: memoryUsage.heapTotal,
+      timestamp: new Date().toISOString(),
+    });
+
+    // Implement memory cleanup strategies
+    global.gc && global.gc();
+  }
+}
+```
+
+### Security Considerations
+
+```javascript
+class ProcessSecurity {
+  static secureProcess() {
+    // Set secure environment
+    process.env.NODE_ENV = process.env.NODE_ENV || 'production';
+
+    // Disable command-line debugging/REPL
+    process.execArgv = process.execArgv.filter(
+      (arg) => !arg.includes('--inspect')
+    );
+
+    // Set memory limits
+    this.setMemoryLimits();
+
+    // Handle signals securely
+    this.setupSecureSignalHandlers();
+
+    // Secure child process creation
+    this.secureChildProcesses();
+  }
+
+  static setMemoryLimits() {
+    // Set max old space size
+    const maxOldSpaceSize = 2048; // MB
+    process.execArgv.push(`--max-old-space-size=${maxOldSpaceSize}`);
+
+    // Monitor memory usage
+    setInterval(() => {
+      const memoryUsage = process.memoryUsage();
+      if (memoryUsage.heapUsed > maxOldSpaceSize * 0.9 * 1024 * 1024) {
+        console.warn('Memory usage approaching limit');
+      }
+    }, 30000);
+  }
+
+  static setupSecureSignalHandlers() {
+    // Prevent unauthorized SIGKILL
+    process.on('SIGTERM', () => {
+      console.log('Received SIGTERM');
+      this.gracefulShutdown();
+    });
+
+    process.on('SIGINT', () => {
+      console.log('Received SIGINT');
+      this.gracefulShutdown();
+    });
+  }
+
+  static secureChildProcesses() {
+    const { spawn } = require('child_process');
+    const originalSpawn = spawn;
+
+    // Override spawn to enforce security options
+    global.spawn = (command, args, options = {}) => {
+      const secureOptions = {
+        ...options,
+        shell: false, // Prevent shell injection
+        uid: process.getuid(), // Run as current user
+        gid: process.getgid(),
+        env: this.sanitizeEnv(options.env),
+      };
+
+      return originalSpawn(command, args, secureOptions);
+    };
+  }
+
+  static sanitizeEnv(env = {}) {
+    const safeEnv = { ...process.env };
+
+    // Remove sensitive environment variables
+    const sensitiveVars = ['AWS_SECRET_KEY', 'DB_PASSWORD'];
+    sensitiveVars.forEach((variable) => {
+      delete safeEnv[variable];
+    });
+
+    return { ...safeEnv, ...env };
+  }
+
+  static async gracefulShutdown() {
+    console.log('Starting graceful shutdown');
+
+    try {
+      // Cleanup resources
+      await this.cleanup();
+      process.exit(0);
+    } catch (error) {
+      console.error('Error during shutdown:', error);
+      process.exit(1);
+    }
+  }
+
+  static async cleanup() {
+    // Implement resource cleanup
+  }
+}
+```
+
+## Related Topics
+
+- [Event Loop](./event-loop) - Understanding the Node.js event loop
+- [Error Handling](./error-handling) - Comprehensive error handling strategies
+- [Performance](./performance) - Performance optimization techniques
+- [Security](./security) - Security best practices

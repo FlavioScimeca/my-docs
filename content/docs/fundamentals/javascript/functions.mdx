@@ -1,0 +1,242 @@
+---
+description: Learn about JavaScript functions, scope, and closures
+title: JavaScript Functions
+---
+
+# JavaScript Functions
+
+Functions are one of the fundamental building blocks in JavaScript. A function is a reusable block of code designed to perform a particular task.
+
+## Function Declarations
+
+There are several ways to define functions in JavaScript:
+
+### Function Declaration
+
+The most traditional way to define a function:
+
+```javascript
+function greet(name) {
+  return `Hello, ${name}!`;
+}
+
+console.log(greet('Alice')); // Output: Hello, Alice!
+```
+
+Function declarations are hoisted, meaning they can be called before they are defined in the code.
+
+### Function Expression
+
+Defining a function as part of an expression:
+
+```javascript
+const sayHello = function (name) {
+  return `Hello, ${name}!`;
+};
+
+console.log(sayHello('Bob')); // Output: Hello, Bob!
+```
+
+Function expressions are not hoisted, so they must be defined before they are called.
+
+### Arrow Functions
+
+Introduced in ES6, arrow functions provide a more concise syntax:
+
+```javascript
+const welcome = (name) => `Welcome, ${name}!`;
+
+// Multiline arrow function with block body
+const greetUser = (name) => {
+  const timeOfDay = new Date().getHours() < 12 ? 'morning' : 'day';
+  return `Good ${timeOfDay}, ${name}!`;
+};
+
+console.log(welcome('Charlie')); // Output: Welcome, Charlie!
+```
+
+Arrow functions have lexical `this` binding, which means they don't have their own `this` context.
+
+## Function Parameters
+
+### Default Parameters
+
+ES6 introduced default parameter values:
+
+```javascript
+function greetWithDefault(name = 'Guest') {
+  return `Hello, ${name}!`;
+}
+
+console.log(greetWithDefault()); // Output: Hello, Guest!
+console.log(greetWithDefault('Dave')); // Output: Hello, Dave!
+```
+
+### Rest Parameters
+
+Collect multiple arguments into an array:
+
+```javascript
+function sum(...numbers) {
+  return numbers.reduce((total, num) => total + num, 0);
+}
+
+console.log(sum(1, 2, 3, 4, 5)); // Output: 15
+```
+
+### Parameter Destructuring
+
+Extract properties from objects or elements from arrays passed as parameters:
+
+```javascript
+function printUserInfo({ name, age, email = 'N/A' }) {
+  console.log(`Name: ${name}, Age: ${age}, Email: ${email}`);
+}
+
+const user = { name: 'John', age: 30 };
+printUserInfo(user); // Output: Name: John, Age: 30, Email: N/A
+```
+
+## Function Scope and Closures
+
+### Variable Scope
+
+JavaScript has function scope and block scope:
+
+```javascript
+// Scope example
+function outer() {
+  let outerVar = 'I am outside!';
+
+  function inner() {
+    let innerVar = 'I am inside!';
+    console.log(outerVar); // Can access outer variable
+  }
+
+  inner();
+  // console.log(innerVar); // Error: innerVar is not defined
+}
+
+outer();
+```
+
+### Closures
+
+A closure is a function that remembers its outer variables and can access them:
+
+```javascript
+// Closure example
+function createCounter() {
+  let count = 0;
+
+  return function () {
+    count++;
+    return count;
+  };
+}
+
+const counter = createCounter();
+console.log(counter()); // Output: 1
+console.log(counter()); // Output: 2
+console.log(counter()); // Output: 3
+
+// A second counter is independent of the first
+const counter2 = createCounter();
+console.log(counter2()); // Output: 1
+```
+
+Closures are commonly used for:
+
+- Data encapsulation
+- Function factories
+- Maintaining state between function calls
+
+## Advanced Function Concepts
+
+### Immediately Invoked Function Expressions (IIFE)
+
+Create and execute a function immediately:
+
+```javascript
+(function () {
+  const privateVar = 'I am private';
+  console.log('This runs immediately!');
+})();
+
+// With parameters
+(function (name) {
+  console.log(`Hello, ${name}!`);
+})('World');
+```
+
+### Higher-Order Functions
+
+Functions that take functions as arguments or return functions:
+
+```javascript
+// Function as an argument
+function executeOperation(operation, a, b) {
+  return operation(a, b);
+}
+
+const add = (x, y) => x + y;
+const multiply = (x, y) => x * y;
+
+console.log(executeOperation(add, 5, 3)); // Output: 8
+console.log(executeOperation(multiply, 5, 3)); // Output: 15
+
+// Function returning a function
+function createMultiplier(factor) {
+  return function (number) {
+    return number * factor;
+  };
+}
+
+const double = createMultiplier(2);
+const triple = createMultiplier(3);
+
+console.log(double(5)); // Output: 10
+console.log(triple(5)); // Output: 15
+```
+
+### Method Chaining
+
+Design functions to enable method chaining:
+
+```javascript
+class Calculator {
+  constructor() {
+    this.value = 0;
+  }
+
+  add(n) {
+    this.value += n;
+    return this;
+  }
+
+  subtract(n) {
+    this.value -= n;
+    return this;
+  }
+
+  multiply(n) {
+    this.value *= n;
+    return this;
+  }
+
+  getValue() {
+    return this.value;
+  }
+}
+
+const result = new Calculator().add(5).multiply(2).subtract(3).getValue();
+
+console.log(result); // Output: 7
+```
+
+## Related Topics
+
+- [Basic Syntax](./basic-syntax) - JavaScript fundamentals including variables and control flow
+- [Objects and Arrays](./objects-arrays) - Complex data structures and operations
+- [Classes and Prototypes](./classes-prototypes) - Object-oriented programming patterns
+- [Modern Features](./modern-features) - Modern JavaScript features including destructuring

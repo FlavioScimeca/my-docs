@@ -1,0 +1,352 @@
+---
+description: A comprehensive guide to Regular Expressions in JavaScript, covering pattern syntax, methods, flags, and practical examples
+title: Regular Expressions in JavaScript
+---
+
+# Regular Expressions in JavaScript
+
+Regular expressions (regex) are powerful patterns used to match character combinations in strings. This guide covers everything you need to know about using regex in JavaScript.
+
+## Creating Regular Expressions
+
+```javascript
+// Literal notation
+const pattern1 = /hello/;
+const pattern2 = /hello/i; // With flags
+
+// Constructor notation
+const pattern3 = new RegExp('hello');
+const pattern4 = new RegExp('hello', 'i'); // With flags
+
+// Dynamic patterns
+const keyword = 'hello';
+const pattern5 = new RegExp(keyword);
+
+// Escaping special characters
+const pattern6 = /\./; // Matches literal dot
+const pattern7 = new RegExp('\\.'); // Same as above
+```
+
+## Pattern Syntax
+
+### Basic Patterns
+
+```javascript
+// Literal characters
+const literalPattern = /cat/;
+console.log(literalPattern.test('cat')); // true
+console.log(literalPattern.test('Cat')); // false
+
+// Character classes
+const vowelPattern = /[aeiou]/; // Matches any vowel
+const notVowelPattern = /[^aeiou]/; // Matches any character except vowels
+const alphaPattern = /[a-zA-Z]/; // Matches any letter
+const digitPattern = /[0-9]/; // Matches any digit
+
+// Shorthand character classes
+const wordChar = /\w/; // Same as [a-zA-Z0-9_]
+const digitChar = /\d/; // Same as [0-9]
+const whitespaceChar = /\s/; // Matches spaces, tabs, newlines
+const anyChar = /./; // Matches any character except newline
+
+// Negated shorthand classes
+const notWord = /\W/; // Same as [^a-zA-Z0-9_]
+const notDigit = /\D/; // Same as [^0-9]
+const notWhitespace = /\S/; // Matches non-whitespace
+```
+
+### Quantifiers
+
+```javascript
+// Basic quantifiers
+const zeroOrOne = /colou?r/; // Matches 'color' or 'colour'
+const zeroOrMore = /go*/; // Matches 'g', 'go', 'goo', etc.
+const oneOrMore = /go+/; // Matches 'go', 'goo', etc. but not 'g'
+
+// Specific quantities
+const exactCount = /go{3}/; // Matches exactly 'gooo'
+const rangeCount = /go{2,4}/; // Matches 'goo', 'gooo', 'goooo'
+const atLeastCount = /go{2,}/; // Matches 'goo', 'gooo', etc.
+
+// Greedy vs lazy quantifiers
+const greedyMatch = /<.*>/; // Greedy - matches as much as possible
+const lazyMatch = /<.*?>/; // Lazy - matches as little as possible
+
+// Examples
+const html = '<p>First</p><p>Second</p>';
+console.log(html.match(greedyMatch)[0]); // '<p>First</p><p>Second</p>'
+console.log(html.match(lazyMatch)[0]); // '<p>'
+```
+
+### Anchors and Boundaries
+
+```javascript
+// Start and end anchors
+const startsWith = /^hello/; // Matches 'hello' at start of string
+const endsWith = /world$/; // Matches 'world' at end of string
+
+// Word boundaries
+const wordBoundary = /\bcat\b/; // Matches 'cat' but not 'category'
+const notWordBoundary = /\Bcat\B/; // Matches 'cat' in 'scatter' but not 'cat'
+
+// Examples
+console.log(startsWith.test('hello world')); // true
+console.log(startsWith.test('say hello')); // false
+console.log(wordBoundary.test('my cat')); // true
+console.log(wordBoundary.test('category')); // false
+```
+
+### Groups and References
+
+```javascript
+// Capturing groups
+const groupPattern = /(foo)(bar)/;
+const match = 'foobar'.match(groupPattern);
+console.log(match[0]); // 'foobar'
+console.log(match[1]); // 'foo'
+console.log(match[2]); // 'bar'
+
+// Named capturing groups
+const namedGroup = /(?<year>\d{4})-(?<month>\d{2})-(?<day>\d{2})/;
+const dateMatch = '2024-03-15'.match(namedGroup);
+console.log(dateMatch.groups.year); // '2024'
+console.log(dateMatch.groups.month); // '03'
+console.log(dateMatch.groups.day); // '15'
+
+// Non-capturing groups
+const nonCapturing = /(?:foo)bar/;
+const ncMatch = 'foobar'.match(nonCapturing);
+console.log(ncMatch[0]); // 'foobar'
+console.log(ncMatch[1]); // undefined
+
+// Backreferences
+const duplicate = /([a-z])\1/; // Matches repeated letters
+console.log(duplicate.test('hello')); // true (matches 'll')
+console.log(duplicate.test('world')); // false
+
+// Named backreferences
+const quotedText = /(?<quote>['"]).*?\k<quote>/;
+console.log(quotedText.test("'hello'")); // true
+console.log(quotedText.test('\'hello"')); // false
+```
+
+## RegExp Methods
+
+### test() and exec()
+
+```javascript
+// test() - returns boolean
+const pattern = /hello/i;
+console.log(pattern.test('Hello World')); // true
+console.log(pattern.test('Hi World')); // false
+
+// exec() - returns array with details or null
+const execPattern = /(\w+)\s(\w+)/;
+const result = execPattern.exec('Hello World');
+console.log(result[0]); // 'Hello World'
+console.log(result[1]); // 'Hello'
+console.log(result[2]); // 'World'
+console.log(result.index); // 0
+console.log(result.input); // 'Hello World'
+
+// Global flag with exec()
+const globalPattern = /\w+/g;
+let match;
+while ((match = globalPattern.exec('Hello World')) !== null) {
+  console.log(match[0], match.index);
+}
+```
+
+### String Methods with RegExp
+
+```javascript
+// match()
+const str = 'The quick brown fox';
+console.log(str.match(/\w+/g)); // ['The', 'quick', 'brown', 'fox']
+
+// matchAll()
+const matches = [...str.matchAll(/\w+/g)];
+matches.forEach((match) => {
+  console.log(match[0], match.index);
+});
+
+// search()
+console.log(str.search(/brown/)); // 10
+
+// replace()
+console.log(str.replace(/quick|brown/g, 'lazy')); // 'The lazy lazy fox'
+
+// replaceAll() (ES2021)
+console.log(str.replaceAll(/\w+/g, 'word')); // 'word word word word'
+
+// split()
+console.log(str.split(/\s+/)); // ['The', 'quick', 'brown', 'fox']
+```
+
+## RegExp Flags
+
+```javascript
+// g - global
+const globalFlag = /\w+/g;
+console.log('hello world'.match(globalFlag)); // ['hello', 'world']
+
+// i - case-insensitive
+const caseInsensitive = /hello/i;
+console.log(caseInsensitive.test('Hello')); // true
+
+// m - multiline
+const multiline = /^hello/m;
+console.log(multiline.test('world\nhello')); // true
+
+// s - dot all
+const dotAll = /./s;
+console.log(dotAll.test('\n')); // true
+
+// u - unicode
+const unicode = /\u{1F600}/u;
+console.log(unicode.test('😀')); // true
+
+// y - sticky
+const sticky = /\w+/y;
+sticky.lastIndex = 6;
+console.log(sticky.test('hello world')); // true if starting at position 6
+```
+
+## Common Use Cases
+
+### Form Validation
+
+```javascript
+// Email validation
+const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+function validateEmail(email) {
+  return emailPattern.test(email);
+}
+
+// Password strength
+const passwordPattern =
+  /^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{8,}$/;
+function validatePassword(password) {
+  return passwordPattern.test(password);
+}
+
+// Phone number
+const phonePattern = /^\+?(\d{1,3})?[-. ]?\(?\d{3}\)?[-. ]?\d{3}[-. ]?\d{4}$/;
+function validatePhone(phone) {
+  return phonePattern.test(phone);
+}
+
+// URL validation
+const urlPattern = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/;
+function validateURL(url) {
+  return urlPattern.test(url);
+}
+```
+
+### String Manipulation
+
+```javascript
+// Format dates
+function formatDate(dateString) {
+  return dateString.replace(/(\d{4})-(\d{2})-(\d{2})/, '$2/$3/$1');
+}
+
+// Extract domain from URL
+function getDomain(url) {
+  const match = url.match(
+    /^(?:https?:\/\/)?(?:[^@\n]+@)?(?:www\.)?([^:\/\n?]+)/
+  );
+  return match ? match[1] : null;
+}
+
+// Convert camelCase to kebab-case
+function toKebabCase(str) {
+  return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
+}
+
+// Format numbers with commas
+function formatNumber(num) {
+  return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+```
+
+### Text Parsing
+
+````javascript
+// Extract hashtags
+function getHashtags(text) {
+  return text.match(/#[\w]+/g) || [];
+}
+
+// Extract mentions
+function getMentions(text) {
+  return text.match(/@[\w]+/g) || [];
+}
+
+// Parse markdown links
+function parseMarkdownLinks(text) {
+  const linkPattern = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const links = [];
+  let match;
+
+  while ((match = linkPattern.exec(text)) !== null) {
+    links.push({
+      text: match[1],
+      url: match[2],
+    });
+  }
+
+  return links;
+}
+
+// Parse code blocks
+function parseCodeBlocks(text) {
+  const codePattern = /```(\w+)?\n([\s\S]*?)\n```/g;
+  const blocks = [];
+  let match;
+
+  while ((match = codePattern.exec(text)) !== null) {
+    blocks.push({
+      language: match[1] || 'text',
+      code: match[2],
+    });
+  }
+
+  return blocks;
+}
+````
+
+## Performance Considerations
+
+```javascript
+// Bad - recreating regex in loop
+for (let i = 0; i < 1000; i++) {
+  const pattern = new RegExp('test');
+  pattern.test(string);
+}
+
+// Good - create regex once
+const pattern = /test/;
+for (let i = 0; i < 1000; i++) {
+  pattern.test(string);
+}
+
+// Bad - using greedy quantifiers with large input
+const greedyPattern = /<.*>/g;
+
+// Good - using non-greedy quantifiers
+const betterPattern = /<.*?>/g;
+
+// Bad - catastrophic backtracking
+const badPattern = /^(\w+\s+)*$/;
+
+// Good - avoid backtracking
+const goodPattern = /^[\w\s]*$/;
+```
+
+## Related Topics
+
+- [String Methods](./string-methods) - String manipulation in JavaScript
+- [Unicode](./unicode) - Working with Unicode in JavaScript
+- [Performance Optimization](./performance-optimization) - Performance best practices
+- [Form Validation](./form-validation) - Form validation techniques

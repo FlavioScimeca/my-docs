@@ -1,0 +1,488 @@
+---
+description: A comprehensive guide to WebAssembly Integration in JavaScript, including loading and using WebAssembly modules, memory management, and performance optimization
+title: WebAssembly Integration in JavaScript
+---
+
+# WebAssembly Integration in JavaScript
+
+WebAssembly (Wasm) allows running high-performance code written in languages like C++ and Rust in the browser. This guide covers how to integrate WebAssembly with JavaScript.
+
+## Loading WebAssembly Modules
+
+### Basic Loading
+
+```javascript
+// Load WebAssembly module
+async function loadWasmModule(wasmUrl) {
+  try {
+    const response = await fetch(wasmUrl);
+    const bytes = await response.arrayBuffer();
+    const wasmModule = await WebAssembly.instantiate(bytes);
+    return wasmModule.instance;
+  } catch (error) {
+    console.error('Failed to load Wasm module:', error);
+    throw error;
+  }
+}
+
+// Usage
+const wasmInstance = await loadWasmModule('module.wasm');
+const result = wasmInstance.exports.add(5, 3);
+console.log('Result:', result);
+
+// Streaming instantiation
+async function loadWasmModuleStreaming(wasmUrl) {
+  try {
+    const response = await fetch(wasmUrl);
+    const wasmModule = await WebAssembly.instantiateStreaming(response);
+    return wasmModule.instance;
+  } catch (error) {
+    console.error('Failed to load Wasm module:', error);
+    throw error;
+  }
+}
+```
+
+### Module Configuration
+
+```javascript
+// Import object for module configuration
+const importObject = {
+  env: {
+    memory: new WebAssembly.Memory({ initial: 256, maximum: 512 }),
+    log: function (value) {
+      console.log('Wasm log:', value);
+    },
+    time: function () {
+      return Date.now();
+    },
+  },
+};
+
+// Load module with imports
+async function loadConfiguredModule(wasmUrl) {
+  const response = await fetch(wasmUrl);
+  const wasmModule = await WebAssembly.instantiateStreaming(
+    response,
+    importObject
+  );
+  return wasmModule.instance;
+}
+
+// Create shared memory
+const memory = new WebAssembly.Memory({
+  initial: 256, // Initial size in pages (64KB each)
+  maximum: 512, // Maximum size in pages
+  shared: true, // Enable shared memory
+});
+```
+
+## Memory Management
+
+### Linear Memory
+
+```javascript
+// Access Wasm memory from JavaScript
+function accessWasmMemory(wasmInstance) {
+  const memory = wasmInstance.exports.memory;
+  const buffer = new Uint8Array(memory.buffer);
+
+  // Read from memory
+  const value = buffer[0];
+
+  // Write to memory
+  buffer[1] = 42;
+
+  return value;
+}
+
+// Working with arrays
+function passArrayToWasm(wasmInstance, array) {
+  const { memory } = wasmInstance.exports;
+  const buffer = new Uint8Array(memory.buffer);
+
+  // Copy array to Wasm memory
+  buffer.set(array, 0);
+
+  // Call Wasm function with pointer and length
+  return wasmInstance.exports.processArray(0, array.length);
+}
+
+// Handle dynamic memory
+function handleDynamicMemory(wasmInstance, size) {
+  const { memory } = wasmInstance.exports;
+
+  // Check if we need to grow memory
+  const currentPages = memory.buffer.byteLength / 65536;
+  const requiredPages = Math.ceil(size / 65536);
+
+  if (currentPages < requiredPages) {
+    memory.grow(requiredPages - currentPages);
+  }
+
+  return new Uint8Array(memory.buffer);
+}
+```
+
+### TypedArrays and DataView
+
+```javascript
+// Working with different data types
+function workWithTypedArrays(wasmInstance) {
+  const { memory } = wasmInstance.exports;
+
+  // Integer arrays
+  const int32Array = new Int32Array(memory.buffer);
+  const uint8Array = new Uint8Array(memory.buffer);
+
+  // Float arrays
+  const float32Array = new Float32Array(memory.buffer);
+  const float64Array = new Float64Array(memory.buffer);
+
+  // DataView for mixed data
+  const dataView = new DataView(memory.buffer);
+
+  return {
+    readInt32: (offset) => dataView.getInt32(offset, true),
+    writeInt32: (offset, value) => dataView.setInt32(offset, value, true),
+    readFloat64: (offset) => dataView.getFloat64(offset, true),
+    writeFloat64: (offset, value) => dataView.setFloat64(offset, value, true),
+  };
+}
+
+// String handling
+function handleStrings(wasmInstance) {
+  const { memory } = wasmInstance.exports;
+
+  function writeString(str, offset) {
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(str);
+    const buffer = new Uint8Array(memory.buffer);
+    buffer.set(bytes, offset);
+    return bytes.length;
+  }
+
+  function readString(offset, length) {
+    const buffer = new Uint8Array(memory.buffer, offset, length);
+    const decoder = new TextDecoder();
+    return decoder.decode(buffer);
+  }
+
+  return { writeString, readString };
+}
+```
+
+## Performance Optimization
+
+### Memory Access Patterns
+
+```javascript
+// Optimize memory access
+function optimizeMemoryAccess(wasmInstance) {
+  const { memory } = wasmInstance.exports;
+
+  // Cache typed arrays
+  const int32Array = new Int32Array(memory.buffer);
+  const float64Array = new Float64Array(memory.buffer);
+
+  // Batch operations
+  function processBatch(data, batchSize) {
+    const totalSize = data.length;
+    const results = new Array(totalSize);
+
+    for (let i = 0; i < totalSize; i += batchSize) {
+      const end = Math.min(i + batchSize, totalSize);
+      const batch = data.slice(i, end);
+
+      // Copy batch to Wasm memory
+      int32Array.set(batch, 0);
+
+      // Process batch
+      wasmInstance.exports.processBatch(0, batch.length);
+
+      // Copy results back
+      results.push(...int32Array.slice(0, batch.length));
+    }
+
+    return results;
+  }
+
+  return { processBatch };
+}
+
+// Minimize copying
+function minimizeCopying(wasmInstance) {
+  const { memory } = wasmInstance.exports;
+
+  // Use shared buffer views
+  const sharedBuffer = new SharedArrayBuffer(1024);
+  const sharedView = new Int32Array(sharedBuffer);
+
+  // Direct memory mapping
+  function mapMemory(size) {
+    const buffer = memory.buffer;
+    return {
+      int32: new Int32Array(buffer, 0, size / 4),
+      float64: new Float64Array(buffer, 0, size / 8),
+    };
+  }
+
+  return { sharedView, mapMemory };
+}
+```
+
+### Parallel Processing
+
+```javascript
+// Web Worker with Wasm
+function createWasmWorker(wasmUrl) {
+  const worker = new Worker('wasm-worker.js');
+
+  // Initialize worker
+  worker.postMessage({ type: 'INIT', wasmUrl });
+
+  return {
+    process: function (data) {
+      return new Promise((resolve, reject) => {
+        worker.onmessage = (e) => {
+          if (e.data.error) {
+            reject(e.data.error);
+          } else {
+            resolve(e.data.result);
+          }
+        };
+
+        worker.postMessage({ type: 'PROCESS', data });
+      });
+    },
+    terminate: () => worker.terminate(),
+  };
+}
+
+// wasm-worker.js
+let wasmInstance = null;
+
+self.onmessage = async function (e) {
+  switch (e.data.type) {
+    case 'INIT':
+      try {
+        const response = await fetch(e.data.wasmUrl);
+        const wasmModule = await WebAssembly.instantiateStreaming(response);
+        wasmInstance = wasmModule.instance;
+        self.postMessage({ type: 'READY' });
+      } catch (error) {
+        self.postMessage({ error: error.message });
+      }
+      break;
+
+    case 'PROCESS':
+      if (!wasmInstance) {
+        self.postMessage({ error: 'Wasm module not initialized' });
+        return;
+      }
+
+      try {
+        const result = wasmInstance.exports.processData(e.data.data);
+        self.postMessage({ result });
+      } catch (error) {
+        self.postMessage({ error: error.message });
+      }
+      break;
+  }
+};
+```
+
+## Debugging and Testing
+
+### Debug Tools
+
+```javascript
+// Debug utilities
+class WasmDebugger {
+  constructor(wasmInstance) {
+    this.instance = wasmInstance;
+    this.memory = wasmInstance.exports.memory;
+  }
+
+  dumpMemory(start, length) {
+    const buffer = new Uint8Array(this.memory.buffer, start, length);
+    console.log('Memory dump:', Array.from(buffer));
+  }
+
+  watchMemory(address, length) {
+    const buffer = new Uint8Array(this.memory.buffer);
+    let lastValue = buffer[address];
+
+    setInterval(() => {
+      const newValue = buffer[address];
+      if (newValue !== lastValue) {
+        console.log(
+          `Memory at ${address} changed: ${lastValue} -> ${newValue}`
+        );
+        lastValue = newValue;
+      }
+    }, 100);
+  }
+
+  traceCall(funcName, ...args) {
+    console.log(`Calling ${funcName}(${args.join(', ')})`);
+    const result = this.instance.exports[funcName](...args);
+    console.log(`${funcName} returned:`, result);
+    return result;
+  }
+}
+
+// Memory leak detection
+function detectMemoryLeaks(wasmInstance) {
+  const initialPages = wasmInstance.exports.memory.buffer.byteLength / 65536;
+  let maxPages = initialPages;
+
+  return function checkMemory() {
+    const currentPages = wasmInstance.exports.memory.buffer.byteLength / 65536;
+    if (currentPages > maxPages) {
+      console.warn(`Memory grew from ${maxPages} to ${currentPages} pages`);
+      maxPages = currentPages;
+    }
+    return currentPages - initialPages;
+  };
+}
+```
+
+### Testing Utilities
+
+```javascript
+// Test helpers
+class WasmTester {
+  constructor(wasmInstance) {
+    this.instance = wasmInstance;
+  }
+
+  async runTests(tests) {
+    const results = [];
+
+    for (const test of tests) {
+      try {
+        const result = await this.instance.exports[test.func](...test.args);
+        const passed = result === test.expected;
+
+        results.push({
+          name: test.name,
+          passed,
+          result,
+          expected: test.expected,
+        });
+      } catch (error) {
+        results.push({
+          name: test.name,
+          passed: false,
+          error: error.message,
+        });
+      }
+    }
+
+    return results;
+  }
+
+  benchmarkFunction(funcName, args, iterations = 1000) {
+    const start = performance.now();
+
+    for (let i = 0; i < iterations; i++) {
+      this.instance.exports[funcName](...args);
+    }
+
+    const end = performance.now();
+    return {
+      totalTime: end - start,
+      averageTime: (end - start) / iterations,
+    };
+  }
+}
+```
+
+## Best Practices
+
+```javascript
+// Module loading best practices
+class WasmModule {
+  constructor(wasmUrl, importObject = {}) {
+    this.wasmUrl = wasmUrl;
+    this.importObject = importObject;
+    this.instance = null;
+  }
+
+  async initialize() {
+    try {
+      // Use streaming instantiation when possible
+      if (WebAssembly.instantiateStreaming) {
+        const response = await fetch(this.wasmUrl);
+        const { instance } = await WebAssembly.instantiateStreaming(
+          response,
+          this.importObject
+        );
+        this.instance = instance;
+      } else {
+        // Fallback to ArrayBuffer instantiation
+        const response = await fetch(this.wasmUrl);
+        const bytes = await response.arrayBuffer();
+        const { instance } = await WebAssembly.instantiate(
+          bytes,
+          this.importObject
+        );
+        this.instance = instance;
+      }
+    } catch (error) {
+      console.error('Failed to initialize Wasm module:', error);
+      throw error;
+    }
+  }
+
+  // Safe function calling
+  callFunction(funcName, ...args) {
+    if (!this.instance) {
+      throw new Error('Module not initialized');
+    }
+
+    const func = this.instance.exports[funcName];
+    if (typeof func !== 'function') {
+      throw new Error(`Function ${funcName} not found`);
+    }
+
+    return func(...args);
+  }
+}
+
+// Memory management best practices
+class WasmMemoryManager {
+  constructor(wasmInstance) {
+    this.instance = wasmInstance;
+    this.memory = wasmInstance.exports.memory;
+    this.allocations = new Map();
+  }
+
+  allocate(size) {
+    const pointer = this.instance.exports.allocate(size);
+    this.allocations.set(pointer, size);
+    return pointer;
+  }
+
+  free(pointer) {
+    if (this.allocations.has(pointer)) {
+      this.instance.exports.free(pointer);
+      this.allocations.delete(pointer);
+    }
+  }
+
+  cleanup() {
+    for (const pointer of this.allocations.keys()) {
+      this.free(pointer);
+    }
+  }
+}
+```
+
+## Related Topics
+
+- [Performance Optimization](./performance-optimization) - JavaScript performance tips
+- [Web Workers](./web-workers) - Parallel processing in JavaScript
+- [TypedArrays](./typed-arrays) - Working with binary data
+- [Memory Management](./memory-management) - Memory handling in JavaScript

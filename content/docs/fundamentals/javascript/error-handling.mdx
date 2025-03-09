@@ -1,0 +1,1077 @@
+---
+description: Understanding JavaScript's error handling mechanisms, exception types, custom error classes, and advanced error handling patterns
+title: JavaScript Error Handling Mechanics
+---
+
+# JavaScript Error Handling Mechanics
+
+JavaScript provides a robust mechanism for handling exceptions and errors that occur during program execution. Proper error handling is essential for building reliable applications that can gracefully recover from unexpected situations. This guide covers JavaScript's error handling capabilities from basic to advanced patterns.
+
+## Error Basics
+
+### Types of Built-in Errors
+
+JavaScript includes several built-in error types for different categories of problems:
+
+```javascript
+// Error - base error type
+throw new Error('Generic error');
+
+// Specific error types
+throw new SyntaxError('Invalid syntax');
+throw new ReferenceError('Variable does not exist');
+throw new TypeError('Value is of the wrong type');
+throw new RangeError('Value is out of range');
+throw new URIError('Invalid URI');
+throw new EvalError('Error in eval() function');
+throw new AggregateError([error1, error2], 'Multiple errors occurred');
+```
+
+Each error type is designed for specific situations:
+
+- **Error**: Generic parent class for all errors
+- **SyntaxError**: Invalid JavaScript syntax
+- **ReferenceError**: Reference to an undefined variable
+- **TypeError**: Operation performed on an incompatible type
+- **RangeError**: Numeric value outside acceptable range
+- **URIError**: Incorrect use of URI-handling functions
+- **EvalError**: Error in the `eval()` function
+- **AggregateError** (ES2020): Group of individual errors
+
+### Error Properties
+
+Error objects have standard properties:
+
+```javascript
+try {
+  throw new Error('Something went wrong');
+} catch (error) {
+  console.log(error.name); // "Error"
+  console.log(error.message); // "Something went wrong"
+  console.log(error.stack); // Stack trace (implementation-dependent)
+}
+```
+
+## Basic Error Handling
+
+### Try-Catch Blocks
+
+The try-catch statement allows you to handle exceptions gracefully:
+
+```javascript
+try {
+  // Code that might throw an error
+  const result = riskyOperation();
+  return result;
+} catch (error) {
+  // Error handling code
+  console.error('An error occurred:', error.message);
+  return defaultValue;
+}
+```
+
+### The Finally Clause
+
+The `finally` block contains code that will always execute, regardless of whether an error occurred:
+
+```javascript
+function processFile() {
+  let file = null;
+
+  try {
+    file = openFile('example.txt');
+    return processData(file);
+  } catch (error) {
+    console.error('Could not process file:', error);
+    return null;
+  } finally {
+    // This will always execute, even if there's a return in try or catch
+    if (file) {
+      closeFile(file); // Clean up resources
+    }
+  }
+}
+```
+
+### Catching Specific Error Types
+
+You can handle different error types in different ways:
+
+```javascript
+try {
+  // Code that might throw different types of errors
+  const data = JSON.parse(userInput);
+  processData(data);
+} catch (error) {
+  if (error instanceof SyntaxError) {
+    console.error('Invalid JSON format:', error.message);
+    showFormatError();
+  } else if (error instanceof TypeError) {
+    console.error('Type error during processing:', error.message);
+    showTypeError();
+  } else {
+    console.error('Unknown error:', error.message);
+    showGenericError();
+  }
+}
+```
+
+### Try-Catch-Finally Execution Flow
+
+It's important to understand the execution flow in try-catch-finally blocks:
+
+```javascript
+function demonstrateFlow() {
+  try {
+    console.log('1. Enter try block');
+    throw new Error('Test error');
+    console.log('This will never execute');
+  } catch (error) {
+    console.log('2. Enter catch block');
+    return 'From catch block';
+    console.log('This will never execute');
+  } finally {
+    console.log('3. Enter finally block');
+    // If you include a return here, it will override the catch return
+  }
+
+  console.log('4. After try-catch-finally');
+  return 'Normal return';
+}
+
+const result = demonstrateFlow();
+console.log('Result:', result);
+
+// Output:
+// 1. Enter try block
+// 2. Enter catch block
+// 3. Enter finally block
+// Result: From catch block
+```
+
+### Using Try/Catch with Async Code
+
+For asynchronous code, there are different approaches:
+
+```javascript
+// Option 1: Promises with .catch()
+fetchData()
+  .then((data) => {
+    // Process data
+  })
+  .catch((error) => {
+    console.error('Error fetching data:', error);
+  });
+
+// Option 2: Async/await with try/catch
+async function getData() {
+  try {
+    const data = await fetchData();
+    return processData(data);
+  } catch (error) {
+    console.error('Error in getData:', error);
+    return defaultData;
+  }
+}
+```
+
+## Custom Error Types
+
+### Creating Custom Error Classes
+
+You can extend the built-in Error class to create your own error types:
+
+```javascript
+// ES6 class syntax
+class ValidationError extends Error {
+  constructor(message, field) {
+    super(message);
+    this.name = 'ValidationError';
+    this.field = field;
+  }
+}
+
+// Using the custom error
+function validateUser(user) {
+  if (!user.name) {
+    throw new ValidationError('Name is required', 'name');
+  }
+
+  if (!user.email) {
+    throw new ValidationError('Email is required', 'email');
+  }
+}
+
+try {
+  validateUser({ name: 'John', email: '' });
+} catch (error) {
+  if (error instanceof ValidationError) {
+    console.log(`Validation failed for ${error.field}: ${error.message}`);
+  } else {
+    console.log('Unknown error:', error);
+  }
+}
+```
+
+### Error Hierarchies
+
+You can create an entire hierarchy of custom errors:
+
+```javascript
+class AppError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = this.constructor.name;
+    Error.captureStackTrace(this, this.constructor);
+  }
+}
+
+class NetworkError extends AppError {
+  constructor(message, statusCode) {
+    super(message);
+    this.statusCode = statusCode;
+  }
+}
+
+class DatabaseError extends AppError {
+  constructor(message, query) {
+    super(message);
+    this.query = query;
+  }
+}
+
+class ValidationError extends AppError {
+  constructor(message, field) {
+    super(message);
+    this.field = field;
+  }
+}
+
+// Usage
+try {
+  // Some code that might throw different errors
+  const response = await fetch('/api/data');
+
+  if (!response.ok) {
+    throw new NetworkError('Failed to fetch data', response.status);
+  }
+
+  const data = await response.json();
+
+  if (!isValid(data)) {
+    throw new ValidationError('Invalid data', 'data');
+  }
+
+  if (!saveToDatabase(data)) {
+    throw new DatabaseError('Failed to save to database', 'INSERT INTO...');
+  }
+} catch (error) {
+  if (error instanceof NetworkError) {
+    console.error(`Network error (${error.statusCode}): ${error.message}`);
+  } else if (error instanceof ValidationError) {
+    console.error(`Validation error in ${error.field}: ${error.message}`);
+  } else if (error instanceof DatabaseError) {
+    console.error(`Database error: ${error.message}, Query: ${error.query}`);
+  } else if (error instanceof AppError) {
+    console.error(`Application error: ${error.message}`);
+  } else {
+    console.error('Unknown error:', error);
+  }
+}
+```
+
+### Properly Maintaining the Stack Trace
+
+To ensure that custom errors preserve the stack trace correctly:
+
+```javascript
+class CustomError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = this.constructor.name;
+
+    // Captures the stack trace, excluding the constructor call from it
+    Error.captureStackTrace(this, this.constructor);
+  }
+}
+
+// Usage
+function validateInput(input) {
+  if (!input) {
+    throw new CustomError('Input is required');
+  }
+}
+
+try {
+  validateInput(null);
+} catch (error) {
+  console.error(error.stack);
+  // CustomError: Input is required
+  //    at validateInput (...)
+  //    ... (the stack trace will not include the CustomError constructor)
+}
+```
+
+## Advanced Error Handling Patterns
+
+### Error Boundaries
+
+In component-based architecture, you can create error boundaries to isolate errors:
+
+```javascript
+// React-inspired error boundary pattern
+class ErrorBoundary {
+  constructor(fallback) {
+    this.fallback = fallback;
+  }
+
+  execute(fn) {
+    try {
+      return fn();
+    } catch (error) {
+      console.error('Error caught by boundary:', error);
+      return this.fallback;
+    }
+  }
+}
+
+// Usage
+const userDisplayBoundary = new ErrorBoundary({ name: 'Unknown User', id: -1 });
+
+function getUserData(id) {
+  return userDisplayBoundary.execute(() => {
+    // Could throw an error
+    const user = fetchUserById(id);
+    return transformUserData(user);
+  });
+}
+
+// Even if an error occurs, we get the fallback data instead of a crash
+const user = getUserData(123);
+```
+
+### Centralized Error Handling
+
+A centralized approach can help manage errors consistently:
+
+```javascript
+// Error handling service
+class ErrorService {
+  constructor() {
+    this.handlers = {};
+    this.defaultHandler = (error) => {
+      console.error('Unhandled error:', error);
+    };
+  }
+
+  registerHandler(errorType, handler) {
+    this.handlers[errorType] = handler;
+  }
+
+  handleError(error) {
+    const handler =
+      this.handlers[error.constructor.name] || this.defaultHandler;
+    handler(error);
+  }
+}
+
+// Create service instance
+const errorService = new ErrorService();
+
+// Register specific handlers
+errorService.registerHandler('NetworkError', (error) => {
+  console.error(`Network error (${error.statusCode}): ${error.message}`);
+  showOfflineMessage();
+});
+
+errorService.registerHandler('ValidationError', (error) => {
+  console.error(`Validation error in ${error.field}: ${error.message}`);
+  highlightField(error.field, error.message);
+});
+
+// Use in application code
+try {
+  // Application code
+} catch (error) {
+  errorService.handleError(error);
+}
+```
+
+### Async Error Handling with Global Catch
+
+For Promise-based applications, you can implement a global catch:
+
+```javascript
+// Add a global unhandled rejection handler
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled promise rejection:', event.reason);
+
+  // Prevent the default browser behavior (console warning)
+  event.preventDefault();
+
+  // Show user-friendly message
+  showErrorNotification(
+    'An unexpected error occurred. Please try again later.'
+  );
+
+  // Log to monitoring service
+  logErrorToMonitoringService(event.reason);
+});
+
+// Node.js version
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Handle or log the error
+});
+```
+
+### Using Symbol.dispose for Resource Cleanup
+
+In modern JavaScript, you can use the Symbol.dispose pattern (part of the ECMAScript proposal for explicit resource management):
+
+```javascript
+// File resource with Symbol.dispose
+class FileResource {
+  constructor(filename) {
+    this.filename = filename;
+    this.file = openFile(filename);
+    console.log(`File ${filename} opened`);
+  }
+
+  // Called automatically by using() when leaving scope
+  [Symbol.dispose]() {
+    if (this.file) {
+      closeFile(this.file);
+      this.file = null;
+      console.log(`File ${this.filename} closed`);
+    }
+  }
+
+  read() {
+    if (!this.file) throw new Error('File already closed');
+    return readFromFile(this.file);
+  }
+}
+
+// Using the resource with the using declaration
+function processFileContents() {
+  using file = new FileResource('example.txt');
+
+  try {
+    const contents = file.read();
+    return processContents(contents);
+  } catch (error) {
+    console.error('Error processing file:', error);
+    return null;
+  }
+  // File is automatically closed when 'using' goes out of scope,
+  // even if an error occurs
+}
+```
+
+Note: This feature is part of an ECMAScript proposal and may not be available without transpilation or polyfills.
+
+## Advanced Exception Handling Techniques
+
+### Retry Logic
+
+When dealing with transient failures, retry logic can be useful:
+
+```javascript
+async function fetchWithRetry(url, options = {}, maxRetries = 3, delay = 1000) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      if (!response.ok) {
+        throw new NetworkError(
+          `HTTP error ${response.status}`,
+          response.status
+        );
+      }
+      return await response.json();
+    } catch (error) {
+      console.warn(`Attempt ${attempt} failed:`, error.message);
+      lastError = error;
+
+      // If this is not the last attempt, wait before retrying
+      if (attempt < maxRetries) {
+        // Exponential backoff
+        const backoffDelay = delay * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, backoffDelay));
+      }
+    }
+  }
+
+  // If we get here, all retries failed
+  throw new Error(`Failed after ${maxRetries} attempts: ${lastError.message}`);
+}
+
+// Usage
+try {
+  const data = await fetchWithRetry('/api/data', {}, 3, 500);
+  processData(data);
+} catch (error) {
+  console.error('Could not fetch data:', error);
+  showErrorToUser(error);
+}
+```
+
+### Error Middleware Pattern
+
+Inspired by Express.js middleware, this pattern allows for extensible error handling:
+
+```javascript
+class ErrorMiddleware {
+  constructor() {
+    this.handlers = [];
+  }
+
+  use(handler) {
+    this.handlers.push(handler);
+    return this;
+  }
+
+  async handleError(error, context) {
+    let modifiedError = error;
+    let handled = false;
+
+    for (const handler of this.handlers) {
+      try {
+        const result = await handler(modifiedError, context);
+        if (result) {
+          // Handler returned a result, error is considered handled
+          handled = true;
+          modifiedError = result.error || modifiedError;
+          if (result.stop) break;
+        }
+      } catch (handlerError) {
+        console.error('Error in error handler:', handlerError);
+      }
+    }
+
+    return { handled, error: modifiedError };
+  }
+}
+
+// Usage
+const errorMiddleware = new ErrorMiddleware();
+
+// Add different handlers
+errorMiddleware
+  .use(async (error, context) => {
+    // Log all errors
+    console.error(`Error in ${context.component}:`, error);
+    return { error, stop: false };
+  })
+  .use(async (error, context) => {
+    // Handle network errors
+    if (error instanceof NetworkError) {
+      if (error.statusCode === 401) {
+        // Redirect to login page
+        window.location.href = '/login';
+        return { handled: true, stop: true };
+      }
+    }
+    return false; // Didn't handle the error
+  })
+  .use(async (error, context) => {
+    // Handle validation errors
+    if (error instanceof ValidationError) {
+      showFieldError(error.field, error.message);
+      return { handled: true, stop: true };
+    }
+    return false;
+  });
+
+// Using the middleware
+async function performAction() {
+  try {
+    // Some action that might fail
+  } catch (error) {
+    const { handled } = await errorMiddleware.handleError(error, {
+      component: 'UserForm',
+      action: 'submit',
+    });
+
+    if (!handled) {
+      // Fall back to default error handling
+      showGenericError();
+    }
+  }
+}
+```
+
+### Graceful Degradation
+
+Design components to fail gracefully when errors occur:
+
+```javascript
+// Component with graceful degradation
+class UserProfile {
+  async render(userId) {
+    let html = '<div class="user-profile">';
+
+    // Basic information
+    try {
+      const basicInfo = await this.fetchBasicInfo(userId);
+      html += `
+        <h2>${basicInfo.name}</h2>
+        <p>${basicInfo.email}</p>
+      `;
+    } catch (error) {
+      console.error('Failed to load basic info:', error);
+      html += `
+        <h2>User #${userId}</h2>
+        <p>Basic information not available</p>
+      `;
+    }
+
+    // Activity history (non-critical)
+    try {
+      const activities = await this.fetchActivities(userId);
+      html += '<div class="activities">';
+      if (activities.length > 0) {
+        html += '<h3>Recent Activity</h3><ul>';
+        activities.forEach((activity) => {
+          html += `<li>${activity.description}</li>`;
+        });
+        html += '</ul>';
+      } else {
+        html += '<p>No recent activity</p>';
+      }
+      html += '</div>';
+    } catch (error) {
+      console.error('Failed to load activities:', error);
+      // Simply omit this section rather than showing an error
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  async fetchBasicInfo(userId) {
+    // API call to fetch user basic info
+  }
+
+  async fetchActivities(userId) {
+    // API call to fetch user activities
+  }
+}
+```
+
+## Error Monitoring and Debugging
+
+### Creating Detailed Error Information
+
+To make errors more helpful for debugging:
+
+```javascript
+class DetailedError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = this.constructor.name;
+    this.details = details;
+    this.timestamp = new Date().toISOString();
+    this.browserInfo = {
+      userAgent: navigator.userAgent,
+      language: navigator.language,
+      screenSize: `${window.innerWidth}x${window.innerHeight}`,
+    };
+    Error.captureStackTrace(this, this.constructor);
+  }
+
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      timestamp: this.timestamp,
+      details: this.details,
+      browserInfo: this.browserInfo,
+      stack: this.stack.split('\n'),
+    };
+  }
+}
+
+// Usage
+try {
+  submitForm(data);
+} catch (error) {
+  const detailedError = new DetailedError('Form submission failed', {
+    formData: data,
+    endpoint: '/api/submit',
+    validationErrors: error.validationErrors || null,
+  });
+
+  console.error(detailedError);
+  logErrorToServer(JSON.stringify(detailedError.toJSON()));
+}
+```
+
+### Client-Side Error Tracking
+
+Monitor client-side errors with a tracking service:
+
+```javascript
+class ErrorTracker {
+  constructor(options = {}) {
+    this.apiKey = options.apiKey || null;
+    this.endpoint = options.endpoint || '/api/errors';
+    this.maxErrors = options.maxErrors || 10;
+    this.errorCount = 0;
+
+    this.init();
+  }
+
+  init() {
+    // Capture unhandled errors
+    window.addEventListener('error', (event) => {
+      this.trackError({
+        type: 'unhandled',
+        message: event.message,
+        source: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        stack: event.error?.stack,
+        timestamp: new Date().toISOString(),
+      });
+
+      // Don't prevent default to allow browser's default error handling
+    });
+
+    // Capture unhandled promise rejections
+    window.addEventListener('unhandledrejection', (event) => {
+      this.trackError({
+        type: 'unhandledRejection',
+        message: event.reason?.message || 'Unhandled promise rejection',
+        stack: event.reason?.stack,
+        reason: String(event.reason),
+        timestamp: new Date().toISOString(),
+      });
+    });
+
+    console.log('ErrorTracker initialized');
+  }
+
+  trackError(errorData) {
+    if (this.errorCount >= this.maxErrors) return;
+    this.errorCount++;
+
+    const data = {
+      ...errorData,
+      userAgent: navigator.userAgent,
+      url: window.location.href,
+      apiKey: this.apiKey,
+    };
+
+    // Send to backend
+    fetch(this.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+      // Using keepalive to ensure the request is sent even if the page unloads
+      keepalive: true,
+    }).catch((err) => {
+      console.error('Failed to send error report:', err);
+    });
+  }
+
+  // Manual error reporting
+  reportError(error, extraData = {}) {
+    const errorData = {
+      type: 'manual',
+      message: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString(),
+      ...extraData,
+    };
+
+    this.trackError(errorData);
+  }
+}
+
+// Initialize the tracker
+const errorTracker = new ErrorTracker({
+  apiKey: 'your-api-key',
+  endpoint: 'https://error-tracking.example.com/api/errors',
+});
+
+// Usage for manual reporting
+try {
+  // Some risky code
+} catch (error) {
+  errorTracker.reportError(error, {
+    component: 'UserProfile',
+    action: 'LoadData',
+    userId: currentUser.id,
+  });
+
+  // Continue with graceful degradation
+}
+```
+
+### Sourcemaps for Error Stack Traces
+
+To make minified stack traces useful in production:
+
+```javascript
+// Server-side error stack trace processing
+async function processStackTrace(stack, version) {
+  // Example implementation using sourcemap library
+  const sourcemaps = require('sourcemap');
+
+  // Load the appropriate sourcemap for this version
+  const sourceMapPath = `./sourcemaps/${version}/app.js.map`;
+  const sourceMap = await loadSourceMap(sourceMapPath);
+
+  // Parse the stack trace
+  const stackLines = stack.split('\n');
+  const processedLines = [];
+
+  for (const line of stackLines) {
+    // Basic regex to extract info from Chrome-like stack trace format
+    const match = line.match(/at\s+(.*?)\s+\((.*?):(\d+):(\d+)\)/);
+    if (match) {
+      const [_, fnName, fileName, lineNumber, columnNumber] = match;
+
+      try {
+        // Use the sourcemap to get the original location
+        const original = sourcemaps.originalPositionFor({
+          source: fileName,
+          line: parseInt(lineNumber, 10),
+          column: parseInt(columnNumber, 10),
+        });
+
+        if (original.source && original.line) {
+          processedLines.push(
+            `at ${fnName} (${original.source}:${original.line}:${original.column})`
+          );
+          continue;
+        }
+      } catch (e) {
+        console.warn('Error processing sourcemap:', e);
+      }
+    }
+
+    // If we couldn't process the line, keep it as is
+    processedLines.push(line);
+  }
+
+  return processedLines.join('\n');
+}
+```
+
+## Best Practices
+
+### Error Handling Checklist
+
+1. **Always catch exceptions at appropriate levels**
+
+   ```javascript
+   // Catch at component level when you can handle or display the error
+   try {
+     loadComponent();
+   } catch (error) {
+     showComponentError(error);
+   }
+   ```
+
+2. **Use specific error types**
+
+   ```javascript
+   if (error instanceof NetworkError && error.statusCode === 404) {
+     showNotFoundPage();
+   } else if (error instanceof ValidationError) {
+     showValidationError(error.field, error.message);
+   }
+   ```
+
+3. **Avoid empty catch blocks**
+
+   ```javascript
+   // Bad
+   try {
+     riskyOperation();
+   } catch (error) {
+     // Do nothing - never do this!
+   }
+
+   // Better
+   try {
+     riskyOperation();
+   } catch (error) {
+     console.warn('Non-critical error in riskyOperation:', error);
+     // Fallback behavior if appropriate
+   }
+   ```
+
+4. **Centralize error handling logic**
+
+   ```javascript
+   // Process all errors through a central system
+   function handleApplicationError(error, context) {
+     logError(error, context);
+
+     if (isUserVisible(error)) {
+       showErrorNotification(error);
+     }
+
+     if (isRecoverable(error)) {
+       // Attempt recovery
+     } else {
+       // Catastrophic failure handling
+     }
+   }
+   ```
+
+5. **Include context with errors**
+
+   ```javascript
+   try {
+     processOrder(orderData);
+   } catch (error) {
+     // Add relevant context to the error
+     error.orderId = orderData.id;
+     error.amount = orderData.amount;
+     throw error;
+   }
+   ```
+
+6. **Use async/await with try/catch**
+   ```javascript
+   async function loadData() {
+     try {
+       const response = await fetch('/api/data');
+       if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+       const data = await response.json();
+       return data;
+     } catch (error) {
+       console.error('Data loading error:', error);
+       return null;
+     }
+   }
+   ```
+
+### Error Prevention Strategies
+
+1. **Validate input data**
+
+   ```javascript
+   function processUserData(userData) {
+     // Validate before proceeding
+     if (!userData) throw new Error('User data is required');
+     if (!userData.name) throw new ValidationError('Name is required', 'name');
+     if (!userData.email)
+       throw new ValidationError('Email is required', 'email');
+
+     // Proceed with validated data
+     return processValidData(userData);
+   }
+   ```
+
+2. **Use defensive programming**
+
+   ```javascript
+   function getNestedProperty(obj, path) {
+     // Avoid errors from accessing properties of undefined
+     if (!obj) return undefined;
+
+     const parts = path.split('.');
+     let current = obj;
+
+     for (const part of parts) {
+       if (current === null || current === undefined) {
+         return undefined;
+       }
+       current = current[part];
+     }
+
+     return current;
+   }
+
+   // Usage
+   const value = getNestedProperty(user, 'profile.address.zipCode');
+   // Returns undefined instead of throwing if any part of the path is missing
+   ```
+
+3. **Fail early, fail visibly**
+   ```javascript
+   function transferMoney(fromAccount, toAccount, amount) {
+     // Validate all conditions before making any changes
+     if (!fromAccount) throw new Error('Source account is required');
+     if (!toAccount) throw new Error('Destination account is required');
+     if (!amount || amount <= 0) throw new Error('Amount must be positive');
+     if (fromAccount.balance < amount) throw new Error('Insufficient funds');
+
+     // If we get here, we can proceed with reasonable confidence
+     fromAccount.debit(amount);
+     toAccount.credit(amount);
+   }
+   ```
+
+### Error Logging Practices
+
+Effective error logging provides valuable insight into application issues:
+
+```javascript
+function logError(error, context = {}) {
+  // Ensure we have the basic error info
+  const errorInfo = {
+    name: error.name || 'Error',
+    message: error.message || String(error),
+    stack: error.stack,
+    timestamp: new Date().toISOString(),
+    ...context,
+    // Extract additional properties from custom errors
+    ...(typeof error.toJSON === 'function' ? error.toJSON() : {}),
+  };
+
+  // Potentially sensitive info should be sanitized
+  if (errorInfo.user) {
+    // Remove sensitive fields
+    const { password, creditCard, ...safeUserInfo } = errorInfo.user;
+    errorInfo.user = safeUserInfo;
+  }
+
+  // Log locally for development
+  console.error('Application error:', errorInfo);
+
+  // Send to server for production
+  if (process.env.NODE_ENV === 'production') {
+    fetch('/api/logs/error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(errorInfo),
+      keepalive: true, // Ensure delivery even if page unloads
+    }).catch((err) => {
+      console.error('Failed to send error log:', err);
+    });
+  }
+}
+
+// Usage example
+try {
+  processUserPayment(user, amount);
+} catch (error) {
+  logError(error, {
+    component: 'PaymentProcessor',
+    action: 'processPayment',
+    user: { id: user.id, name: user.name },
+    paymentDetails: { amount, currency: 'USD' },
+  });
+
+  // Show user-facing error
+  showPaymentError(error);
+}
+```
+
+## Related Topics
+
+- [Asynchronous JavaScript](./async-javascript) - Working with promises, async/await, and callbacks
+- [JavaScript Debugging](./debugging) - Tools and techniques for finding and fixing errors
+- [Design Patterns](./design-patterns) - Architectural patterns to improve code quality and error handling
+- [Testing JavaScript](./testing) - Approaches to test your code to prevent errors
+- [Performance Optimization](./performance-optimization) - Ensuring your error handling doesn't impact performance

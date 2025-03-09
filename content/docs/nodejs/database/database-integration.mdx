@@ -1,0 +1,569 @@
+---
+description: A comprehensive guide to Database Integration in Node.js, including SQL and NoSQL databases, ORMs, connection pooling, and best practices
+title: Database Integration
+---
+
+# Database Integration
+
+Learn how to integrate and work with various databases in Node.js, including SQL databases (MySQL, PostgreSQL) and NoSQL databases (MongoDB, Redis).
+
+## SQL Database Integration
+
+### MySQL Integration
+
+```javascript
+const mysql = require('mysql2/promise');
+
+class MySQLConnection {
+  constructor(config) {
+    this.config = {
+      host: config.host || 'localhost',
+      user: config.user,
+      password: config.password,
+      database: config.database,
+      waitForConnections: true,
+      connectionLimit: 10,
+      queueLimit: 0,
+      ...config,
+    };
+    this.pool = null;
+  }
+
+  async initialize() {
+    try {
+      this.pool = await mysql.createPool(this.config);
+      await this.testConnection();
+      console.log('MySQL connection pool initialized');
+    } catch (error) {
+      console.error('Error initializing MySQL connection:', error);
+      throw error;
+    }
+  }
+
+  async testConnection() {
+    try {
+      const connection = await this.pool.getConnection();
+      connection.release();
+    } catch (error) {
+      console.error('Error testing MySQL connection:', error);
+      throw error;
+    }
+  }
+
+  async query(sql, params = []) {
+    try {
+      const [results] = await this.pool.execute(sql, params);
+      return results;
+    } catch (error) {
+      console.error('Error executing MySQL query:', error);
+      throw error;
+    }
+  }
+
+  async transaction(callback) {
+    const connection = await this.pool.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      const result = await callback(connection);
+      await connection.commit();
+      return result;
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  }
+
+  async close() {
+    if (this.pool) {
+      await this.pool.end();
+      console.log('MySQL connection pool closed');
+    }
+  }
+}
+
+// Usage example
+async function mysqlExample() {
+  const db = new MySQLConnection({
+    host: 'localhost',
+    user: 'user',
+    password: 'password',
+    database: 'myapp',
+  });
+
+  await db.initialize();
+
+  // Simple query
+  const users = await db.query('SELECT * FROM users WHERE status = ?', [
+    'active',
+  ]);
+
+  // Transaction example
+  await db.transaction(async (connection) => {
+    await connection.execute(
+      'UPDATE accounts SET balance = balance - ? WHERE id = ?',
+      [100, 1]
+    );
+    await connection.execute(
+      'UPDATE accounts SET balance = balance + ? WHERE id = ?',
+      [100, 2]
+    );
+  });
+
+  await db.close();
+}
+```
+
+### PostgreSQL Integration
+
+```javascript
+const { Pool } = require('pg');
+
+class PostgresConnection {
+  constructor(config) {
+    this.config = {
+      host: config.host || 'localhost',
+      port: config.port || 5432,
+      user: config.user,
+      password: config.password,
+      database: config.database,
+      max: config.maxConnections || 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 2000,
+      ...config,
+    };
+    this.pool = null;
+  }
+
+  async initialize() {
+    try {
+      this.pool = new Pool(this.config);
+      await this.testConnection();
+      console.log('PostgreSQL connection pool initialized');
+    } catch (error) {
+      console.error('Error initializing PostgreSQL connection:', error);
+      throw error;
+    }
+  }
+
+  async testConnection() {
+    const client = await this.pool.connect();
+    try {
+      await client.query('SELECT NOW()');
+    } finally {
+      client.release();
+    }
+  }
+
+  async query(sql, params = []) {
+    try {
+      const { rows } = await this.pool.query(sql, params);
+      return rows;
+    } catch (error) {
+      console.error('Error executing PostgreSQL query:', error);
+      throw error;
+    }
+  }
+
+  async transaction(callback) {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async close() {
+    if (this.pool) {
+      await this.pool.end();
+      console.log('PostgreSQL connection pool closed');
+    }
+  }
+}
+```
+
+## NoSQL Database Integration
+
+### MongoDB Integration
+
+```javascript
+const { MongoClient, ObjectId } = require('mongodb');
+
+class MongoConnection {
+  constructor(config) {
+    this.config = {
+      url: config.url || 'mongodb://localhost:27017',
+      dbName: config.dbName,
+      options: {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        maxPoolSize: 10,
+        ...config.options,
+      },
+    };
+    this.client = null;
+    this.db = null;
+  }
+
+  async connect() {
+    try {
+      this.client = await MongoClient.connect(
+        this.config.url,
+        this.config.options
+      );
+      this.db = this.client.db(this.config.dbName);
+      console.log('MongoDB connection established');
+    } catch (error) {
+      console.error('Error connecting to MongoDB:', error);
+      throw error;
+    }
+  }
+
+  async findOne(collection, query, options = {}) {
+    try {
+      return await this.db.collection(collection).findOne(query, options);
+    } catch (error) {
+      console.error('Error in MongoDB findOne:', error);
+      throw error;
+    }
+  }
+
+  async find(collection, query, options = {}) {
+    try {
+      return await this.db
+        .collection(collection)
+        .find(query, options)
+        .toArray();
+    } catch (error) {
+      console.error('Error in MongoDB find:', error);
+      throw error;
+    }
+  }
+
+  async insertOne(collection, document) {
+    try {
+      return await this.db.collection(collection).insertOne(document);
+    } catch (error) {
+      console.error('Error in MongoDB insertOne:', error);
+      throw error;
+    }
+  }
+
+  async updateOne(collection, filter, update, options = {}) {
+    try {
+      return await this.db
+        .collection(collection)
+        .updateOne(filter, update, options);
+    } catch (error) {
+      console.error('Error in MongoDB updateOne:', error);
+      throw error;
+    }
+  }
+
+  async deleteOne(collection, filter) {
+    try {
+      return await this.db.collection(collection).deleteOne(filter);
+    } catch (error) {
+      console.error('Error in MongoDB deleteOne:', error);
+      throw error;
+    }
+  }
+
+  async aggregate(collection, pipeline) {
+    try {
+      return await this.db.collection(collection).aggregate(pipeline).toArray();
+    } catch (error) {
+      console.error('Error in MongoDB aggregate:', error);
+      throw error;
+    }
+  }
+
+  async close() {
+    if (this.client) {
+      await this.client.close();
+      console.log('MongoDB connection closed');
+    }
+  }
+}
+
+// Usage example
+async function mongoExample() {
+  const db = new MongoConnection({
+    url: 'mongodb://localhost:27017',
+    dbName: 'myapp',
+  });
+
+  await db.connect();
+
+  // CRUD operations
+  const user = await db.findOne('users', { email: 'user@example.com' });
+  const users = await db.find('users', { status: 'active' });
+
+  await db.insertOne('users', {
+    name: 'John Doe',
+    email: 'john@example.com',
+    createdAt: new Date(),
+  });
+
+  await db.updateOne(
+    'users',
+    { _id: ObjectId('...') },
+    { $set: { status: 'inactive' } }
+  );
+
+  // Aggregation example
+  const result = await db.aggregate('orders', [
+    { $match: { status: 'completed' } },
+    { $group: { _id: '$userId', total: { $sum: '$amount' } } },
+  ]);
+
+  await db.close();
+}
+```
+
+### Redis Integration
+
+```javascript
+const Redis = require('ioredis');
+
+class RedisConnection {
+  constructor(config) {
+    this.config = {
+      host: config.host || 'localhost',
+      port: config.port || 6379,
+      password: config.password,
+      db: config.db || 0,
+      retryStrategy: (times) => Math.min(times * 50, 2000),
+      ...config,
+    };
+    this.client = null;
+  }
+
+  async connect() {
+    try {
+      this.client = new Redis(this.config);
+
+      this.client.on('error', (error) => {
+        console.error('Redis error:', error);
+      });
+
+      await this.testConnection();
+      console.log('Redis connection established');
+    } catch (error) {
+      console.error('Error connecting to Redis:', error);
+      throw error;
+    }
+  }
+
+  async testConnection() {
+    await this.client.ping();
+  }
+
+  async set(key, value, options = {}) {
+    try {
+      if (options.ttl) {
+        return await this.client.set(key, value, 'EX', options.ttl);
+      }
+      return await this.client.set(key, value);
+    } catch (error) {
+      console.error('Error in Redis set:', error);
+      throw error;
+    }
+  }
+
+  async get(key) {
+    try {
+      return await this.client.get(key);
+    } catch (error) {
+      console.error('Error in Redis get:', error);
+      throw error;
+    }
+  }
+
+  async delete(key) {
+    try {
+      return await this.client.del(key);
+    } catch (error) {
+      console.error('Error in Redis delete:', error);
+      throw error;
+    }
+  }
+
+  async hashSet(key, field, value) {
+    try {
+      return await this.client.hset(key, field, value);
+    } catch (error) {
+      console.error('Error in Redis hashSet:', error);
+      throw error;
+    }
+  }
+
+  async hashGet(key, field) {
+    try {
+      return await this.client.hget(key, field);
+    } catch (error) {
+      console.error('Error in Redis hashGet:', error);
+      throw error;
+    }
+  }
+
+  async close() {
+    if (this.client) {
+      await this.client.quit();
+      console.log('Redis connection closed');
+    }
+  }
+}
+
+// Usage example
+async function redisExample() {
+  const redis = new RedisConnection({
+    host: 'localhost',
+    port: 6379,
+  });
+
+  await redis.connect();
+
+  // Basic operations
+  await redis.set('user:1', JSON.stringify({ name: 'John' }));
+  await redis.set('session:123', 'data', { ttl: 3600 }); // 1 hour TTL
+
+  const user = JSON.parse(await redis.get('user:1'));
+
+  // Hash operations
+  await redis.hashSet('users', '1', JSON.stringify({ name: 'John' }));
+  const userData = await redis.hashGet('users', '1');
+
+  await redis.close();
+}
+```
+
+## Best Practices
+
+### Connection Management
+
+```javascript
+class DatabaseManager {
+  static async initializeDatabases(config) {
+    const connections = {
+      mysql: new MySQLConnection(config.mysql),
+      postgres: new PostgresConnection(config.postgres),
+      mongodb: new MongoConnection(config.mongodb),
+      redis: new RedisConnection(config.redis),
+    };
+
+    try {
+      await Promise.all([
+        connections.mysql.initialize(),
+        connections.postgres.initialize(),
+        connections.mongodb.connect(),
+        connections.redis.connect(),
+      ]);
+
+      return connections;
+    } catch (error) {
+      await this.closeDatabases(connections);
+      throw error;
+    }
+  }
+
+  static async closeDatabases(connections) {
+    await Promise.all(
+      Object.values(connections)
+        .filter((conn) => conn)
+        .map((conn) => conn.close())
+    );
+  }
+
+  static handleShutdown(connections) {
+    const shutdown = async () => {
+      console.log('Shutting down database connections...');
+      await this.closeDatabases(connections);
+      process.exit(0);
+    };
+
+    process.on('SIGTERM', shutdown);
+    process.on('SIGINT', shutdown);
+  }
+}
+```
+
+### Error Handling
+
+```javascript
+class DatabaseError extends Error {
+  constructor(message, code, originalError) {
+    super(message);
+    this.name = 'DatabaseError';
+    this.code = code;
+    this.originalError = originalError;
+  }
+}
+
+class DatabaseErrorHandler {
+  static handleError(error, operation) {
+    if (error.code === 'ECONNREFUSED') {
+      throw new DatabaseError(
+        'Database connection refused',
+        'CONNECTION_ERROR',
+        error
+      );
+    }
+
+    if (error.code === 'ER_DUP_ENTRY') {
+      throw new DatabaseError(
+        'Duplicate entry violation',
+        'DUPLICATE_ERROR',
+        error
+      );
+    }
+
+    throw new DatabaseError(
+      `Database error during ${operation}`,
+      'UNKNOWN_ERROR',
+      error
+    );
+  }
+
+  static async withRetry(operation, options = {}) {
+    const retries = options.retries || 3;
+    const delay = options.delay || 1000;
+
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await operation();
+      } catch (error) {
+        if (i === retries - 1) throw error;
+
+        if (this.isRetryableError(error)) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+
+        throw error;
+      }
+    }
+  }
+
+  static isRetryableError(error) {
+    const retryableCodes = ['ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET'];
+    return retryableCodes.includes(error.code);
+  }
+}
+```
+
+## Related Topics
+
+- [Performance](./performance) - Database performance optimization
+- [Security](./security) - Database security best practices
+- [Error Handling](./error-handling) - Error handling strategies
+- [Monitoring](./monitoring) - Database monitoring and logging

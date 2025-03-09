@@ -1,0 +1,605 @@
+---
+description: A comprehensive guide to UDP networking in Node.js, including datagram sockets, multicast, and broadcast communication
+title: UDP Networking Implementation
+---
+
+# UDP Networking Implementation
+
+Learn how to implement UDP (User Datagram Protocol) networking in Node.js for fast, connectionless communication, including unicast, multicast, and broadcast messaging.
+
+## Basic UDP Server
+
+### Creating a UDP Server
+
+```javascript
+const dgram = require('dgram');
+
+// Create UDP server (IPv4)
+const server = dgram.createSocket('udp4');
+
+// Handle incoming messages
+server.on('message', (msg, rinfo) => {
+  console.log(`Received message from ${rinfo.address}:${rinfo.port}: ${msg}`);
+
+  // Echo back
+  server.send(msg, rinfo.port, rinfo.address, (err) => {
+    if (err) {
+      console.error('Error sending response:', err);
+    }
+  });
+});
+
+// Handle server events
+server.on('listening', () => {
+  const address = server.address();
+  console.log(`UDP Server listening on ${address.address}:${address.port}`);
+});
+
+server.on('error', (err) => {
+  console.error('Server error:', err);
+  server.close();
+});
+
+// Bind to port
+server.bind(41234);
+```
+
+### UDP Client
+
+```javascript
+const dgram = require('dgram');
+
+// Create UDP client
+const client = dgram.createSocket('udp4');
+
+// Send message
+const message = Buffer.from('Hello UDP Server!');
+client.send(message, 41234, 'localhost', (err) => {
+  if (err) {
+    console.error('Error sending message:', err);
+    client.close();
+    return;
+  }
+  console.log('Message sent');
+});
+
+// Handle responses
+client.on('message', (msg, rinfo) => {
+  console.log(`Received response from ${rinfo.address}:${rinfo.port}: ${msg}`);
+  client.close();
+});
+
+client.on('error', (err) => {
+  console.error('Client error:', err);
+  client.close();
+});
+```
+
+## Advanced Features
+
+### Multicast Communication
+
+```javascript
+const dgram = require('dgram');
+
+class MulticastGroup {
+  constructor(address = '224.0.0.1', port = 41234) {
+    this.address = address;
+    this.port = port;
+    this.socket = null;
+  }
+
+  createSender() {
+    this.socket = dgram.createSocket({
+      type: 'udp4',
+      reuseAddr: true,
+    });
+
+    this.socket.on('error', (err) => {
+      console.error('Sender error:', err);
+      this.socket.close();
+    });
+  }
+
+  createReceiver() {
+    this.socket = dgram.createSocket({
+      type: 'udp4',
+      reuseAddr: true,
+    });
+
+    this.socket.on('message', (msg, rinfo) => {
+      console.log(`Received multicast: ${msg} from ${rinfo.address}`);
+    });
+
+    this.socket.on('listening', () => {
+      console.log('Multicast receiver listening');
+
+      // Join multicast group
+      this.socket.addMembership(this.address);
+
+      const address = this.socket.address();
+      console.log(`Receiver bound to ${address.address}:${address.port}`);
+    });
+
+    this.socket.bind(this.port);
+  }
+
+  send(message) {
+    if (!this.socket) {
+      throw new Error('Create sender first');
+    }
+
+    const buffer = Buffer.from(message);
+    this.socket.send(
+      buffer,
+      0,
+      buffer.length,
+      this.port,
+      this.address,
+      (err) => {
+        if (err) {
+          console.error('Error sending multicast:', err);
+        } else {
+          console.log('Multicast message sent');
+        }
+      }
+    );
+  }
+
+  close() {
+    if (this.socket) {
+      this.socket.close();
+      this.socket = null;
+    }
+  }
+}
+
+// Usage: Sender
+const sender = new MulticastGroup();
+sender.createSender();
+setInterval(() => {
+  sender.send('Multicast message ' + Date.now());
+}, 1000);
+
+// Usage: Receiver
+const receiver = new MulticastGroup();
+receiver.createReceiver();
+```
+
+### Broadcast Communication
+
+```javascript
+const dgram = require('dgram');
+
+class BroadcastManager {
+  constructor(port = 41234) {
+    this.port = port;
+    this.socket = null;
+  }
+
+  createBroadcaster() {
+    this.socket = dgram.createSocket('udp4');
+
+    // Enable broadcast
+    this.socket.setBroadcast(true);
+
+    this.socket.on('error', (err) => {
+      console.error('Broadcaster error:', err);
+      this.socket.close();
+    });
+  }
+
+  createListener() {
+    this.socket = dgram.createSocket('udp4');
+
+    this.socket.on('message', (msg, rinfo) => {
+      console.log(`Received broadcast: ${msg} from ${rinfo.address}`);
+    });
+
+    this.socket.on('listening', () => {
+      console.log('Broadcast listener started');
+      const address = this.socket.address();
+      console.log(`Listener bound to ${address.address}:${address.port}`);
+    });
+
+    // Bind to all interfaces
+    this.socket.bind(this.port, '0.0.0.0');
+  }
+
+  broadcast(message) {
+    if (!this.socket) {
+      throw new Error('Create broadcaster first');
+    }
+
+    const buffer = Buffer.from(message);
+    this.socket.send(
+      buffer,
+      0,
+      buffer.length,
+      this.port,
+      '255.255.255.255',
+      (err) => {
+        if (err) {
+          console.error('Error broadcasting:', err);
+        } else {
+          console.log('Broadcast message sent');
+        }
+      }
+    );
+  }
+
+  close() {
+    if (this.socket) {
+      this.socket.close();
+      this.socket = null;
+    }
+  }
+}
+```
+
+### Datagram Packet Management
+
+```javascript
+class DatagramPacket {
+  static MAX_SIZE = 65507; // Maximum UDP packet size
+
+  constructor(type, payload) {
+    this.type = type;
+    this.payload = payload;
+    this.timestamp = Date.now();
+  }
+
+  static create(type, payload) {
+    const packet = {
+      type,
+      payload,
+      timestamp: Date.now(),
+    };
+
+    return Buffer.from(JSON.stringify(packet));
+  }
+
+  static parse(buffer) {
+    try {
+      const packet = JSON.parse(buffer.toString());
+      return new DatagramPacket(packet.type, packet.payload);
+    } catch (err) {
+      throw new Error('Invalid packet format');
+    }
+  }
+
+  static fragment(data, maxChunkSize = 1400) {
+    const chunks = [];
+    const totalSize = data.length;
+    let offset = 0;
+
+    while (offset < totalSize) {
+      const chunk = data.slice(offset, offset + maxChunkSize);
+      chunks.push(chunk);
+      offset += maxChunkSize;
+    }
+
+    return chunks.map((chunk, index) => {
+      return DatagramPacket.create('fragment', {
+        data: chunk.toString('base64'),
+        index,
+        total: chunks.length,
+      });
+    });
+  }
+}
+
+// Usage with reassembly
+class PacketReassembler {
+  constructor(timeout = 30000) {
+    this.fragments = new Map();
+    this.timeout = timeout;
+  }
+
+  addFragment(packet) {
+    const { index, total, data } = packet.payload;
+    const key = `${packet.timestamp}-${total}`;
+
+    if (!this.fragments.has(key)) {
+      this.fragments.set(key, new Map());
+
+      // Set cleanup timeout
+      setTimeout(() => {
+        this.fragments.delete(key);
+      }, this.timeout);
+    }
+
+    const assembly = this.fragments.get(key);
+    assembly.set(index, Buffer.from(data, 'base64'));
+
+    // Check if complete
+    if (assembly.size === total) {
+      const ordered = Array.from(assembly.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([_, data]) => data);
+
+      this.fragments.delete(key);
+      return Buffer.concat(ordered);
+    }
+
+    return null;
+  }
+}
+```
+
+## Performance Optimization
+
+### Socket Buffer Management
+
+```javascript
+const dgram = require('dgram');
+
+class OptimizedUDPSocket {
+  constructor(options = {}) {
+    this.socket = dgram.createSocket('udp4');
+
+    // Set buffer sizes
+    this.socket.setRecvBufferSize(options.recvBufferSize || 1024 * 1024);
+    this.socket.setSendBufferSize(options.sendBufferSize || 1024 * 1024);
+
+    // Buffer pool for receiving data
+    this.bufferPool = Array.from({ length: options.poolSize || 10 }, () =>
+      Buffer.alloc(options.bufferSize || 65507)
+    );
+
+    this.setupHandlers();
+  }
+
+  setupHandlers() {
+    this.socket.on('message', (msg, rinfo) => {
+      // Get buffer from pool
+      const buffer = this.bufferPool.pop();
+      if (!buffer) {
+        console.warn('Buffer pool empty');
+        return;
+      }
+
+      // Copy message to pooled buffer
+      msg.copy(buffer);
+      this.processMessage(buffer, rinfo);
+
+      // Return buffer to pool
+      this.bufferPool.push(buffer);
+    });
+  }
+
+  processMessage(buffer, rinfo) {
+    // Process message using pooled buffer
+    // Implementation specific
+  }
+}
+```
+
+### Message Batching
+
+```javascript
+class UDPBatcher {
+  constructor(socket, options = {}) {
+    this.socket = socket;
+    this.options = {
+      maxBatchSize: 10,
+      maxDelay: 100,
+      ...options,
+    };
+
+    this.batch = [];
+    this.timer = null;
+  }
+
+  send(message, port, address) {
+    this.batch.push({ message, port, address });
+
+    if (this.batch.length >= this.options.maxBatchSize) {
+      this.flush();
+    } else if (!this.timer) {
+      this.timer = setTimeout(() => this.flush(), this.options.maxDelay);
+    }
+  }
+
+  flush() {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+
+    if (this.batch.length === 0) return;
+
+    // Group messages by destination
+    const groups = new Map();
+    for (const item of this.batch) {
+      const key = `${item.address}:${item.port}`;
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key).push(item.message);
+    }
+
+    // Send batched messages
+    for (const [key, messages] of groups) {
+      const [address, port] = key.split(':');
+      const buffer = Buffer.from(JSON.stringify(messages));
+
+      this.socket.send(buffer, parseInt(port), address, (err) => {
+        if (err) {
+          console.error('Error sending batch:', err);
+        }
+      });
+    }
+
+    this.batch = [];
+  }
+}
+```
+
+## Best Practices
+
+### Error Handling
+
+```javascript
+class UDPErrorHandler {
+  static handle(socket, error) {
+    console.error('UDP error:', error);
+
+    switch (error.code) {
+      case 'EADDRINUSE':
+        console.error('Address already in use');
+        // Try alternative port
+        this.tryAlternativePort(socket);
+        break;
+
+      case 'EACCES':
+        console.error('Permission denied');
+        // Try non-privileged port
+        this.tryNonPrivilegedPort(socket);
+        break;
+
+      case 'EMSGSIZE':
+        console.error('Message too large');
+        // Fragment message
+        break;
+
+      default:
+        console.error('Unhandled error:', error);
+        socket.close();
+    }
+  }
+
+  static tryAlternativePort(socket) {
+    const currentPort = socket.address().port;
+    const newPort = currentPort + 1;
+
+    try {
+      socket.bind(newPort);
+    } catch (err) {
+      console.error('Failed to bind to alternative port:', err);
+      socket.close();
+    }
+  }
+
+  static tryNonPrivilegedPort(socket) {
+    try {
+      socket.bind(0); // Let OS assign port
+    } catch (err) {
+      console.error('Failed to bind to random port:', err);
+      socket.close();
+    }
+  }
+}
+```
+
+### Reliability Layer
+
+```javascript
+class ReliableUDP {
+  constructor(options = {}) {
+    this.socket = dgram.createSocket('udp4');
+    this.retries = options.retries || 3;
+    this.timeout = options.timeout || 1000;
+    this.pending = new Map();
+
+    this.setupHandlers();
+  }
+
+  setupHandlers() {
+    this.socket.on('message', (msg, rinfo) => {
+      try {
+        const packet = JSON.parse(msg);
+
+        if (packet.type === 'ack') {
+          this.handleAck(packet.id);
+        } else {
+          // Send acknowledgment
+          this.sendAck(packet.id, rinfo.port, rinfo.address);
+          // Process message
+          this.handleMessage(packet.payload);
+        }
+      } catch (err) {
+        console.error('Error processing message:', err);
+      }
+    });
+  }
+
+  sendReliable(message, port, address) {
+    const id = Date.now().toString();
+    const packet = {
+      id,
+      type: 'message',
+      payload: message,
+    };
+
+    return new Promise((resolve, reject) => {
+      this.pending.set(id, {
+        resolve,
+        reject,
+        retries: this.retries,
+        timer: null,
+      });
+
+      this.sendWithRetry(packet, port, address, id);
+    });
+  }
+
+  sendWithRetry(packet, port, address, id) {
+    const pending = this.pending.get(id);
+    if (!pending) return;
+
+    const buffer = Buffer.from(JSON.stringify(packet));
+    this.socket.send(buffer, port, address, (err) => {
+      if (err) {
+        this.handleError(id, err);
+        return;
+      }
+
+      // Set retry timer
+      pending.timer = setTimeout(() => {
+        if (pending.retries > 0) {
+          pending.retries--;
+          this.sendWithRetry(packet, port, address, id);
+        } else {
+          this.handleError(id, new Error('Max retries reached'));
+        }
+      }, this.timeout);
+    });
+  }
+
+  handleAck(id) {
+    const pending = this.pending.get(id);
+    if (pending) {
+      clearTimeout(pending.timer);
+      pending.resolve();
+      this.pending.delete(id);
+    }
+  }
+
+  handleError(id, error) {
+    const pending = this.pending.get(id);
+    if (pending) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
+      this.pending.delete(id);
+    }
+  }
+
+  sendAck(id, port, address) {
+    const ack = {
+      type: 'ack',
+      id,
+    };
+
+    const buffer = Buffer.from(JSON.stringify(ack));
+    this.socket.send(buffer, port, address);
+  }
+}
+```
+
+## Related Topics
+
+- [TCP Server](./tcp-server) - TCP server implementation
+- [Network Programming](./network-programming) - General networking concepts
+- [Performance](./performance) - Performance optimization techniques
+- [Security](./security) - Network security best practices

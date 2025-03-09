@@ -1,0 +1,389 @@
+---
+description: A comprehensive guide to Node.js Modules and Package Management, including module systems, npm usage, and dependency management
+title: Node.js Modules and Package Management
+---
+
+# Node.js Modules and Package Management
+
+Node.js provides robust module systems and package management capabilities. This guide covers everything you need to know about working with modules and managing packages.
+
+## Module Systems
+
+### CommonJS Modules
+
+```javascript
+// Exporting in CommonJS
+// math.js
+module.exports = {
+  add: (a, b) => a + b,
+  subtract: (a, b) => a - b,
+};
+
+// Alternative exports
+exports.multiply = (a, b) => a * b;
+exports.divide = (a, b) => a / b;
+
+// Importing in CommonJS
+const math = require('./math');
+console.log(math.add(2, 3)); // 5
+
+// Destructuring imports
+const { multiply, divide } = require('./math');
+console.log(multiply(4, 2)); // 8
+```
+
+### ES Modules
+
+```javascript
+// Exporting in ES Modules
+// utils.js
+export const formatDate = (date) => {
+  return new Date(date).toLocaleDateString();
+};
+
+export const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(amount);
+};
+
+// Default export
+export default class Logger {
+  log(message) {
+    console.log(`[${new Date().toISOString()}] ${message}`);
+  }
+}
+
+// Importing ES Modules
+import Logger, { formatDate, formatCurrency } from './utils.js';
+
+const logger = new Logger();
+logger.log(formatDate(new Date()));
+logger.log(formatCurrency(99.99));
+
+// Dynamic imports
+async function loadModule() {
+  const { default: Module } = await import('./dynamic-module.js');
+  return new Module();
+}
+```
+
+### Dual Package Support
+
+```javascript
+// package.json
+{
+  "name": "my-package",
+  "exports": {
+    ".": {
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "type": "module"
+}
+
+// Conditional exports
+{
+  "exports": {
+    ".": {
+      "node": {
+        "import": "./dist/node/index.mjs",
+        "require": "./dist/node/index.cjs"
+      },
+      "browser": "./dist/browser/index.js",
+      "default": "./dist/default/index.js"
+    }
+  }
+}
+```
+
+## Package Management
+
+### NPM Basics
+
+```bash
+# Initialize a new package
+npm init
+
+# Install dependencies
+npm install express
+npm i lodash
+
+# Install dev dependencies
+npm install --save-dev jest
+npm i -D typescript
+
+# Install global packages
+npm install -g nodemon
+
+# Update packages
+npm update
+npm update express
+
+# Remove packages
+npm uninstall moment
+```
+
+### Package.json Configuration
+
+```json
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "description": "My Node.js application",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "jest",
+    "build": "tsc",
+    "lint": "eslint src/**/*.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "mongoose": "^7.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "nodemon": "^2.0.20",
+    "typescript": "^4.9.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "private": true,
+  "license": "MIT"
+}
+```
+
+### Dependency Management
+
+```javascript
+// Version ranges
+{
+  "dependencies": {
+    "exact": "1.0.0",          // Exact version
+    "patch": "~1.0.0",         // 1.0.x
+    "minor": "^1.0.0",         // 1.x.x
+    "any": "*",                // Any version
+    "range": ">=1.0.0 <2.0.0", // Version range
+    "latest": "latest"         // Latest version
+  }
+}
+
+// Lock files
+// package-lock.json
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "lockfileVersion": 2,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "my-app",
+      "version": "1.0.0",
+      "dependencies": {
+        "express": "^4.18.2"
+      }
+    }
+  }
+}
+```
+
+### Workspaces
+
+```json
+// Root package.json
+{
+  "name": "monorepo",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ]
+}
+
+// packages/api/package.json
+{
+  "name": "@monorepo/api",
+  "version": "1.0.0",
+  "dependencies": {
+    "@monorepo/shared": "workspace:*"
+  }
+}
+
+// packages/shared/package.json
+{
+  "name": "@monorepo/shared",
+  "version": "1.0.0"
+}
+```
+
+## Module Resolution
+
+### Node.js Module Resolution Algorithm
+
+```javascript
+// Directory structure
+my-app/
+  ├── node_modules/
+  │   └── lodash/
+  ├── src/
+  │   ├── utils/
+  │   │   └── helper.js
+  │   └── index.js
+  └── package.json
+
+// Module resolution
+const lodash = require('lodash');           // From node_modules
+const helper = require('./utils/helper');    // Relative path
+const config = require('../config');         // Parent directory
+
+// Resolution order
+// 1. Core modules (e.g., 'fs', 'path')
+// 2. node_modules lookup
+// 3. Local modules
+
+// Custom resolution
+const options = {
+  paths: [
+    '/custom/path/node_modules',
+    process.cwd() + '/node_modules'
+  ]
+};
+require.resolve('module-name', options);
+```
+
+### Module Caching
+
+```javascript
+// Module caching example
+// counter.js
+let count = 0;
+module.exports = {
+  increment: () => ++count,
+  getCount: () => count,
+};
+
+// main.js
+const counter1 = require('./counter');
+const counter2 = require('./counter');
+
+console.log(counter1.increment()); // 1
+console.log(counter2.increment()); // 2
+console.log(counter1.getCount()); // 2
+console.log(counter2.getCount()); // 2
+
+// Clear cache
+delete require.cache[require.resolve('./counter')];
+const counter3 = require('./counter');
+console.log(counter3.getCount()); // 0
+```
+
+## Best Practices
+
+### Project Structure
+
+```
+my-app/
+├── src/
+│   ├── config/
+│   │   └── index.js
+│   ├── models/
+│   │   └── user.js
+│   ├── routes/
+│   │   └── api.js
+│   ├── utils/
+│   │   └── helpers.js
+│   └── index.js
+├── tests/
+│   └── api.test.js
+├── .gitignore
+├── package.json
+└── README.md
+```
+
+### Module Design
+
+```javascript
+// Single responsibility
+// userService.js
+class UserService {
+  async getUser(id) {
+    /* ... */
+  }
+  async createUser(data) {
+    /* ... */
+  }
+  async updateUser(id, data) {
+    /* ... */
+  }
+  async deleteUser(id) {
+    /* ... */
+  }
+}
+
+export default UserService;
+
+// Dependency injection
+// database.js
+export class Database {
+  async connect() {
+    /* ... */
+  }
+  async query(sql) {
+    /* ... */
+  }
+}
+
+// userRepository.js
+export class UserRepository {
+  constructor(database) {
+    this.db = database;
+  }
+
+  async findUser(id) {
+    return this.db.query('SELECT * FROM users WHERE id = ?', [id]);
+  }
+}
+
+// Usage
+const db = new Database();
+const userRepo = new UserRepository(db);
+```
+
+### Security Considerations
+
+```javascript
+// Audit dependencies
+{
+  "scripts": {
+    "audit": "npm audit",
+    "audit:fix": "npm audit fix"
+  }
+}
+
+// Package verification
+{
+  "scripts": {
+    "verify": "npm verify"
+  }
+}
+
+// Lockfile policies
+{
+  "packageManager": "npm@8.19.2",
+  "engines": {
+    "npm": ">=8.0.0"
+  }
+}
+```
+
+## Related Topics
+
+- [Node.js Security](./security) - Security best practices
+- [Testing](./testing) - Testing Node.js applications
+- [Dependency Management](./dependency-management) - Advanced dependency management
+- [Project Structure](./project-structure) - Project organization patterns

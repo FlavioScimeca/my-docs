@@ -1,0 +1,310 @@
+---
+description: Understanding JavaScript hoisting, execution context, and variable lifecycle
+title: JavaScript Hoisting
+---
+
+# JavaScript Hoisting
+
+Hoisting is a JavaScript behavior where variable and function declarations are moved to the top of their containing scope during the compilation phase, before the code is executed. Understanding hoisting is crucial for mastering JavaScript and debugging unexpected behaviors.
+
+## How Hoisting Works
+
+Behind the scenes, JavaScript execution happens in two phases:
+
+1. **Compilation Phase**: The engine scans the code, recognizes declarations, and allocates memory for them
+2. **Execution Phase**: The engine runs the code line by line, assigning values and executing functions
+
+During the compilation phase, declarations are "hoisted" to the top of their scope, but initializations remain in place.
+
+## Variable Hoisting
+
+### `var` Declarations
+
+Variables declared with `var` are hoisted and initialized with `undefined`:
+
+```javascript
+console.log(name); // Output: undefined (not ReferenceError)
+var name = 'John';
+```
+
+What's happening behind the scenes:
+
+```javascript
+// How the JavaScript engine interprets the code
+var name; // Declaration is hoisted
+console.log(name); // undefined
+name = 'John'; // Assignment stays in place
+```
+
+### `let` and `const` Declarations
+
+Variables declared with `let` and `const` are also hoisted, but they're not initialized with any value. They exist in a "temporal dead zone" until their declaration:
+
+```javascript
+console.log(age); // ReferenceError: Cannot access 'age' before initialization
+let age = 30;
+
+console.log(PI); // ReferenceError: Cannot access 'PI' before initialization
+const PI = 3.14;
+```
+
+## Function Hoisting
+
+### Function Declarations
+
+Function declarations are completely hoisted—both the declaration and definition:
+
+```javascript
+// This works fine
+console.log(add(2, 3)); // Output: 5
+
+// Function declaration is fully hoisted
+function add(a, b) {
+  return a + b;
+}
+```
+
+### Function Expressions
+
+Function expressions using `var` are hoisted as variables, but the function definition isn't:
+
+```javascript
+console.log(subtract(5, 2)); // TypeError: subtract is not a function
+
+var subtract = function (a, b) {
+  return a - b;
+};
+
+// The above is interpreted as:
+var subtract; // Declaration is hoisted
+console.log(subtract(5, 2)); // TypeError: subtract is not a function
+subtract = function (a, b) {
+  // Assignment stays in place
+  return a - b;
+};
+```
+
+### Arrow Functions
+
+Arrow functions behave like function expressions in terms of hoisting:
+
+```javascript
+console.log(multiply(3, 4)); // TypeError: multiply is not a function
+
+var multiply = (a, b) => a * b;
+```
+
+## Class Hoisting
+
+Classes behave similar to `let`/`const` declarations:
+
+```javascript
+// ReferenceError: Cannot access 'User' before initialization
+const user = new User('John');
+
+class User {
+  constructor(name) {
+    this.name = name;
+  }
+}
+```
+
+## Practical Implications and Best Practices
+
+### The Problem with Hoisting
+
+Hoisting can lead to confusing code and bugs, especially with `var`:
+
+```javascript
+// Unexpected behavior due to hoisting
+var x = 10;
+
+function createValue() {
+  if (x > 5) {
+    var x = 5; // This declaration is hoisted to the top of the function!
+    console.log('x inside if:', x); // 5
+  }
+  console.log('x outside if:', x); // undefined, not 10!
+}
+
+createValue();
+```
+
+This happens because the inner `var x` is hoisted to the top of the function, shadowing the global `x`.
+
+### Best Practices
+
+To avoid hoisting-related issues:
+
+1. **Declare variables at the top of their scope**
+
+   ```javascript
+   function processData() {
+     // All declarations at the top
+     let data;
+     let result;
+
+     // Rest of the function
+     data = fetchData();
+     result = transformData(data);
+     return result;
+   }
+   ```
+
+2. **Use `let` and `const` instead of `var`**
+
+   ```javascript
+   // Prefer
+   let name = 'John';
+   const PI = 3.14;
+
+   // Avoid
+   var age = 30;
+   ```
+
+3. **Declare functions before using them**
+
+   ```javascript
+   // Function declarations
+   function validateUser(user) {
+     // implementation
+   }
+
+   // Then use them
+   validateUser(currentUser);
+   ```
+
+4. **Use function expressions with `const`**
+
+   ```javascript
+   // Clear, doesn't rely on hoisting behavior
+   const calculateTotal = function (items) {
+     // implementation
+   };
+
+   calculateTotal(cart);
+   ```
+
+## Execution Context and Variable Environment
+
+Hoisting is closely related to JavaScript's execution context system:
+
+```javascript
+// Global Execution Context created
+let globalVar = 'global';
+
+function outer() {
+  // Outer Function Execution Context created
+  let outerVar = 'outer';
+
+  function inner() {
+    // Inner Function Execution Context created
+    let innerVar = 'inner';
+    console.log(globalVar, outerVar, innerVar); // 'global', 'outer', 'inner'
+  }
+
+  inner();
+}
+
+outer();
+```
+
+Each execution context has a creation and execution phase:
+
+- **Creation Phase**: Where hoisting happens, declarations are set up
+- **Execution Phase**: Where code is run line-by-line
+
+## Real-World Example: Avoiding Hoisting Issues in Modules
+
+In a modern application using modules:
+
+```javascript
+// userService.js - Proper organization avoiding hoisting issues
+const API_URL = 'https://api.example.com/users';
+
+// All functions declared before use
+function validateUser(user) {
+  // Validation logic
+  return user.name && user.email;
+}
+
+function formatUserData(userData) {
+  // Formatting logic
+  return {
+    ...userData,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+// Main function using helper functions
+async function createUser(userData) {
+  if (!validateUser(userData)) {
+    throw new Error('Invalid user data');
+  }
+
+  const formattedData = formatUserData(userData);
+
+  const response = await fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(formattedData),
+  });
+
+  return response.json();
+}
+
+export { createUser };
+```
+
+This organization keeps the code predictable and avoids hoisting-related surprises.
+
+## Hoisting in Loops and Conditionals
+
+Hoisting applies within each function scope, which can create issues in loops and conditionals:
+
+```javascript
+function createFunctions() {
+  var functions = [];
+
+  for (var i = 0; i < 3; i++) {
+    functions.push(function () {
+      console.log(i);
+    });
+  }
+
+  return functions;
+}
+
+const fns = createFunctions();
+fns[0](); // 3 (not 0!)
+fns[1](); // 3 (not 1!)
+fns[2](); // 3 (not 2!)
+```
+
+This happens because `var` is function-scoped, not block-scoped. The solution is to use `let`:
+
+```javascript
+function createFunctions() {
+  const functions = [];
+
+  for (let i = 0; i < 3; i++) {
+    functions.push(function () {
+      console.log(i);
+    });
+  }
+
+  return functions;
+}
+
+const fns = createFunctions();
+fns[0](); // 0
+fns[1](); // 1
+fns[2](); // 2
+```
+
+## Related Topics
+
+- [Closures and Scope](./closures) - How JavaScript manages variable access
+- [Execution Context](./execution-context) - The environment in which JavaScript code is executed
+- [Let, Const, and Var](./variables) - Different ways to declare variables
+- [Functions](./functions) - Working with JavaScript functions

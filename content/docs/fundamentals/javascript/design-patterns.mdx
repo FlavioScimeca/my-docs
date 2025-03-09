@@ -1,0 +1,817 @@
+---
+description: A comprehensive guide to JavaScript Design Patterns, covering creational, structural, and behavioral patterns with practical examples
+title: JavaScript Design Patterns
+---
+
+# JavaScript Design Patterns
+
+Design patterns are reusable solutions to commonly occurring problems in software design. This guide covers various design patterns implemented in JavaScript.
+
+## Creational Patterns
+
+### Singleton Pattern
+
+```javascript
+// Basic Singleton
+class Singleton {
+  private static instance: Singleton;
+
+  private constructor() {}
+
+  public static getInstance(): Singleton {
+    if (!Singleton.instance) {
+      Singleton.instance = new Singleton();
+    }
+    return Singleton.instance;
+  }
+}
+
+// Practical example: Configuration Manager
+class ConfigManager {
+  private static instance: ConfigManager;
+  private config: Record<string, any>;
+
+  private constructor() {
+    this.config = {};
+  }
+
+  public static getInstance(): ConfigManager {
+    if (!ConfigManager.instance) {
+      ConfigManager.instance = new ConfigManager();
+    }
+    return ConfigManager.instance;
+  }
+
+  public set(key: string, value: any): void {
+    this.config[key] = value;
+  }
+
+  public get(key: string): any {
+    return this.config[key];
+  }
+}
+
+// Usage
+const config = ConfigManager.getInstance();
+config.set('apiUrl', 'https://api.example.com');
+console.log(config.get('apiUrl')); // https://api.example.com
+```
+
+### Factory Pattern
+
+```javascript
+// Simple Factory
+class UserFactory {
+  createUser(type) {
+    switch (type) {
+      case 'admin':
+        return new AdminUser();
+      case 'regular':
+        return new RegularUser();
+      default:
+        throw new Error('Invalid user type');
+    }
+  }
+}
+
+// Abstract Factory
+interface Button {
+  render(): void;
+  onClick(): void;
+}
+
+interface Checkbox {
+  render(): void;
+  toggle(): void;
+}
+
+interface GUIFactory {
+  createButton(): Button;
+  createCheckbox(): Checkbox;
+}
+
+class WindowsFactory implements GUIFactory {
+  createButton(): Button {
+    return new WindowsButton();
+  }
+
+  createCheckbox(): Checkbox {
+    return new WindowsCheckbox();
+  }
+}
+
+class MacFactory implements GUIFactory {
+  createButton(): Button {
+    return new MacButton();
+  }
+
+  createCheckbox(): Checkbox {
+    return new MacCheckbox();
+  }
+}
+
+// Usage
+class Application {
+  private factory: GUIFactory;
+  private button: Button;
+
+  constructor(factory: GUIFactory) {
+    this.factory = factory;
+  }
+
+  createUI() {
+    this.button = this.factory.createButton();
+  }
+
+  paint() {
+    this.button.render();
+  }
+}
+```
+
+### Builder Pattern
+
+```javascript
+// Product
+class Pizza {
+  constructor() {
+    this.toppings = [];
+    this.size = '';
+    this.crust = '';
+  }
+}
+
+// Builder
+class PizzaBuilder {
+  constructor() {
+    this.pizza = new Pizza();
+  }
+
+  setSize(size) {
+    this.pizza.size = size;
+    return this;
+  }
+
+  setCrust(crust) {
+    this.pizza.crust = crust;
+    return this;
+  }
+
+  addTopping(topping) {
+    this.pizza.toppings.push(topping);
+    return this;
+  }
+
+  build() {
+    return this.pizza;
+  }
+}
+
+// Director
+class PizzaDirector {
+  constructor(builder) {
+    this.builder = builder;
+  }
+
+  constructMargherita() {
+    return this.builder
+      .setSize('medium')
+      .setCrust('thin')
+      .addTopping('tomato')
+      .addTopping('mozzarella')
+      .addTopping('basil')
+      .build();
+  }
+
+  constructPepperoni() {
+    return this.builder
+      .setSize('large')
+      .setCrust('thick')
+      .addTopping('tomato')
+      .addTopping('mozzarella')
+      .addTopping('pepperoni')
+      .build();
+  }
+}
+
+// Usage
+const builder = new PizzaBuilder();
+const director = new PizzaDirector(builder);
+
+const margherita = director.constructMargherita();
+console.log(margherita);
+```
+
+### Prototype Pattern
+
+```javascript
+// Prototype base class
+class Shape {
+  constructor() {
+    this.type = 'Shape';
+    this.x = 0;
+    this.y = 0;
+  }
+
+  clone() {
+    const clone = Object.create(Object.getPrototypeOf(this));
+    Object.assign(clone, this);
+    return clone;
+  }
+
+  move(x, y) {
+    this.x = x;
+    this.y = y;
+  }
+}
+
+// Concrete prototypes
+class Rectangle extends Shape {
+  constructor(width, height) {
+    super();
+    this.type = 'Rectangle';
+    this.width = width;
+    this.height = height;
+  }
+}
+
+class Circle extends Shape {
+  constructor(radius) {
+    super();
+    this.type = 'Circle';
+    this.radius = radius;
+  }
+}
+
+// Usage
+const rectangle = new Rectangle(10, 20);
+const rectangleClone = rectangle.clone();
+
+const circle = new Circle(15);
+const circleClone = circle.clone();
+```
+
+## Structural Patterns
+
+### Adapter Pattern
+
+```javascript
+// Old interface
+class OldPrinter {
+  printOld(text) {
+    console.log('Old printer:', text);
+  }
+}
+
+// New interface
+interface ModernPrinter {
+  print(text: string): void;
+}
+
+// Adapter
+class PrinterAdapter implements ModernPrinter {
+  private oldPrinter: OldPrinter;
+
+  constructor(oldPrinter: OldPrinter) {
+    this.oldPrinter = oldPrinter;
+  }
+
+  print(text: string): void {
+    this.oldPrinter.printOld(text);
+  }
+}
+
+// Usage
+const oldPrinter = new OldPrinter();
+const adapter = new PrinterAdapter(oldPrinter);
+adapter.print('Hello World'); // Uses old printer with new interface
+```
+
+### Decorator Pattern
+
+```javascript
+// Component interface
+interface Coffee {
+  cost(): number;
+  description(): string;
+}
+
+// Concrete component
+class SimpleCoffee implements Coffee {
+  cost(): number {
+    return 10;
+  }
+
+  description(): string {
+    return 'Simple coffee';
+  }
+}
+
+// Base decorator
+abstract class CoffeeDecorator implements Coffee {
+  protected coffee: Coffee;
+
+  constructor(coffee: Coffee) {
+    this.coffee = coffee;
+  }
+
+  cost(): number {
+    return this.coffee.cost();
+  }
+
+  description(): string {
+    return this.coffee.description();
+  }
+}
+
+// Concrete decorators
+class MilkDecorator extends CoffeeDecorator {
+  cost(): number {
+    return this.coffee.cost() + 2;
+  }
+
+  description(): string {
+    return this.coffee.description() + ', milk';
+  }
+}
+
+class SugarDecorator extends CoffeeDecorator {
+  cost(): number {
+    return this.coffee.cost() + 1;
+  }
+
+  description(): string {
+    return this.coffee.description() + ', sugar';
+  }
+}
+
+// Usage
+let coffee: Coffee = new SimpleCoffee();
+coffee = new MilkDecorator(coffee);
+coffee = new SugarDecorator(coffee);
+
+console.log(coffee.cost()); // 13
+console.log(coffee.description()); // Simple coffee, milk, sugar
+```
+
+### Facade Pattern
+
+```javascript
+// Complex subsystem classes
+class AudioPlayer {
+  turnOn() {
+    console.log('Audio player turned on');
+  }
+
+  setSource(source) {
+    console.log(`Source set to: ${source}`);
+  }
+
+  play() {
+    console.log('Playing audio');
+  }
+}
+
+class Display {
+  turnOn() {
+    console.log('Display turned on');
+  }
+
+  setResolution(width, height) {
+    console.log(`Resolution set to: ${width}x${height}`);
+  }
+}
+
+class VideoPlayer {
+  prepare(filename) {
+    console.log(`Preparing video: ${filename}`);
+  }
+
+  play() {
+    console.log('Playing video');
+  }
+}
+
+// Facade
+class MediaFacade {
+  constructor() {
+    this.audio = new AudioPlayer();
+    this.display = new Display();
+    this.video = new VideoPlayer();
+  }
+
+  playVideo(filename) {
+    this.display.turnOn();
+    this.display.setResolution(1920, 1080);
+    this.audio.turnOn();
+    this.video.prepare(filename);
+    this.video.play();
+    this.audio.play();
+  }
+}
+
+// Usage
+const mediaPlayer = new MediaFacade();
+mediaPlayer.playVideo('movie.mp4');
+```
+
+### Proxy Pattern
+
+```javascript
+// Subject interface
+interface Image {
+  display(): void;
+}
+
+// Real subject
+class RealImage implements Image {
+  private filename: string;
+
+  constructor(filename: string) {
+    this.filename = filename;
+    this.loadFromDisk();
+  }
+
+  private loadFromDisk(): void {
+    console.log(`Loading ${this.filename}`);
+  }
+
+  display(): void {
+    console.log(`Displaying ${this.filename}`);
+  }
+}
+
+// Proxy
+class ProxyImage implements Image {
+  private realImage: RealImage | null;
+  private filename: string;
+
+  constructor(filename: string) {
+    this.realImage = null;
+    this.filename = filename;
+  }
+
+  display(): void {
+    if (this.realImage === null) {
+      this.realImage = new RealImage(this.filename);
+    }
+    this.realImage.display();
+  }
+}
+
+// Usage
+const image = new ProxyImage('photo.jpg');
+// Image is not loaded until display() is called
+image.display(); // Loads and displays
+image.display(); // Just displays
+```
+
+## Behavioral Patterns
+
+### Observer Pattern
+
+```javascript
+// Subject interface
+interface Subject {
+  attach(observer: Observer): void;
+  detach(observer: Observer): void;
+  notify(): void;
+}
+
+// Observer interface
+interface Observer {
+  update(subject: Subject): void;
+}
+
+// Concrete subject
+class NewsAgency implements Subject {
+  private observers: Observer[] = [];
+  private news: string = '';
+
+  attach(observer: Observer): void {
+    const isExist = this.observers.includes(observer);
+    if (!isExist) {
+      this.observers.push(observer);
+    }
+  }
+
+  detach(observer: Observer): void {
+    const observerIndex = this.observers.indexOf(observer);
+    if (observerIndex !== -1) {
+      this.observers.splice(observerIndex, 1);
+    }
+  }
+
+  notify(): void {
+    for (const observer of this.observers) {
+      observer.update(this);
+    }
+  }
+
+  setNews(news: string): void {
+    this.news = news;
+    this.notify();
+  }
+
+  getNews(): string {
+    return this.news;
+  }
+}
+
+// Concrete observers
+class NewsChannel implements Observer {
+  private name: string;
+
+  constructor(name: string) {
+    this.name = name;
+  }
+
+  update(subject: NewsAgency): void {
+    console.log(`${this.name} received news: ${subject.getNews()}`);
+  }
+}
+
+// Usage
+const newsAgency = new NewsAgency();
+const channel1 = new NewsChannel('CNN');
+const channel2 = new NewsChannel('BBC');
+
+newsAgency.attach(channel1);
+newsAgency.attach(channel2);
+
+newsAgency.setNews('Breaking news!');
+```
+
+### Strategy Pattern
+
+```javascript
+// Strategy interface
+interface PaymentStrategy {
+  pay(amount: number): void;
+}
+
+// Concrete strategies
+class CreditCardPayment implements PaymentStrategy {
+  private card: string;
+
+  constructor(card: string) {
+    this.card = card;
+  }
+
+  pay(amount: number): void {
+    console.log(`Paid ${amount} using credit card ${this.card}`);
+  }
+}
+
+class PayPalPayment implements PaymentStrategy {
+  private email: string;
+
+  constructor(email: string) {
+    this.email = email;
+  }
+
+  pay(amount: number): void {
+    console.log(`Paid ${amount} using PayPal account ${this.email}`);
+  }
+}
+
+// Context
+class ShoppingCart {
+  private paymentStrategy: PaymentStrategy;
+
+  constructor(paymentStrategy: PaymentStrategy) {
+    this.paymentStrategy = paymentStrategy;
+  }
+
+  setPaymentStrategy(paymentStrategy: PaymentStrategy): void {
+    this.paymentStrategy = paymentStrategy;
+  }
+
+  checkout(amount: number): void {
+    this.paymentStrategy.pay(amount);
+  }
+}
+
+// Usage
+const cart = new ShoppingCart(new CreditCardPayment('1234-5678'));
+cart.checkout(100);
+
+cart.setPaymentStrategy(new PayPalPayment('user@example.com'));
+cart.checkout(200);
+```
+
+### Command Pattern
+
+```javascript
+// Command interface
+interface Command {
+  execute(): void;
+  undo(): void;
+}
+
+// Receiver
+class Light {
+  turnOn(): void {
+    console.log('Light is on');
+  }
+
+  turnOff(): void {
+    console.log('Light is off');
+  }
+}
+
+// Concrete commands
+class TurnOnCommand implements Command {
+  private light: Light;
+
+  constructor(light: Light) {
+    this.light = light;
+  }
+
+  execute(): void {
+    this.light.turnOn();
+  }
+
+  undo(): void {
+    this.light.turnOff();
+  }
+}
+
+class TurnOffCommand implements Command {
+  private light: Light;
+
+  constructor(light: Light) {
+    this.light = light;
+  }
+
+  execute(): void {
+    this.light.turnOff();
+  }
+
+  undo(): void {
+    this.light.turnOn();
+  }
+}
+
+// Invoker
+class RemoteControl {
+  private command: Command;
+
+  setCommand(command: Command): void {
+    this.command = command;
+  }
+
+  pressButton(): void {
+    this.command.execute();
+  }
+
+  pressUndo(): void {
+    this.command.undo();
+  }
+}
+
+// Usage
+const light = new Light();
+const turnOn = new TurnOnCommand(light);
+const turnOff = new TurnOffCommand(light);
+
+const remote = new RemoteControl();
+remote.setCommand(turnOn);
+remote.pressButton(); // Light is on
+remote.pressUndo(); // Light is off
+```
+
+## Best Practices
+
+### SOLID Principles
+
+```javascript
+// Single Responsibility Principle
+class UserService {
+  private user: User;
+
+  constructor(user: User) {
+    this.user = user;
+  }
+
+  getUser(): User {
+    return this.user;
+  }
+}
+
+class UserValidator {
+  validateUser(user: User): boolean {
+    // Validation logic
+    return true;
+  }
+}
+
+class UserRepository {
+  saveUser(user: User): void {
+    // Save user to database
+  }
+}
+
+// Open/Closed Principle
+interface Shape {
+  calculateArea(): number;
+}
+
+class Rectangle implements Shape {
+  constructor(private width: number, private height: number) {}
+
+  calculateArea(): number {
+    return this.width * this.height;
+  }
+}
+
+class Circle implements Shape {
+  constructor(private radius: number) {}
+
+  calculateArea(): number {
+    return Math.PI * this.radius ** 2;
+  }
+}
+
+// Liskov Substitution Principle
+class Bird {
+  fly(): void {
+    console.log('Flying...');
+  }
+}
+
+class Penguin extends Bird {
+  fly(): void {
+    throw new Error('Cannot fly');
+  }
+
+  swim(): void {
+    console.log('Swimming...');
+  }
+}
+
+// Interface Segregation Principle
+interface Printer {
+  print(): void;
+}
+
+interface Scanner {
+  scan(): void;
+}
+
+interface Fax {
+  fax(): void;
+}
+
+class AllInOnePrinter implements Printer, Scanner, Fax {
+  print(): void {
+    // Print implementation
+  }
+
+  scan(): void {
+    // Scan implementation
+  }
+
+  fax(): void {
+    // Fax implementation
+  }
+}
+
+class SimplePrinter implements Printer {
+  print(): void {
+    // Print implementation
+  }
+}
+
+// Dependency Inversion Principle
+interface Database {
+  save(data: any): void;
+}
+
+class MySQLDatabase implements Database {
+  save(data: any): void {
+    // Save to MySQL
+  }
+}
+
+class MongoDatabase implements Database {
+  save(data: any): void {
+    // Save to MongoDB
+  }
+}
+
+class UserService {
+  constructor(private database: Database) {}
+
+  saveUser(user: User): void {
+    this.database.save(user);
+  }
+}
+```
+
+## Related Topics
+
+- [Object-Oriented Programming](./oop) - OOP concepts in JavaScript
+- [TypeScript](./typescript) - Using TypeScript with design patterns
+- [Testing Patterns](./testing-patterns) - Testing design patterns
+- [Architecture Patterns](./architecture-patterns) - Large-scale application patterns

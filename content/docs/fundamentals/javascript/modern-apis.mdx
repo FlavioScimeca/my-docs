@@ -1,0 +1,501 @@
+---
+description: A comprehensive guide to Modern JavaScript APIs, including Fetch, Intersection Observer, ResizeObserver, and other modern browser APIs
+title: Modern JavaScript APIs
+---
+
+# Modern JavaScript APIs
+
+Modern JavaScript provides powerful APIs for building rich web applications. This guide covers the most important modern browser APIs and their usage.
+
+## Fetch API
+
+### Basic Usage
+
+```javascript
+// Simple GET request
+fetch('https://api.example.com/data')
+  .then((response) => response.json())
+  .then((data) => console.log(data))
+  .catch((error) => console.error('Error:', error));
+
+// POST request with options
+fetch('https://api.example.com/posts', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    Authorization: 'Bearer token123',
+  },
+  body: JSON.stringify({
+    title: 'New Post',
+    content: 'Post content',
+  }),
+})
+  .then((response) => response.json())
+  .then((data) => console.log('Success:', data))
+  .catch((error) => console.error('Error:', error));
+```
+
+### Advanced Features
+
+```javascript
+// Request with timeout
+async function fetchWithTimeout(resource, options = {}) {
+  const { timeout = 5000 } = options;
+
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(resource, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error) {
+    clearTimeout(id);
+    if (error.name === 'AbortError') {
+      throw new Error('Request timed out');
+    }
+    throw error;
+  }
+}
+
+// Request with retry
+async function fetchWithRetry(url, options = {}, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fetch(url, options);
+    } catch (error) {
+      if (i === retries - 1) throw error;
+      await new Promise((resolve) =>
+        setTimeout(resolve, 1000 * Math.pow(2, i))
+      );
+    }
+  }
+}
+
+// Upload progress
+async function uploadWithProgress(url, file, onProgress) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  return fetch(url, {
+    method: 'POST',
+    body: formData,
+  }).then((response) => {
+    const reader = response.body.getReader();
+    const contentLength = +response.headers.get('Content-Length');
+
+    return new Response(
+      new ReadableStream({
+        async start(controller) {
+          let bytesReceived = 0;
+
+          while (true) {
+            const { done, value } = await reader.read();
+
+            if (done) {
+              controller.close();
+              break;
+            }
+
+            bytesReceived += value.length;
+            controller.enqueue(value);
+            onProgress(bytesReceived / contentLength);
+          }
+        },
+      })
+    );
+  });
+}
+```
+
+## Intersection Observer
+
+### Basic Usage
+
+```javascript
+// Create observer
+const observer = new IntersectionObserver(
+  (entries, observer) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        console.log('Element is visible');
+        entry.target.classList.add('visible');
+      } else {
+        console.log('Element is not visible');
+        entry.target.classList.remove('visible');
+      }
+    });
+  },
+  {
+    root: null,
+    rootMargin: '0px',
+    threshold: 0.1,
+  }
+);
+
+// Observe elements
+document.querySelectorAll('.observe-me').forEach((element) => {
+  observer.observe(element);
+});
+```
+
+### Advanced Features
+
+```javascript
+// Lazy loading images
+function lazyLoadImages() {
+  const imageObserver = new IntersectionObserver(
+    (entries, observer) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const img = entry.target;
+          img.src = img.dataset.src;
+          img.onload = () => img.classList.add('loaded');
+          observer.unobserve(img);
+        }
+      });
+    },
+    {
+      rootMargin: '50px 0px',
+    }
+  );
+
+  document.querySelectorAll('img[data-src]').forEach((img) => {
+    imageObserver.observe(img);
+  });
+}
+
+// Infinite scroll
+class InfiniteScroll {
+  constructor(container, loadMore) {
+    this.container = container;
+    this.loadMore = loadMore;
+    this.loading = false;
+
+    this.observer = new IntersectionObserver(this.handleIntersect.bind(this), {
+      rootMargin: '100px',
+    });
+
+    this.sentinel = document.createElement('div');
+    this.sentinel.className = 'sentinel';
+    this.container.appendChild(this.sentinel);
+    this.observer.observe(this.sentinel);
+  }
+
+  async handleIntersect(entries) {
+    if (this.loading) return;
+
+    if (entries[0].isIntersecting) {
+      this.loading = true;
+
+      try {
+        await this.loadMore();
+      } finally {
+        this.loading = false;
+      }
+    }
+  }
+}
+```
+
+## ResizeObserver
+
+### Basic Usage
+
+```javascript
+// Create observer
+const observer = new ResizeObserver((entries) => {
+  entries.forEach((entry) => {
+    const { width, height } = entry.contentRect;
+    console.log('Element size:', width, height);
+  });
+});
+
+// Observe element
+const element = document.querySelector('.resize-me');
+observer.observe(element);
+```
+
+### Advanced Features
+
+```javascript
+// Responsive elements
+class ResponsiveElement {
+  constructor(element) {
+    this.element = element;
+    this.observer = new ResizeObserver(this.handleResize.bind(this));
+    this.observer.observe(element);
+  }
+
+  handleResize(entries) {
+    const entry = entries[0];
+    const { width } = entry.contentRect;
+
+    this.element.classList.remove('small', 'medium', 'large');
+
+    if (width < 300) {
+      this.element.classList.add('small');
+    } else if (width < 600) {
+      this.element.classList.add('medium');
+    } else {
+      this.element.classList.add('large');
+    }
+  }
+
+  disconnect() {
+    this.observer.disconnect();
+  }
+}
+
+// Grid layout manager
+class GridLayout {
+  constructor(container) {
+    this.container = container;
+    this.observer = new ResizeObserver(this.updateLayout.bind(this));
+    this.observer.observe(container);
+  }
+
+  updateLayout(entries) {
+    const entry = entries[0];
+    const { width } = entry.contentRect;
+
+    const columns = Math.floor(width / 200);
+    this.container.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
+  }
+}
+```
+
+## MutationObserver
+
+### Basic Usage
+
+```javascript
+// Create observer
+const observer = new MutationObserver((mutations, observer) => {
+  mutations.forEach((mutation) => {
+    if (mutation.type === 'childList') {
+      console.log('Child nodes changed');
+    } else if (mutation.type === 'attributes') {
+      console.log(`${mutation.attributeName} attribute changed`);
+    }
+  });
+});
+
+// Start observing
+observer.observe(document.body, {
+  childList: true,
+  subtree: true,
+  attributes: true,
+});
+```
+
+### Advanced Features
+
+```javascript
+// DOM change tracker
+class DOMTracker {
+  constructor(element) {
+    this.element = element;
+    this.changes = [];
+
+    this.observer = new MutationObserver(this.handleMutations.bind(this));
+    this.observer.observe(element, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: true,
+      attributeOldValue: true,
+      characterDataOldValue: true,
+    });
+  }
+
+  handleMutations(mutations) {
+    mutations.forEach((mutation) => {
+      const change = {
+        type: mutation.type,
+        timestamp: Date.now(),
+      };
+
+      switch (mutation.type) {
+        case 'childList':
+          change.added = Array.from(mutation.addedNodes);
+          change.removed = Array.from(mutation.removedNodes);
+          break;
+
+        case 'attributes':
+          change.attribute = mutation.attributeName;
+          change.oldValue = mutation.oldValue;
+          change.newValue = mutation.target.getAttribute(
+            mutation.attributeName
+          );
+          break;
+
+        case 'characterData':
+          change.oldValue = mutation.oldValue;
+          change.newValue = mutation.target.textContent;
+          break;
+      }
+
+      this.changes.push(change);
+    });
+  }
+
+  getChanges() {
+    return this.changes;
+  }
+
+  clearChanges() {
+    this.changes = [];
+  }
+}
+```
+
+## Web Share API
+
+### Basic Usage
+
+```javascript
+// Share content
+async function shareContent() {
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: 'Check this out',
+        text: 'Interesting content to share',
+        url: window.location.href,
+      });
+      console.log('Content shared successfully');
+    } catch (error) {
+      console.error('Error sharing:', error);
+    }
+  } else {
+    console.log('Web Share API not supported');
+  }
+}
+
+// Share files
+async function shareFiles(files) {
+  if (navigator.canShare && navigator.canShare({ files })) {
+    try {
+      await navigator.share({
+        files,
+        title: 'Shared files',
+        text: 'Check out these files',
+      });
+      console.log('Files shared successfully');
+    } catch (error) {
+      console.error('Error sharing files:', error);
+    }
+  }
+}
+```
+
+## Web Storage API
+
+### Basic Usage
+
+```javascript
+// LocalStorage
+class Storage {
+  static set(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      return true;
+    } catch (error) {
+      console.error('Storage error:', error);
+      return false;
+    }
+  }
+
+  static get(key) {
+    try {
+      const item = localStorage.getItem(key);
+      return item ? JSON.parse(item) : null;
+    } catch (error) {
+      console.error('Storage error:', error);
+      return null;
+    }
+  }
+
+  static remove(key) {
+    localStorage.removeItem(key);
+  }
+
+  static clear() {
+    localStorage.clear();
+  }
+}
+
+// SessionStorage wrapper
+class SessionStore {
+  static set(key, value) {
+    sessionStorage.setItem(key, JSON.stringify(value));
+  }
+
+  static get(key) {
+    const item = sessionStorage.getItem(key);
+    return item ? JSON.parse(item) : null;
+  }
+
+  static remove(key) {
+    sessionStorage.removeItem(key);
+  }
+
+  static clear() {
+    sessionStorage.clear();
+  }
+}
+```
+
+## Clipboard API
+
+### Basic Usage
+
+```javascript
+// Copy to clipboard
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    console.log('Text copied');
+  } catch (error) {
+    console.error('Copy failed:', error);
+  }
+}
+
+// Read from clipboard
+async function readFromClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    console.log('Clipboard content:', text);
+    return text;
+  } catch (error) {
+    console.error('Read failed:', error);
+    return null;
+  }
+}
+
+// Copy rich content
+async function copyRichContent() {
+  const blob = new Blob(['<b>Rich content</b>'], { type: 'text/html' });
+  const richData = new ClipboardItem({
+    'text/html': blob,
+  });
+
+  try {
+    await navigator.clipboard.write([richData]);
+    console.log('Rich content copied');
+  } catch (error) {
+    console.error('Copy failed:', error);
+  }
+}
+```
+
+## Related Topics
+
+- [Browser APIs](./browser-apis) - Other browser APIs
+- [Web Workers](./web-workers) - Parallel processing in JavaScript
+- [Service Workers](./service-workers) - Offline capabilities
+- [Performance](./performance) - Performance optimization

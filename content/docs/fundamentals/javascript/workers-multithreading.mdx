@@ -1,0 +1,573 @@
+---
+description: A comprehensive guide to Workers and Multithreading in JavaScript, including Web Workers, Worker Threads, and parallel processing patterns
+title: Workers and Multithreading in JavaScript
+---
+
+# Workers and Multithreading in JavaScript
+
+JavaScript is single-threaded by nature, but modern JavaScript provides several ways to achieve concurrent execution through workers and parallel processing.
+
+## Web Workers
+
+### Basic Web Worker Usage
+
+```javascript
+// main.js
+// Create a new worker
+const worker = new Worker('worker.js');
+
+// Send data to worker
+worker.postMessage({
+  type: 'PROCESS_DATA',
+  data: [1, 2, 3, 4, 5],
+});
+
+// Receive data from worker
+worker.onmessage = function (e) {
+  console.log('Result from worker:', e.data);
+};
+
+// Handle errors
+worker.onerror = function (error) {
+  console.error('Worker error:', error);
+};
+
+// Terminate worker
+function stopWorker() {
+  worker.terminate();
+}
+
+// worker.js
+self.onmessage = function (e) {
+  if (e.data.type === 'PROCESS_DATA') {
+    const result = processData(e.data.data);
+    self.postMessage(result);
+  }
+};
+
+function processData(data) {
+  // Expensive computation
+  return data.map((x) => x * x);
+}
+```
+
+### Dedicated Workers
+
+```javascript
+// Complex calculation worker
+// calculator-worker.js
+self.onmessage = function (e) {
+  const { operation, numbers } = e.data;
+
+  let result;
+  switch (operation) {
+    case 'sum':
+      result = numbers.reduce((a, b) => a + b, 0);
+      break;
+    case 'average':
+      result = numbers.reduce((a, b) => a + b, 0) / numbers.length;
+      break;
+    case 'factorial':
+      result = factorial(numbers[0]);
+      break;
+    default:
+      throw new Error('Unknown operation');
+  }
+
+  self.postMessage({ operation, result });
+};
+
+function factorial(n) {
+  if (n === 0) return 1;
+  return n * factorial(n - 1);
+}
+
+// main.js
+class CalculatorWorker {
+  constructor() {
+    this.worker = new Worker('calculator-worker.js');
+    this.callbacks = new Map();
+
+    this.worker.onmessage = (e) => {
+      const { operation, result } = e.data;
+      const callback = this.callbacks.get(operation);
+      if (callback) {
+        callback(result);
+        this.callbacks.delete(operation);
+      }
+    };
+  }
+
+  calculate(operation, numbers) {
+    return new Promise((resolve) => {
+      this.callbacks.set(operation, resolve);
+      this.worker.postMessage({ operation, numbers });
+    });
+  }
+
+  terminate() {
+    this.worker.terminate();
+  }
+}
+
+// Usage
+const calculator = new CalculatorWorker();
+calculator
+  .calculate('sum', [1, 2, 3, 4, 5])
+  .then((result) => console.log('Sum:', result));
+```
+
+### Shared Workers
+
+```javascript
+// shared-worker.js
+const connections = new Set();
+
+self.onconnect = function (e) {
+  const port = e.ports[0];
+  connections.add(port);
+
+  port.onmessage = function (e) {
+    // Broadcast message to all connections
+    connections.forEach((connection) => {
+      connection.postMessage(e.data);
+    });
+  };
+
+  port.start();
+};
+
+// main.js
+class SharedWorkerConnection {
+  constructor() {
+    this.worker = new SharedWorker('shared-worker.js');
+    this.port = this.worker.port;
+    this.port.start();
+  }
+
+  send(message) {
+    this.port.postMessage(message);
+  }
+
+  onMessage(callback) {
+    this.port.onmessage = (e) => callback(e.data);
+  }
+}
+
+// Usage in multiple tabs/windows
+const connection = new SharedWorkerConnection();
+connection.onMessage((message) => {
+  console.log('Received:', message);
+});
+
+connection.send('Hello from tab 1');
+```
+
+## Worker Threads (Node.js)
+
+### Basic Worker Thread Usage
+
+```javascript
+// main.js
+const { Worker } = require('worker_threads');
+
+function runWorker(workerData) {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker('./worker.js', { workerData });
+
+    worker.on('message', resolve);
+    worker.on('error', reject);
+    worker.on('exit', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Worker stopped with exit code ${code}`));
+      }
+    });
+  });
+}
+
+// worker.js
+const { parentPort, workerData } = require('worker_threads');
+
+// Process data
+const result = processData(workerData);
+
+// Send result back to main thread
+parentPort.postMessage(result);
+
+function processData(data) {
+  // Expensive computation
+  return data.map((x) => x * x);
+}
+
+// Usage
+async function main() {
+  try {
+    const result = await runWorker([1, 2, 3, 4, 5]);
+    console.log('Result:', result);
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+main();
+```
+
+### Worker Pool
+
+```javascript
+// worker-pool.js
+const { Worker } = require('worker_threads');
+const path = require('path');
+
+class WorkerPool {
+  constructor(size, workerScript) {
+    this.size = size;
+    this.workerScript = workerScript;
+    this.workers = [];
+    this.queue = [];
+    this.activeWorkers = new Set();
+
+    this.initialize();
+  }
+
+  initialize() {
+    for (let i = 0; i < this.size; i++) {
+      const worker = new Worker(this.workerScript);
+      this.workers.push(worker);
+    }
+  }
+
+  runTask(task) {
+    return new Promise((resolve, reject) => {
+      const workerTask = {
+        task,
+        callback: { resolve, reject },
+      };
+
+      const availableWorker = this.workers.find(
+        (w) => !this.activeWorkers.has(w)
+      );
+
+      if (availableWorker) {
+        this.runWorkerTask(availableWorker, workerTask);
+      } else {
+        this.queue.push(workerTask);
+      }
+    });
+  }
+
+  runWorkerTask(worker, workerTask) {
+    this.activeWorkers.add(worker);
+
+    worker.once('message', (result) => {
+      this.activeWorkers.delete(worker);
+      workerTask.callback.resolve(result);
+
+      if (this.queue.length > 0) {
+        this.runWorkerTask(worker, this.queue.shift());
+      }
+    });
+
+    worker.once('error', (error) => {
+      this.activeWorkers.delete(worker);
+      workerTask.callback.reject(error);
+    });
+
+    worker.postMessage(workerTask.task);
+  }
+
+  async destroy() {
+    await Promise.all(this.workers.map((worker) => worker.terminate()));
+  }
+}
+
+// Usage
+const pool = new WorkerPool(4, path.join(__dirname, 'worker.js'));
+
+async function processItems(items) {
+  const results = await Promise.all(items.map((item) => pool.runTask(item)));
+
+  await pool.destroy();
+  return results;
+}
+```
+
+## Parallel Processing Patterns
+
+### Task Distribution
+
+```javascript
+// Distribute work across multiple workers
+class TaskDistributor {
+  constructor(numWorkers) {
+    this.workers = [];
+    this.currentWorker = 0;
+
+    for (let i = 0; i < numWorkers; i++) {
+      this.workers.push(new Worker('worker.js'));
+    }
+  }
+
+  distribute(tasks) {
+    return new Promise((resolve) => {
+      const results = new Array(tasks.length);
+      let completed = 0;
+
+      tasks.forEach((task, index) => {
+        const worker = this.workers[this.currentWorker];
+        this.currentWorker = (this.currentWorker + 1) % this.workers.length;
+
+        worker.postMessage(task);
+
+        worker.onmessage = (e) => {
+          results[index] = e.data;
+          completed++;
+
+          if (completed === tasks.length) {
+            resolve(results);
+          }
+        };
+      });
+    });
+  }
+
+  terminate() {
+    this.workers.forEach((worker) => worker.terminate());
+  }
+}
+
+// Usage
+const distributor = new TaskDistributor(4);
+const tasks = [
+  { type: 'calculation', data: [1, 2, 3] },
+  { type: 'calculation', data: [4, 5, 6] },
+  { type: 'calculation', data: [7, 8, 9] },
+];
+
+distributor
+  .distribute(tasks)
+  .then((results) => console.log('Results:', results))
+  .finally(() => distributor.terminate());
+```
+
+### Pipeline Processing
+
+```javascript
+// Pipeline of workers for sequential processing
+class WorkerPipeline {
+  constructor(workerScripts) {
+    this.workers = workerScripts.map((script) => new Worker(script));
+    this.setupPipeline();
+  }
+
+  setupPipeline() {
+    this.workers.forEach((worker, index) => {
+      worker.onmessage = (e) => {
+        const nextWorker = this.workers[index + 1];
+        if (nextWorker) {
+          nextWorker.postMessage(e.data);
+        } else {
+          // Final result
+          this.onComplete(e.data);
+        }
+      };
+    });
+  }
+
+  process(data) {
+    return new Promise((resolve) => {
+      this.onComplete = resolve;
+      this.workers[0].postMessage(data);
+    });
+  }
+
+  terminate() {
+    this.workers.forEach((worker) => worker.terminate());
+  }
+}
+
+// Usage
+const pipeline = new WorkerPipeline([
+  'filter-worker.js',
+  'transform-worker.js',
+  'aggregate-worker.js',
+]);
+
+const data = [
+  /* large dataset */
+];
+pipeline
+  .process(data)
+  .then((result) => console.log('Final result:', result))
+  .finally(() => pipeline.terminate());
+```
+
+### Map-Reduce Pattern
+
+```javascript
+// Parallel map-reduce implementation
+class MapReduceWorker {
+  constructor(mapperScript, reducerScript, numWorkers) {
+    this.mappers = Array(numWorkers)
+      .fill()
+      .map(() => new Worker(mapperScript));
+
+    this.reducer = new Worker(reducerScript);
+  }
+
+  async process(data) {
+    // Split data among mappers
+    const chunkSize = Math.ceil(data.length / this.mappers.length);
+    const mappedResults = await Promise.all(
+      this.mappers.map((mapper, index) => {
+        const chunk = data.slice(index * chunkSize, (index + 1) * chunkSize);
+
+        return new Promise((resolve) => {
+          mapper.onmessage = (e) => resolve(e.data);
+          mapper.postMessage(chunk);
+        });
+      })
+    );
+
+    // Reduce results
+    return new Promise((resolve) => {
+      this.reducer.onmessage = (e) => resolve(e.data);
+      this.reducer.postMessage(mappedResults);
+    });
+  }
+
+  terminate() {
+    this.mappers.forEach((mapper) => mapper.terminate());
+    this.reducer.terminate();
+  }
+}
+
+// Usage
+const mapReduce = new MapReduceWorker('mapper.js', 'reducer.js', 4);
+
+const data = [
+  /* large dataset */
+];
+mapReduce
+  .process(data)
+  .then((result) => console.log('Result:', result))
+  .finally(() => mapReduce.terminate());
+```
+
+## Performance Considerations
+
+### Worker Creation Cost
+
+```javascript
+// Worker pool with lazy initialization
+class LazyWorkerPool {
+  constructor(maxWorkers, workerScript) {
+    this.maxWorkers = maxWorkers;
+    this.workerScript = workerScript;
+    this.workers = [];
+    this.queue = [];
+  }
+
+  async runTask(task) {
+    if (this.workers.length < this.maxWorkers) {
+      const worker = new Worker(this.workerScript);
+      this.workers.push(worker);
+      return this.executeTask(worker, task);
+    }
+
+    const availableWorker = this.workers.find((w) => !w.busy);
+    if (availableWorker) {
+      return this.executeTask(availableWorker, task);
+    }
+
+    return new Promise((resolve, reject) => {
+      this.queue.push({ task, resolve, reject });
+    });
+  }
+
+  executeTask(worker, task) {
+    return new Promise((resolve, reject) => {
+      worker.busy = true;
+
+      worker.onmessage = (e) => {
+        worker.busy = false;
+        resolve(e.data);
+
+        if (this.queue.length > 0) {
+          const nextTask = this.queue.shift();
+          this.executeTask(worker, nextTask.task)
+            .then(nextTask.resolve)
+            .catch(nextTask.reject);
+        }
+      };
+
+      worker.onerror = (error) => {
+        worker.busy = false;
+        reject(error);
+      };
+
+      worker.postMessage(task);
+    });
+  }
+}
+```
+
+### Memory Management
+
+```javascript
+// Worker with memory monitoring
+class MonitoredWorker {
+  constructor(script) {
+    this.worker = new Worker(script);
+    this.memoryUsage = [];
+    this.monitoringInterval = null;
+  }
+
+  startMonitoring(interval = 1000) {
+    this.monitoringInterval = setInterval(() => {
+      this.worker.postMessage({ type: 'MEMORY_CHECK' });
+    }, interval);
+
+    this.worker.addEventListener('message', (e) => {
+      if (e.data.type === 'MEMORY_USAGE') {
+        this.memoryUsage.push({
+          timestamp: Date.now(),
+          usage: e.data.usage,
+        });
+
+        this.checkMemoryThreshold();
+      }
+    });
+  }
+
+  checkMemoryThreshold() {
+    const lastUsage = this.memoryUsage[this.memoryUsage.length - 1];
+    if (lastUsage.usage > 100 * 1024 * 1024) {
+      // 100MB
+      console.warn('High memory usage in worker');
+      this.cleanup();
+    }
+  }
+
+  cleanup() {
+    // Implement cleanup strategy
+    this.worker.postMessage({ type: 'CLEANUP' });
+  }
+
+  stopMonitoring() {
+    clearInterval(this.monitoringInterval);
+  }
+
+  terminate() {
+    this.stopMonitoring();
+    this.worker.terminate();
+  }
+}
+```
+
+## Related Topics
+
+- [Performance Optimization](./performance-optimization) - JavaScript performance tips
+- [Concurrency](./concurrency) - Concurrency patterns in JavaScript
+- [Event Loop](./event-loop) - Understanding JavaScript's event loop
+- [Node.js](./nodejs) - Node.js specific features and patterns

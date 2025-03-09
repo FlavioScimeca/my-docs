@@ -1,0 +1,421 @@
+---
+description: A comprehensive guide to Node.js Streams and Buffers, including stream types, buffer operations, and practical examples of data handling
+title: Node.js Streams and Buffers
+---
+
+# Node.js Streams and Buffers
+
+Streams and Buffers are fundamental concepts in Node.js for handling data flow and binary data. This guide covers everything you need to know about working with streams and buffers effectively.
+
+## Buffers
+
+### Buffer Basics
+
+```javascript
+// Creating buffers
+const buf1 = Buffer.alloc(10); // Creates a buffer of 10 bytes filled with zeros
+const buf2 = Buffer.from('Hello World'); // Creates a buffer from string
+const buf3 = Buffer.from([1, 2, 3, 4]); // Creates a buffer from array
+
+// Writing to buffers
+buf1.write('Hello');
+console.log(buf1.toString()); // 'Hello'
+
+// Buffer operations
+buf1.fill(0); // Fill with zeros
+buf1.slice(0, 5); // Create a new buffer view
+buf1.copy(buf2); // Copy contents
+
+// Buffer concatenation
+const combined = Buffer.concat([buf1, buf2]);
+
+// Buffer comparison
+buf1.equals(buf2); // Compare contents
+buf1.compare(buf2); // Compare lexicographically
+```
+
+### Buffer Encoding
+
+```javascript
+// String encoding
+const buf = Buffer.from('Hello World');
+console.log(buf.toString('hex'));
+console.log(buf.toString('base64'));
+console.log(buf.toString('utf8'));
+
+// Converting between encodings
+const base64Str = buf.toString('base64');
+const originalBuf = Buffer.from(base64Str, 'base64');
+
+// Working with binary data
+const binaryData = Buffer.from([0xff, 0x00, 0xff]);
+console.log(binaryData.toString('hex')); // 'ff00ff'
+```
+
+## Streams
+
+### Readable Streams
+
+```javascript
+const fs = require('fs');
+
+// Create readable stream
+const readStream = fs.createReadStream('input.txt', {
+  encoding: 'utf8',
+  highWaterMark: 64 * 1024, // 64KB chunks
+});
+
+// Handle data events
+readStream.on('data', (chunk) => {
+  console.log('Received chunk:', chunk.length);
+});
+
+readStream.on('end', () => {
+  console.log('Finished reading');
+});
+
+readStream.on('error', (error) => {
+  console.error('Error reading:', error);
+});
+
+// Pausing and resuming
+readStream.pause();
+setTimeout(() => {
+  readStream.resume();
+}, 1000);
+
+// Custom readable stream
+const { Readable } = require('stream');
+
+class CounterStream extends Readable {
+  constructor(max) {
+    super();
+    this.max = max;
+    this.current = 0;
+  }
+
+  _read() {
+    this.current += 1;
+
+    if (this.current <= this.max) {
+      const buf = Buffer.from(`${this.current}`);
+      this.push(buf);
+    } else {
+      this.push(null);
+    }
+  }
+}
+
+const counter = new CounterStream(5);
+counter.pipe(process.stdout);
+```
+
+### Writable Streams
+
+```javascript
+const fs = require('fs');
+
+// Create writable stream
+const writeStream = fs.createWriteStream('output.txt', {
+  flags: 'w',
+  encoding: 'utf8',
+});
+
+// Write data
+writeStream.write('Hello\n');
+writeStream.write('World\n');
+writeStream.end('Done!');
+
+writeStream.on('finish', () => {
+  console.log('Finished writing');
+});
+
+writeStream.on('error', (error) => {
+  console.error('Error writing:', error);
+});
+
+// Custom writable stream
+const { Writable } = require('stream');
+
+class LogStream extends Writable {
+  _write(chunk, encoding, callback) {
+    console.log('Received:', chunk.toString());
+    callback();
+  }
+}
+
+const logger = new LogStream();
+process.stdin.pipe(logger);
+```
+
+### Transform Streams
+
+```javascript
+const { Transform } = require('stream');
+
+// Create transform stream
+class UppercaseTransform extends Transform {
+  _transform(chunk, encoding, callback) {
+    this.push(chunk.toString().toUpperCase());
+    callback();
+  }
+}
+
+// Usage with pipe
+const uppercaser = new UppercaseTransform();
+process.stdin.pipe(uppercaser).pipe(process.stdout);
+
+// Compression example
+const zlib = require('zlib');
+const fs = require('fs');
+
+fs.createReadStream('input.txt')
+  .pipe(zlib.createGzip())
+  .pipe(fs.createWriteStream('input.txt.gz'));
+
+// Custom transform with async operations
+class AsyncTransform extends Transform {
+  constructor(options = {}) {
+    super(options);
+  }
+
+  async _transform(chunk, encoding, callback) {
+    try {
+      const result = await this.processChunk(chunk);
+      this.push(result);
+      callback();
+    } catch (err) {
+      callback(err);
+    }
+  }
+
+  async processChunk(chunk) {
+    // Simulate async processing
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return chunk.toString().toUpperCase();
+  }
+}
+```
+
+### Stream Pipelines
+
+```javascript
+const { pipeline } = require('stream/promises');
+const fs = require('fs');
+const zlib = require('zlib');
+
+// Error-handled pipeline
+async function compressFile(input, output) {
+  try {
+    await pipeline(
+      fs.createReadStream(input),
+      zlib.createGzip(),
+      fs.createWriteStream(output)
+    );
+    console.log('Pipeline succeeded');
+  } catch (err) {
+    console.error('Pipeline failed', err);
+  }
+}
+
+// Multiple transforms
+async function processFile(input, output) {
+  const removeSpaces = new Transform({
+    transform(chunk, encoding, callback) {
+      this.push(chunk.toString().replace(/\s+/g, ''));
+      callback();
+    },
+  });
+
+  const addTimestamp = new Transform({
+    transform(chunk, encoding, callback) {
+      this.push(`[${Date.now()}] ${chunk}`);
+      callback();
+    },
+  });
+
+  await pipeline(
+    fs.createReadStream(input),
+    removeSpaces,
+    addTimestamp,
+    fs.createWriteStream(output)
+  );
+}
+```
+
+## Memory Management
+
+### Backpressure Handling
+
+```javascript
+const fs = require('fs');
+
+const readStream = fs.createReadStream('big-file.txt');
+const writeStream = fs.createWriteStream('output.txt');
+
+// Handle backpressure
+readStream.on('data', (chunk) => {
+  const canContinue = writeStream.write(chunk);
+
+  if (!canContinue) {
+    readStream.pause();
+
+    writeStream.once('drain', () => {
+      readStream.resume();
+    });
+  }
+});
+
+// Better approach using pipeline
+const { pipeline } = require('stream');
+
+pipeline(
+  fs.createReadStream('big-file.txt'),
+  fs.createWriteStream('output.txt'),
+  (err) => {
+    if (err) {
+      console.error('Pipeline failed', err);
+    } else {
+      console.log('Pipeline succeeded');
+    }
+  }
+);
+```
+
+### Memory Efficient Processing
+
+```javascript
+const fs = require('fs');
+const csv = require('csv-parser');
+
+// Process large CSV file
+async function processLargeCSV(filename) {
+  const results = [];
+
+  return new Promise((resolve, reject) => {
+    fs.createReadStream(filename)
+      .pipe(csv())
+      .on('data', (data) => {
+        // Process each row without loading entire file
+        results.push(processRow(data));
+
+        // Optional: Control memory usage
+        if (results.length >= 1000) {
+          const batch = results.splice(0);
+          saveBatch(batch);
+        }
+      })
+      .on('end', () => {
+        if (results.length > 0) {
+          saveBatch(results);
+        }
+        resolve();
+      })
+      .on('error', reject);
+  });
+}
+
+// Large file copy with progress
+async function copyLargeFile(source, destination, onProgress) {
+  const stat = await fs.promises.stat(source);
+  let bytesRead = 0;
+
+  return new Promise((resolve, reject) => {
+    pipeline(
+      fs.createReadStream(source),
+      new Transform({
+        transform(chunk, encoding, callback) {
+          bytesRead += chunk.length;
+          onProgress(bytesRead / stat.size);
+          callback(null, chunk);
+        },
+      }),
+      fs.createWriteStream(destination),
+      (err) => {
+        if (err) reject(err);
+        else resolve();
+      }
+    );
+  });
+}
+```
+
+## Best Practices
+
+### Error Handling
+
+```javascript
+// Proper error handling for streams
+function handleStreamError(stream) {
+  stream.on('error', (error) => {
+    console.error('Stream error:', error);
+    // Cleanup resources
+    stream.destroy();
+  });
+
+  stream.on('end', () => {
+    console.log('Stream ended normally');
+  });
+
+  stream.on('close', () => {
+    console.log('Stream closed');
+  });
+}
+
+// Using async iterators with streams
+async function processStream(stream) {
+  try {
+    for await (const chunk of stream) {
+      console.log('Processing chunk:', chunk);
+    }
+  } catch (error) {
+    console.error('Error processing stream:', error);
+  } finally {
+    stream.destroy();
+  }
+}
+```
+
+### Performance Optimization
+
+```javascript
+// Optimize buffer allocation
+const bufferPool = [];
+
+function getBuffer() {
+  return bufferPool.pop() || Buffer.alloc(64 * 1024);
+}
+
+function releaseBuffer(buffer) {
+  if (bufferPool.length < 100) {
+    bufferPool.push(buffer);
+  }
+}
+
+// Optimize stream processing
+const { Transform } = require('stream');
+
+class OptimizedTransform extends Transform {
+  constructor(options) {
+    super({
+      ...options,
+      highWaterMark: 64 * 1024, // Optimize chunk size
+    });
+  }
+
+  _transform(chunk, encoding, callback) {
+    // Process in larger chunks
+    setImmediate(() => {
+      this.push(processChunk(chunk));
+      callback();
+    });
+  }
+}
+```
+
+## Related Topics
+
+- [File System Operations](./file-system) - Working with files
+- [Network Programming](./network) - Network streams
+- [Performance Optimization](./performance) - Performance best practices
+- [Memory Management](./memory) - Memory handling in Node.js

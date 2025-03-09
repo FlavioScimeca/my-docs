@@ -1,0 +1,546 @@
+---
+description: A comprehensive guide to implementing HTTP/2 servers in Node.js, including server push, stream multiplexing, and performance optimization
+title: HTTP/2 Server Implementation
+---
+
+# HTTP/2 Server Implementation
+
+Learn how to create and manage HTTP/2 servers in Node.js, leveraging features like server push, stream multiplexing, and header compression.
+
+## Basic HTTP/2 Server
+
+### Creating a Secure HTTP/2 Server
+
+```javascript
+const http2 = require('http2');
+const fs = require('fs');
+
+const options = {
+  key: fs.readFileSync('server-key.pem'),
+  cert: fs.readFileSync('server-cert.pem'),
+};
+
+// Create HTTP/2 server
+const server = http2.createSecureServer(options);
+
+server.on('stream', (stream, headers) => {
+  // Get path from headers
+  const path = headers[':path'];
+
+  // Handle request
+  if (path === '/') {
+    stream.respond({
+      'content-type': 'text/html',
+      ':status': 200,
+    });
+    stream.end('<h1>Hello HTTP/2!</h1>');
+  } else {
+    stream.respond({
+      ':status': 404,
+    });
+    stream.end('Not Found');
+  }
+});
+
+server.listen(443, () => {
+  console.log('HTTP/2 server listening on port 443');
+});
+
+// Handle server errors
+server.on('error', (err) => {
+  console.error('Server error:', err);
+});
+```
+
+### HTTP/2 Client
+
+```javascript
+const http2 = require('http2');
+
+// Create client session
+const client = http2.connect('https://localhost:443', {
+  // For self-signed certificates in development
+  rejectUnauthorized: false,
+});
+
+client.on('error', (err) => {
+  console.error('Client error:', err);
+});
+
+// Create request
+const req = client.request({
+  ':method': 'GET',
+  ':path': '/',
+});
+
+req.on('response', (headers) => {
+  console.log('Status:', headers[':status']);
+});
+
+let data = '';
+req.on('data', (chunk) => {
+  data += chunk;
+});
+
+req.on('end', () => {
+  console.log('Response:', data);
+  client.close();
+});
+
+req.end();
+```
+
+## Advanced Features
+
+### Server Push
+
+```javascript
+const http2 = require('http2');
+const fs = require('fs');
+
+const server = http2.createSecureServer({
+  key: fs.readFileSync('server-key.pem'),
+  cert: fs.readFileSync('server-cert.pem'),
+});
+
+server.on('stream', (stream, headers) => {
+  if (headers[':path'] === '/') {
+    // Push CSS and JS files
+    const pushCSS = stream.pushStream(
+      {
+        ':path': '/styles.css',
+      },
+      (err, pushStream) => {
+        if (err) {
+          console.error('Push stream error:', err);
+          return;
+        }
+
+        pushStream.respond({
+          'content-type': 'text/css',
+          ':status': 200,
+        });
+
+        fs.createReadStream('styles.css').pipe(pushStream);
+      }
+    );
+
+    const pushJS = stream.pushStream(
+      {
+        ':path': '/script.js',
+      },
+      (err, pushStream) => {
+        if (err) return;
+
+        pushStream.respond({
+          'content-type': 'application/javascript',
+          ':status': 200,
+        });
+
+        fs.createReadStream('script.js').pipe(pushStream);
+      }
+    );
+
+    // Send main HTML
+    stream.respond({
+      'content-type': 'text/html',
+      ':status': 200,
+    });
+
+    stream.end(`
+      <html>
+        <head>
+          <link rel="stylesheet" href="/styles.css">
+          <script src="/script.js" defer></script>
+        </head>
+        <body>
+          <h1>HTTP/2 Server Push Demo</h1>
+        </body>
+      </html>
+    `);
+  }
+});
+```
+
+### Stream Multiplexing
+
+```javascript
+const http2 = require('http2');
+const fs = require('fs');
+
+class HTTP2Handler {
+  constructor(options) {
+    this.server = http2.createSecureServer(options);
+    this.setupHandlers();
+  }
+
+  setupHandlers() {
+    this.server.on('stream', (stream, headers) => {
+      // Handle multiple concurrent streams
+      this.handleStream(stream, headers).catch((err) => {
+        console.error('Stream error:', err);
+        stream.respond({
+          ':status': 500,
+        });
+        stream.end('Internal Server Error');
+      });
+    });
+  }
+
+  async handleStream(stream, headers) {
+    const path = headers[':path'];
+    const method = headers[':method'];
+
+    // Track active streams
+    const streamId = stream.id;
+    console.log(`Stream ${streamId}: ${method} ${path}`);
+
+    try {
+      switch (path) {
+        case '/data':
+          // Simulate long-running operation
+          await this.handleDataRequest(stream);
+          break;
+
+        case '/upload':
+          // Handle file upload
+          await this.handleFileUpload(stream, headers);
+          break;
+
+        default:
+          stream.respond({ ':status': 404 });
+          stream.end('Not Found');
+      }
+    } finally {
+      console.log(`Stream ${streamId} completed`);
+    }
+  }
+
+  async handleDataRequest(stream) {
+    stream.respond({
+      'content-type': 'application/json',
+      ':status': 200,
+    });
+
+    // Send data in chunks
+    for (let i = 0; i < 5; i++) {
+      const chunk = { part: i + 1, data: `Chunk ${i + 1}` };
+      stream.write(JSON.stringify(chunk) + '\n');
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    stream.end();
+  }
+
+  async handleFileUpload(stream, headers) {
+    const contentLength = parseInt(headers['content-length']);
+
+    if (isNaN(contentLength)) {
+      stream.respond({ ':status': 400 });
+      stream.end('Missing Content-Length');
+      return;
+    }
+
+    let data = Buffer.alloc(0);
+
+    stream.on('data', (chunk) => {
+      data = Buffer.concat([data, chunk]);
+    });
+
+    await new Promise((resolve, reject) => {
+      stream.on('end', resolve);
+      stream.on('error', reject);
+    });
+
+    stream.respond({
+      'content-type': 'application/json',
+      ':status': 200,
+    });
+
+    stream.end(
+      JSON.stringify({
+        size: data.length,
+        message: 'Upload complete',
+      })
+    );
+  }
+}
+```
+
+### Header Compression
+
+```javascript
+const http2 = require('http2');
+
+// Constants for common headers
+const {
+  HTTP2_HEADER_METHOD,
+  HTTP2_HEADER_PATH,
+  HTTP2_HEADER_STATUS,
+  HTTP2_HEADER_CONTENT_TYPE,
+} = http2.constants;
+
+class HeaderOptimizer {
+  constructor() {
+    // Cache for common header values
+    this.headerCache = new Map();
+  }
+
+  optimizeRequestHeaders(headers) {
+    const optimized = {};
+
+    // Use constants for common headers
+    optimized[HTTP2_HEADER_METHOD] = headers[':method'];
+    optimized[HTTP2_HEADER_PATH] = headers[':path'];
+
+    // Cache other common headers
+    for (const [key, value] of Object.entries(headers)) {
+      if (!key.startsWith(':')) {
+        const cacheKey = `${key}:${value}`;
+        if (!this.headerCache.has(cacheKey)) {
+          this.headerCache.set(cacheKey, value);
+        }
+        optimized[key] = this.headerCache.get(cacheKey);
+      }
+    }
+
+    return optimized;
+  }
+
+  optimizeResponseHeaders(status, headers = {}) {
+    return {
+      [HTTP2_HEADER_STATUS]: status,
+      [HTTP2_HEADER_CONTENT_TYPE]: headers['content-type'] || 'text/plain',
+      ...headers,
+    };
+  }
+}
+
+// Usage
+const optimizer = new HeaderOptimizer();
+
+server.on('stream', (stream, headers) => {
+  const optimizedHeaders = optimizer.optimizeRequestHeaders(headers);
+
+  stream.respond(
+    optimizer.optimizeResponseHeaders(200, {
+      'content-type': 'text/html',
+      'cache-control': 'max-age=3600',
+    })
+  );
+});
+```
+
+## Performance Optimization
+
+### Stream Prioritization
+
+```javascript
+const http2 = require('http2');
+
+class StreamPrioritizer {
+  constructor() {
+    this.priorities = new Map();
+  }
+
+  setPriority(stream, priority) {
+    this.priorities.set(stream.id, priority);
+
+    stream.priority({
+      exclusive: false,
+      parent: 0,
+      weight: this.calculateWeight(priority),
+    });
+  }
+
+  calculateWeight(priority) {
+    // Convert priority (1-5) to weight (1-256)
+    return Math.max(1, Math.min(256, priority * 51));
+  }
+}
+
+// Usage
+const server = http2.createSecureServer(options);
+const prioritizer = new StreamPrioritizer();
+
+server.on('stream', (stream, headers) => {
+  // Set priority based on content type
+  if (headers[':path'].endsWith('.css')) {
+    prioritizer.setPriority(stream, 5); // Highest
+  } else if (headers[':path'].endsWith('.js')) {
+    prioritizer.setPriority(stream, 4);
+  } else if (headers[':path'].endsWith('.jpg')) {
+    prioritizer.setPriority(stream, 3);
+  } else {
+    prioritizer.setPriority(stream, 2);
+  }
+});
+```
+
+### Flow Control
+
+```javascript
+class StreamController {
+  constructor(maxConcurrent = 100) {
+    this.maxConcurrent = maxConcurrent;
+    this.activeStreams = new Set();
+    this.pendingStreams = [];
+  }
+
+  async handleStream(stream) {
+    if (this.activeStreams.size >= this.maxConcurrent) {
+      // Wait for slot
+      await new Promise((resolve) => {
+        this.pendingStreams.push(resolve);
+      });
+    }
+
+    this.activeStreams.add(stream);
+
+    stream.on('close', () => {
+      this.activeStreams.delete(stream);
+
+      // Process pending stream
+      if (this.pendingStreams.length > 0) {
+        const next = this.pendingStreams.shift();
+        next();
+      }
+    });
+  }
+
+  setMaxConcurrent(max) {
+    this.maxConcurrent = max;
+
+    // Process pending streams if limit increased
+    while (
+      this.activeStreams.size < this.maxConcurrent &&
+      this.pendingStreams.length > 0
+    ) {
+      const next = this.pendingStreams.shift();
+      next();
+    }
+  }
+}
+
+// Usage
+const controller = new StreamController();
+
+server.on('stream', async (stream, headers) => {
+  await controller.handleStream(stream);
+  // Handle stream normally...
+});
+```
+
+## Best Practices
+
+### Security Configuration
+
+```javascript
+const http2 = require('http2');
+const fs = require('fs');
+
+const options = {
+  // SSL/TLS configuration
+  key: fs.readFileSync('server-key.pem'),
+  cert: fs.readFileSync('server-cert.pem'),
+
+  // Modern cipher configuration
+  ciphers: [
+    'TLS_AES_128_GCM_SHA256',
+    'TLS_AES_256_GCM_SHA384',
+    'TLS_CHACHA20_POLY1305_SHA256',
+  ].join(':'),
+
+  // Minimum TLS version
+  minVersion: 'TLSv1.2',
+
+  // HTTP/2 specific settings
+  settings: {
+    // Maximum concurrent streams
+    maxConcurrentStreams: 100,
+    // Initial window size
+    initialWindowSize: 1024 * 1024, // 1MB
+    // Maximum frame size
+    maxFrameSize: 16384, // 16KB
+  },
+
+  // Timeout settings
+  timeout: 5000,
+
+  // Disable renegotiation
+  allowHTTP1: false,
+};
+
+const server = http2.createSecureServer(options);
+```
+
+### Error Handling
+
+```javascript
+class HTTP2ErrorHandler {
+  static handle(stream, error) {
+    console.error('Stream error:', error);
+
+    if (!stream.destroyed) {
+      const status = this.getStatusCode(error);
+      const message = this.getErrorMessage(error);
+
+      try {
+        stream.respond({
+          ':status': status,
+          'content-type': 'application/json',
+        });
+
+        stream.end(
+          JSON.stringify({
+            error: message,
+          })
+        );
+      } catch (err) {
+        console.error('Error sending error response:', err);
+        stream.destroy();
+      }
+    }
+  }
+
+  static getStatusCode(error) {
+    switch (error.code) {
+      case 'PROTOCOL_ERROR':
+        return 400;
+      case 'INTERNAL_ERROR':
+        return 500;
+      case 'FLOW_CONTROL_ERROR':
+        return 503;
+      default:
+        return 500;
+    }
+  }
+
+  static getErrorMessage(error) {
+    switch (error.code) {
+      case 'PROTOCOL_ERROR':
+        return 'Invalid request format';
+      case 'INTERNAL_ERROR':
+        return 'Internal server error';
+      case 'FLOW_CONTROL_ERROR':
+        return 'Server is busy';
+      default:
+        return 'An unexpected error occurred';
+    }
+  }
+}
+
+// Usage
+server.on('stream', (stream) => {
+  stream.on('error', (error) => {
+    HTTP2ErrorHandler.handle(stream, error);
+  });
+});
+```
+
+## Related Topics
+
+- [HTTP Server](./http-server) - Basic HTTP server implementation
+- [Performance](./performance) - Performance optimization techniques
+- [Security](./security) - Network security best practices
+- [SSL/TLS](./ssl-tls) - SSL/TLS configuration

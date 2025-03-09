@@ -1,0 +1,549 @@
+---
+description: A comprehensive guide to File System operations in Node.js, including file handling, directory management, streams, and best practices
+title: File System Operations
+---
+
+# File System Operations
+
+Learn how to work with files and directories in Node.js, including synchronous and asynchronous operations, streams, and advanced file handling techniques.
+
+## Basic File Operations
+
+### Reading and Writing Files
+
+```javascript
+const fs = require('fs').promises;
+const path = require('path');
+
+class FileManager {
+  static async readFile(filePath, encoding = 'utf8') {
+    try {
+      const content = await fs.readFile(filePath, { encoding });
+      return content;
+    } catch (error) {
+      console.error(`Error reading file ${filePath}:`, error);
+      throw error;
+    }
+  }
+
+  static async writeFile(filePath, content, options = {}) {
+    try {
+      const dirname = path.dirname(filePath);
+      await fs.mkdir(dirname, { recursive: true });
+
+      await fs.writeFile(filePath, content, options);
+    } catch (error) {
+      console.error(`Error writing to file ${filePath}:`, error);
+      throw error;
+    }
+  }
+
+  static async appendFile(filePath, content) {
+    try {
+      await fs.appendFile(filePath, content);
+    } catch (error) {
+      console.error(`Error appending to file ${filePath}:`, error);
+      throw error;
+    }
+  }
+
+  static async copyFile(source, destination) {
+    try {
+      await fs.copyFile(source, destination);
+    } catch (error) {
+      console.error(
+        `Error copying file from ${source} to ${destination}:`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  static async moveFile(source, destination) {
+    try {
+      await fs.rename(source, destination);
+    } catch (error) {
+      if (error.code === 'EXDEV') {
+        // Cross-device move, fallback to copy and delete
+        await this.copyFile(source, destination);
+        await fs.unlink(source);
+      } else {
+        console.error(
+          `Error moving file from ${source} to ${destination}:`,
+          error
+        );
+        throw error;
+      }
+    }
+  }
+}
+
+// Usage examples
+async function fileOperations() {
+  // Read file
+  const content = await FileManager.readFile('input.txt');
+  console.log('File content:', content);
+
+  // Write file
+  await FileManager.writeFile('output.txt', 'Hello, World!');
+
+  // Append to file
+  await FileManager.appendFile(
+    'log.txt',
+    `[${new Date().toISOString()}] Log entry\n`
+  );
+
+  // Copy file
+  await FileManager.copyFile('source.txt', 'backup/source.txt');
+
+  // Move file
+  await FileManager.moveFile('old/file.txt', 'new/file.txt');
+}
+```
+
+### File Information and Stats
+
+```javascript
+class FileInfo {
+  static async getStats(filePath) {
+    try {
+      const stats = await fs.stat(filePath);
+      return {
+        size: stats.size,
+        created: stats.birthtime,
+        modified: stats.mtime,
+        accessed: stats.atime,
+        isFile: stats.isFile(),
+        isDirectory: stats.isDirectory(),
+        isSymbolicLink: stats.isSymbolicLink(),
+        permissions: stats.mode,
+      };
+    } catch (error) {
+      console.error(`Error getting stats for ${filePath}:`, error);
+      throw error;
+    }
+  }
+
+  static async checkAccess(filePath, mode = fs.constants.F_OK) {
+    try {
+      await fs.access(filePath, mode);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  static async getFileType(filePath) {
+    const stats = await this.getStats(filePath);
+    if (stats.isFile()) return 'file';
+    if (stats.isDirectory()) return 'directory';
+    if (stats.isSymbolicLink()) return 'symlink';
+    return 'unknown';
+  }
+
+  static formatSize(bytes) {
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let size = bytes;
+    let unitIndex = 0;
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024;
+      unitIndex++;
+    }
+
+    return `${size.toFixed(2)} ${units[unitIndex]}`;
+  }
+}
+```
+
+## Directory Operations
+
+### Directory Management
+
+```javascript
+class DirectoryManager {
+  static async createDirectory(dirPath, options = { recursive: true }) {
+    try {
+      await fs.mkdir(dirPath, options);
+    } catch (error) {
+      if (error.code !== 'EEXIST') {
+        console.error(`Error creating directory ${dirPath}:`, error);
+        throw error;
+      }
+    }
+  }
+
+  static async removeDirectory(dirPath, options = { recursive: true }) {
+    try {
+      await fs.rm(dirPath, options);
+    } catch (error) {
+      console.error(`Error removing directory ${dirPath}:`, error);
+      throw error;
+    }
+  }
+
+  static async readDirectory(dirPath, options = { withFileTypes: true }) {
+    try {
+      const entries = await fs.readdir(dirPath, options);
+      return entries;
+    } catch (error) {
+      console.error(`Error reading directory ${dirPath}:`, error);
+      throw error;
+    }
+  }
+
+  static async *walkDirectory(dirPath) {
+    const entries = await this.readDirectory(dirPath);
+
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+
+      if (entry.isDirectory()) {
+        yield* this.walkDirectory(fullPath);
+      } else {
+        yield fullPath;
+      }
+    }
+  }
+
+  static async findFiles(dirPath, pattern) {
+    const files = [];
+    for await (const file of this.walkDirectory(dirPath)) {
+      if (pattern.test(file)) {
+        files.push(file);
+      }
+    }
+    return files;
+  }
+}
+
+// Usage example
+async function directoryOperations() {
+  // Create nested directories
+  await DirectoryManager.createDirectory('data/uploads/images');
+
+  // List directory contents
+  const entries = await DirectoryManager.readDirectory('data');
+  console.log('Directory contents:', entries);
+
+  // Find all JavaScript files
+  const jsFiles = await DirectoryManager.findFiles('src', /\.js$/);
+  console.log('JavaScript files:', jsFiles);
+
+  // Remove directory and contents
+  await DirectoryManager.removeDirectory('temp');
+}
+```
+
+## File Streams
+
+### Stream Operations
+
+```javascript
+const { createReadStream, createWriteStream } = require('fs');
+const { pipeline } = require('stream/promises');
+
+class StreamManager {
+  static createFileReadStream(filePath, options = {}) {
+    return createReadStream(filePath, {
+      highWaterMark: 64 * 1024, // 64KB chunks
+      ...options,
+    });
+  }
+
+  static createFileWriteStream(filePath, options = {}) {
+    return createWriteStream(filePath, {
+      flags: 'w',
+      ...options,
+    });
+  }
+
+  static async copyFileStream(source, destination) {
+    const readStream = this.createFileReadStream(source);
+    const writeStream = this.createFileWriteStream(destination);
+
+    try {
+      await pipeline(readStream, writeStream);
+    } catch (error) {
+      console.error('Pipeline failed:', error);
+      throw error;
+    }
+  }
+
+  static async processLineByLine(filePath, processor) {
+    const { createInterface } = require('readline');
+    const fileStream = this.createFileReadStream(filePath);
+
+    const rl = createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
+
+    try {
+      for await (const line of rl) {
+        await processor(line);
+      }
+    } finally {
+      rl.close();
+    }
+  }
+
+  static createTransformStream(transform) {
+    const { Transform } = require('stream');
+
+    return new Transform({
+      transform(chunk, encoding, callback) {
+        try {
+          const result = transform(chunk);
+          callback(null, result);
+        } catch (error) {
+          callback(error);
+        }
+      },
+    });
+  }
+}
+
+// Usage examples
+async function streamOperations() {
+  // Copy large file efficiently
+  await StreamManager.copyFileStream('large-file.mp4', 'backup.mp4');
+
+  // Process file line by line
+  await StreamManager.processLineByLine('logs.txt', async (line) => {
+    if (line.includes('ERROR')) {
+      await FileManager.appendFile('errors.txt', line + '\n');
+    }
+  });
+
+  // Transform stream example
+  const uppercaseTransform = StreamManager.createTransformStream((chunk) =>
+    chunk.toString().toUpperCase()
+  );
+
+  await pipeline(
+    StreamManager.createFileReadStream('input.txt'),
+    uppercaseTransform,
+    StreamManager.createFileWriteStream('output.txt')
+  );
+}
+```
+
+## Performance Optimization
+
+### File System Caching
+
+```javascript
+class FileCache {
+  constructor(options = {}) {
+    this.cache = new Map();
+    this.maxSize = options.maxSize || 100;
+    this.maxAge = options.maxAge || 5000; // 5 seconds
+  }
+
+  async get(filePath) {
+    const cached = this.cache.get(filePath);
+
+    if (cached && Date.now() - cached.timestamp < this.maxAge) {
+      return cached.content;
+    }
+
+    const content = await fs.readFile(filePath, 'utf8');
+    this.set(filePath, content);
+    return content;
+  }
+
+  set(filePath, content) {
+    if (this.cache.size >= this.maxSize) {
+      const oldestKey = Array.from(this.cache.keys())[0];
+      this.cache.delete(oldestKey);
+    }
+
+    this.cache.set(filePath, {
+      content,
+      timestamp: Date.now(),
+    });
+  }
+
+  invalidate(filePath) {
+    this.cache.delete(filePath);
+  }
+
+  clear() {
+    this.cache.clear();
+  }
+}
+
+// File watcher with cache integration
+class FileWatcher {
+  constructor(cache) {
+    this.cache = cache;
+    this.watchers = new Map();
+  }
+
+  watch(filePath) {
+    if (this.watchers.has(filePath)) return;
+
+    const watcher = fs.watch(filePath, (eventType) => {
+      if (eventType === 'change') {
+        this.cache.invalidate(filePath);
+      }
+    });
+
+    this.watchers.set(filePath, watcher);
+  }
+
+  unwatch(filePath) {
+    const watcher = this.watchers.get(filePath);
+    if (watcher) {
+      watcher.close();
+      this.watchers.delete(filePath);
+    }
+  }
+
+  unwatchAll() {
+    for (const [filePath] of this.watchers) {
+      this.unwatch(filePath);
+    }
+  }
+}
+```
+
+## Best Practices
+
+### Error Handling
+
+```javascript
+class FileSystemError extends Error {
+  constructor(message, code, path) {
+    super(message);
+    this.name = 'FileSystemError';
+    this.code = code;
+    this.path = path;
+  }
+}
+
+class FileSystemHandler {
+  static async withRetry(operation, options = {}) {
+    const retries = options.retries || 3;
+    const delay = options.delay || 1000;
+
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await operation();
+      } catch (error) {
+        if (i === retries - 1) throw error;
+
+        if (this.isRetryableError(error)) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+
+        throw error;
+      }
+    }
+  }
+
+  static isRetryableError(error) {
+    const retryableCodes = ['EBUSY', 'ECONNRESET', 'ETIMEDOUT'];
+    return retryableCodes.includes(error.code);
+  }
+
+  static handleError(error, operation, path) {
+    switch (error.code) {
+      case 'ENOENT':
+        throw new FileSystemError(
+          `File or directory not found: ${path}`,
+          'ENOENT',
+          path
+        );
+
+      case 'EACCES':
+        throw new FileSystemError(`Permission denied: ${path}`, 'EACCES', path);
+
+      case 'EEXIST':
+        throw new FileSystemError(
+          `File or directory already exists: ${path}`,
+          'EEXIST',
+          path
+        );
+
+      default:
+        throw new FileSystemError(
+          `Error during ${operation}: ${error.message}`,
+          error.code,
+          path
+        );
+    }
+  }
+}
+```
+
+### Security Considerations
+
+```javascript
+class SecureFileSystem {
+  static validatePath(filePath) {
+    const normalizedPath = path.normalize(filePath);
+    const resolvedPath = path.resolve(normalizedPath);
+
+    // Check for path traversal attempts
+    if (!resolvedPath.startsWith(process.cwd())) {
+      throw new Error('Path traversal attempt detected');
+    }
+
+    return resolvedPath;
+  }
+
+  static async secureRead(filePath) {
+    const validPath = this.validatePath(filePath);
+
+    try {
+      return await fs.readFile(validPath, 'utf8');
+    } catch (error) {
+      throw new FileSystemError(
+        `Secure read failed: ${error.message}`,
+        error.code,
+        validPath
+      );
+    }
+  }
+
+  static async secureWrite(filePath, content) {
+    const validPath = this.validatePath(filePath);
+
+    try {
+      await fs.writeFile(validPath, content, {
+        mode: 0o600, // Read/write for owner only
+      });
+    } catch (error) {
+      throw new FileSystemError(
+        `Secure write failed: ${error.message}`,
+        error.code,
+        validPath
+      );
+    }
+  }
+
+  static async setSecurePermissions(filePath) {
+    const validPath = this.validatePath(filePath);
+
+    try {
+      await fs.chmod(validPath, 0o600);
+    } catch (error) {
+      throw new FileSystemError(
+        `Setting secure permissions failed: ${error.message}`,
+        error.code,
+        validPath
+      );
+    }
+  }
+}
+```
+
+## Related Topics
+
+- [Streams](./streams) - Working with Node.js streams
+- [Error Handling](./error-handling) - Error handling strategies
+- [Performance](./performance) - Performance optimization techniques
+- [Security](./security) - Security best practices

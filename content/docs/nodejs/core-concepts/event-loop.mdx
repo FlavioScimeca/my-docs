@@ -1,0 +1,427 @@
+---
+description: A comprehensive guide to the Node.js Event Loop, including its phases, microtasks, and practical examples of asynchronous execution
+title: Node.js Event Loop
+---
+
+# Node.js Event Loop
+
+The Event Loop is fundamental to Node.js's non-blocking I/O operations. This guide explains how the Event Loop works and how to effectively use it in your applications.
+
+## Event Loop Phases
+
+```javascript
+// The Event Loop phases in order
+process.nextTick(() => {
+  console.log('1: nextTick');
+});
+
+Promise.resolve().then(() => {
+  console.log('2: Promise');
+});
+
+setTimeout(() => {
+  console.log('3: setTimeout');
+}, 0);
+
+setImmediate(() => {
+  console.log('4: setImmediate');
+});
+
+// Output order may vary slightly but generally:
+// 1: nextTick
+// 2: Promise
+// 3: setTimeout
+// 4: setImmediate
+```
+
+### Timers Phase
+
+```javascript
+// Timer phase example
+console.log('Start');
+
+setTimeout(() => {
+  console.log('Timeout 1');
+}, 0);
+
+setTimeout(() => {
+  console.log('Timeout 2');
+}, 3);
+
+setInterval(() => {
+  console.log('Interval');
+}, 100);
+
+console.log('End');
+
+// Output:
+// Start
+// End
+// Timeout 1
+// Timeout 2
+// Interval (every 100ms)
+```
+
+### Pending Callbacks Phase
+
+```javascript
+const fs = require('fs');
+
+// Reading file (triggers I/O operation)
+fs.readFile('example.txt', (err, data) => {
+  if (err) {
+    console.error('Error reading file:', err);
+    return;
+  }
+  console.log('File content:', data.toString());
+});
+
+// Multiple I/O operations
+const files = ['file1.txt', 'file2.txt', 'file3.txt'];
+
+files.forEach((file) => {
+  fs.readFile(file, (err, data) => {
+    if (err) {
+      console.error(`Error reading ${file}:`, err);
+      return;
+    }
+    console.log(`${file} content:`, data.toString());
+  });
+});
+```
+
+### Poll Phase
+
+```javascript
+const net = require('net');
+
+// Creating a TCP server
+const server = net.createServer((socket) => {
+  socket.on('data', (data) => {
+    console.log('Received data:', data.toString());
+  });
+});
+
+server.listen(3000, () => {
+  console.log('Server listening on port 3000');
+});
+
+// Poll phase will wait for new connections
+```
+
+### Check Phase
+
+```javascript
+const fs = require('fs');
+
+// setImmediate vs setTimeout
+fs.readFile('example.txt', () => {
+  setTimeout(() => {
+    console.log('timeout');
+  }, 0);
+
+  setImmediate(() => {
+    console.log('immediate');
+  });
+});
+
+// setImmediate will always run first in I/O cycle
+
+// Multiple setImmediate calls
+setImmediate(() => {
+  console.log('1st immediate');
+
+  setImmediate(() => {
+    console.log('2nd immediate');
+  });
+});
+```
+
+### Close Callbacks Phase
+
+```javascript
+const fs = require('fs');
+
+// File stream example
+const readStream = fs.createReadStream('example.txt');
+
+readStream.on('data', (chunk) => {
+  console.log('Received chunk:', chunk.length);
+});
+
+readStream.on('end', () => {
+  console.log('Stream ended');
+});
+
+readStream.on('close', () => {
+  console.log('Stream closed');
+});
+
+// Server close example
+const http = require('http');
+const server = http.createServer();
+
+server.on('close', () => {
+  console.log('Server closed');
+});
+
+server.listen(3000, () => {
+  console.log('Server started');
+  server.close();
+});
+```
+
+## Microtasks
+
+```javascript
+// process.nextTick vs Promise
+process.nextTick(() => {
+  console.log('nextTick 1');
+});
+
+Promise.resolve().then(() => {
+  console.log('Promise 1');
+});
+
+process.nextTick(() => {
+  console.log('nextTick 2');
+});
+
+Promise.resolve().then(() => {
+  console.log('Promise 2');
+});
+
+// Output:
+// nextTick 1
+// nextTick 2
+// Promise 1
+// Promise 2
+
+// Nested microtasks
+process.nextTick(() => {
+  console.log('nextTick 1');
+  process.nextTick(() => {
+    console.log('nextTick 2');
+    process.nextTick(() => {
+      console.log('nextTick 3');
+    });
+  });
+});
+
+Promise.resolve().then(() => {
+  console.log('Promise 1');
+  return Promise.resolve().then(() => {
+    console.log('Promise 2');
+  });
+});
+```
+
+## Practical Examples
+
+### HTTP Server with Event Loop Considerations
+
+```javascript
+const http = require('http');
+const fs = require('fs');
+
+const server = http.createServer((req, res) => {
+  // Immediate response for health checks
+  if (req.url === '/health') {
+    res.writeHead(200);
+    res.end('OK');
+    return;
+  }
+
+  // Heavy computation wrapped in setImmediate
+  if (req.url === '/compute') {
+    setImmediate(() => {
+      let result = 0;
+      for (let i = 0; i < 1e9; i++) {
+        result += i;
+      }
+      res.writeHead(200);
+      res.end(`Result: ${result}`);
+    });
+    return;
+  }
+
+  // File operations
+  if (req.url === '/file') {
+    fs.readFile('large-file.txt', (err, data) => {
+      if (err) {
+        res.writeHead(500);
+        res.end('Error reading file');
+        return;
+      }
+      res.writeHead(200);
+      res.end(data);
+    });
+    return;
+  }
+
+  res.writeHead(404);
+  res.end('Not found');
+});
+
+server.listen(3000);
+```
+
+### Database Operations and Event Loop
+
+```javascript
+const { Pool } = require('pg');
+const pool = new Pool();
+
+async function handleDatabaseOperations() {
+  // Sequential queries
+  console.time('sequential');
+  for (let i = 0; i < 10; i++) {
+    await pool.query('SELECT pg_sleep(1)');
+  }
+  console.timeEnd('sequential');
+
+  // Parallel queries
+  console.time('parallel');
+  await Promise.all(
+    Array(10)
+      .fill()
+      .map(() => pool.query('SELECT pg_sleep(1)'))
+  );
+  console.timeEnd('parallel');
+
+  // Mixed operations
+  const results = [];
+
+  // CPU-bound task
+  setImmediate(() => {
+    let sum = 0;
+    for (let i = 0; i < 1e8; i++) {
+      sum += i;
+    }
+    results.push(sum);
+  });
+
+  // I/O-bound task
+  process.nextTick(async () => {
+    const result = await pool.query('SELECT NOW()');
+    results.push(result.rows[0]);
+  });
+
+  // Timer task
+  setTimeout(() => {
+    results.push('timeout');
+  }, 100);
+}
+```
+
+### File System Operations
+
+```javascript
+const fs = require('fs').promises;
+const path = require('path');
+
+async function processLargeDirectory(dirPath) {
+  const files = await fs.readdir(dirPath);
+
+  // Process files in chunks to avoid blocking the event loop
+  const chunkSize = 100;
+
+  for (let i = 0; i < files.length; i += chunkSize) {
+    const chunk = files.slice(i, i + chunkSize);
+
+    // Schedule next chunk processing
+    setImmediate(async () => {
+      for (const file of chunk) {
+        const filePath = path.join(dirPath, file);
+        try {
+          const stats = await fs.stat(filePath);
+          if (stats.isFile()) {
+            // Process file
+            await processFile(filePath);
+          }
+        } catch (err) {
+          console.error(`Error processing ${file}:`, err);
+        }
+      }
+    });
+  }
+}
+
+async function processFile(filePath) {
+  // File processing logic
+  const content = await fs.readFile(filePath);
+
+  // Heavy computation split into chunks
+  return new Promise((resolve) => {
+    const chunks = splitIntoChunks(content);
+    let processed = [];
+
+    function processChunk() {
+      const chunk = chunks.shift();
+      if (chunk) {
+        processed.push(processDataChunk(chunk));
+        setImmediate(processChunk);
+      } else {
+        resolve(processed);
+      }
+    }
+
+    setImmediate(processChunk);
+  });
+}
+```
+
+## Best Practices
+
+```javascript
+// Avoid blocking the event loop
+function heavyComputation() {
+  return new Promise((resolve) => {
+    setImmediate(() => {
+      let result = 0;
+      for (let i = 0; i < 1e9; i++) {
+        result += i;
+      }
+      resolve(result);
+    });
+  });
+}
+
+// Use async/await with proper error handling
+async function safeOperation() {
+  try {
+    await heavyComputation();
+  } catch (err) {
+    console.error('Operation failed:', err);
+  }
+}
+
+// Proper error handling in callbacks
+function handleWithCallback(callback) {
+  process.nextTick(() => {
+    try {
+      // Risky operation
+      throw new Error('Something went wrong');
+    } catch (err) {
+      callback(err);
+    }
+  });
+}
+
+// Monitor event loop lag
+let lastCheck = Date.now();
+
+setInterval(() => {
+  const now = Date.now();
+  const lag = now - lastCheck - 1000; // Should be close to 0
+  console.log('Event loop lag:', lag, 'ms');
+  lastCheck = now;
+}, 1000);
+```
+
+## Related Topics
+
+- [Node.js Streams](./streams) - Working with data streams
+- [Async Programming](./async-programming) - Asynchronous programming patterns
+- [Performance Optimization](./performance) - Performance best practices
+- [Error Handling](./error-handling) - Error handling patterns

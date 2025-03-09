@@ -1,0 +1,687 @@
+---
+description: Understanding JavaScript scope, lexical scoping, scope chain, and variable accessibility
+title: JavaScript Scope
+---
+
+# JavaScript Scope
+
+Scope in JavaScript determines the accessibility and lifetime of variables, functions, and objects. Understanding scope is crucial for writing maintainable code, avoiding variable conflicts, and debugging effectively.
+
+## What is Scope?
+
+Scope is the region of code where a variable or function is accessible. JavaScript uses lexical (static) scoping, which means that the scope of a variable is determined by its location in the source code, rather than by the function call stack at runtime.
+
+## Types of Scope in JavaScript
+
+JavaScript has several types of scope:
+
+1. **Global Scope**
+2. **Function Scope**
+3. **Block Scope** (introduced in ES6 with `let` and `const`)
+4. **Module Scope** (for code in ES modules)
+
+## Global Scope
+
+Variables declared outside any function or block have global scope and are accessible from anywhere in the program:
+
+```javascript
+// Global variable
+const globalVariable = 'I am global';
+
+function accessGlobal() {
+  console.log(globalVariable); // Accessible here
+}
+
+if (true) {
+  console.log(globalVariable); // Accessible here too
+}
+
+accessGlobal(); // Outputs: "I am global"
+```
+
+In browsers, global variables become properties of the `window` object:
+
+```javascript
+var globalVar = 'I am global too';
+console.log(window.globalVar); // "I am global too"
+
+// But not with let or const
+let notReally = 'I am not attached to window';
+console.log(window.notReally); // undefined
+```
+
+### Global Scope Pitfalls
+
+Global variables can cause problems with:
+
+- Name collisions
+- Unintended modifications
+- Code maintainability
+
+```javascript
+// Dangerous example with implicit globals
+function createCounter() {
+  count = 0; // Missing var, let, or const - creates an implicit global!
+  return function () {
+    return ++count;
+  };
+}
+
+const increment = createCounter();
+console.log(increment()); // 1
+console.log(window.count); // 1 (in browsers)
+
+// Another function can unexpectedly alter your "private" counter
+function resetCount() {
+  count = 0; // Modifies the global count!
+}
+
+resetCount();
+console.log(increment()); // 1 (started over)
+```
+
+## Function Scope
+
+Variables declared within a function are only accessible within that function and any nested functions. They are not visible outside the function.
+
+```javascript
+function outerFunction() {
+  // Function-scoped variable
+  var functionScoped = 'I am function-scoped';
+  let alsoFunctionScoped = 'Me too';
+
+  console.log(functionScoped); // Accessible
+  console.log(alsoFunctionScoped); // Accessible
+
+  function innerFunction() {
+    console.log(functionScoped); // Also accessible here
+  }
+
+  innerFunction();
+}
+
+outerFunction();
+// console.log(functionScoped); // ReferenceError: functionScoped is not defined
+```
+
+### Function Scope with var
+
+Variables declared with `var` are function-scoped, which means they're accessible throughout the entire function, even before they're declared (due to hoisting):
+
+```javascript
+function varExample() {
+  console.log(hoisted); // undefined (not a ReferenceError)
+
+  if (true) {
+    var hoisted = 'I am hoisted';
+  }
+
+  console.log(hoisted); // "I am hoisted" (accessible outside the if block)
+}
+
+varExample();
+```
+
+## Block Scope
+
+Variables declared with `let` and `const` have block scope. A block is code within curly braces `{}`, such as in `if` statements, loops, or standalone blocks.
+
+```javascript
+function blockScopeExample() {
+  // Function scope
+  let outsideBlock = 'Outside';
+
+  if (true) {
+    // Block scope
+    let insideBlock = 'Inside';
+    const alsoInside = 'Also inside';
+
+    console.log(outsideBlock); // "Outside" (accessible from inner scope)
+    console.log(insideBlock); // "Inside"
+    console.log(alsoInside); // "Also inside"
+  }
+
+  console.log(outsideBlock); // "Outside"
+  // console.log(insideBlock); // ReferenceError: insideBlock is not defined
+}
+
+blockScopeExample();
+```
+
+Block scoping is particularly useful in loops:
+
+```javascript
+// Each iteration gets its own binding with 'let'
+for (let i = 0; i < 3; i++) {
+  setTimeout(() => {
+    console.log(i); // Logs 0, 1, 2
+  }, 100);
+}
+
+// With 'var', all callbacks share the same variable
+for (var j = 0; j < 3; j++) {
+  setTimeout(() => {
+    console.log(j); // Logs 3, 3, 3
+  }, 100);
+}
+```
+
+## Lexical Scope and Scope Chain
+
+JavaScript uses lexical scoping, meaning that the scope of a variable is determined by its position in the source code. When code accesses a variable, JavaScript looks up the variable in the current scope. If not found, it continues to look in the outer scope, and so on, creating a scope chain:
+
+```javascript
+const global = 'I am global';
+
+function outer() {
+  const outerVar = 'I am from outer';
+
+  function middle() {
+    const middleVar = 'I am from middle';
+
+    function inner() {
+      const innerVar = 'I am from inner';
+
+      // Accessing variables from different scopes
+      console.log(innerVar); // Own scope
+      console.log(middleVar); // Parent scope
+      console.log(outerVar); // Grandparent scope
+      console.log(global); // Global scope
+    }
+
+    inner();
+  }
+
+  middle();
+}
+
+outer();
+```
+
+The scope chain for `inner` function is:
+
+1. `inner`'s local scope
+2. `middle`'s scope
+3. `outer`'s scope
+4. Global scope
+
+If JavaScript can't find a variable in this chain, it throws a `ReferenceError`.
+
+## Scope and Hoisting
+
+JavaScript "hoists" declarations, but the behavior differs for `var`, `let`, and `const`:
+
+```javascript
+console.log(varVariable); // undefined (hoisted declaration)
+console.log(letVariable); // ReferenceError: Cannot access before initialization
+console.log(constVariable); // ReferenceError: Cannot access before initialization
+
+var varVariable = 'var value';
+let letVariable = 'let value';
+const constVariable = 'const value';
+```
+
+With `var`, the declaration is hoisted and initialized with `undefined`. With `let` and `const`, the declarations are hoisted but not initialized (they're in the "temporal dead zone").
+
+### Function Hoisting
+
+Function declarations are completely hoisted (both declaration and definition):
+
+```javascript
+// Works fine
+console.log(hoistedFunction()); // "I am hoisted"
+
+// This is a function declaration
+function hoistedFunction() {
+  return 'I am hoisted';
+}
+
+// Error - only the variable is hoisted, not the function assignment
+console.log(notHoisted()); // TypeError: notHoisted is not a function
+
+// Function expression
+var notHoisted = function () {
+  return 'I am not hoisted';
+};
+```
+
+## Module Scope
+
+ES6 modules have their own scope. Variables, functions, and classes declared in a module are scoped to that module unless explicitly exported:
+
+```javascript
+// myModule.js
+const privateVar = 'This is private';
+export const publicVar = 'This is public';
+
+export function doSomething() {
+  console.log(privateVar); // Accessible within module
+}
+
+// main.js
+import { publicVar, doSomething } from './myModule.js';
+
+console.log(publicVar); // "This is public"
+// console.log(privateVar); // ReferenceError: privateVar is not defined
+doSomething(); // "This is private" (function runs in its original scope)
+```
+
+## Practical Scope Examples
+
+### Closures and Private Variables
+
+Scope enables closures, allowing for private variables:
+
+```javascript
+function createCounter() {
+  // 'count' is private due to function scope
+  let count = 0;
+
+  return {
+    increment() {
+      count++;
+      return count;
+    },
+    decrement() {
+      count--;
+      return count;
+    },
+    getCount() {
+      return count;
+    },
+  };
+}
+
+const counter = createCounter();
+console.log(counter.getCount()); // 0
+console.log(counter.increment()); // 1
+console.log(counter.increment()); // 2
+console.log(counter.decrement()); // 1
+// console.log(count); // ReferenceError: count is not defined
+```
+
+### Immediately Invoked Function Expressions (IIFE)
+
+IIFEs create an isolated scope to avoid polluting the global namespace:
+
+```javascript
+(function () {
+  // Private scope
+  const privateFn = function () {
+    console.log('This is private');
+  };
+
+  const privateVar = 'Private data';
+
+  // This becomes a global (only if we wanted it to)
+  window.myModule = {
+    publicFn: function () {
+      console.log('This is public');
+      privateFn(); // Can access private function
+      console.log(privateVar); // Can access private variable
+    },
+  };
+})();
+
+// Only public interface is accessible
+myModule.publicFn(); // "This is public", "This is private", "Private data"
+// privateFn(); // ReferenceError: privateFn is not defined
+```
+
+### Nesting Functions with Shared Scope
+
+Nesting functions gives inner functions access to outer variables:
+
+```javascript
+function setupCalculator(initialValue) {
+  let value = initialValue || 0;
+
+  function add(n) {
+    value += n;
+    return value;
+  }
+
+  function subtract(n) {
+    value -= n;
+    return value;
+  }
+
+  function getValue() {
+    return value;
+  }
+
+  return { add, subtract, getValue };
+}
+
+const calc = setupCalculator(10);
+console.log(calc.add(5)); // 15
+console.log(calc.subtract(3)); // 12
+console.log(calc.getValue()); // 12
+```
+
+## Variable Shadowing
+
+When a variable in an inner scope has the same name as a variable in an outer scope, the inner variable "shadows" the outer one:
+
+```javascript
+const value = 'global';
+
+function shadowExample() {
+  const value = 'function scope';
+
+  if (true) {
+    const value = 'block scope';
+    console.log(`Block value: ${value}`); // "Block value: block scope"
+  }
+
+  console.log(`Function value: ${value}`); // "Function value: function scope"
+}
+
+shadowExample();
+console.log(`Global value: ${value}`); // "Global value: global"
+```
+
+Shadowing can cause unexpected behavior and should generally be avoided.
+
+## Scope Best Practices
+
+### 1. Minimize Global Variables
+
+```javascript
+// Bad
+globalCounter = 0;
+
+// Better
+let moduleCounter = 0;
+
+// Best
+function createCounter() {
+  let count = 0;
+  return {
+    increment() {
+      count++;
+      return count;
+    },
+    getCount() {
+      return count;
+    },
+  };
+}
+```
+
+### 2. Use Block Scope with let and const
+
+```javascript
+// Prefer
+for (let i = 0; i < 10; i++) {
+  // 'i' is scoped to this loop
+}
+
+// Avoid
+for (var i = 0; i < 10; i++) {
+  // 'i' leaks outside the loop
+}
+```
+
+### 3. Explicit Function Parameters Instead of Outer Scope Variables
+
+```javascript
+// Avoid
+const multiplier = 10;
+function multiply(n) {
+  return n * multiplier; // Dependent on outer scope
+}
+
+// Better
+function multiply(n, multiplier) {
+  return n * multiplier; // Explicit dependency
+}
+```
+
+### 4. Keep Functions Pure When Possible
+
+```javascript
+// Impure function (depends on external state)
+let basePrice = 100;
+function calculateTotal(quantity) {
+  return quantity * basePrice;
+}
+
+// Pure function (only depends on its parameters)
+function calculateTotal(quantity, basePrice) {
+  return quantity * basePrice;
+}
+```
+
+### 5. Use IIFE for Isolating Code
+
+```javascript
+// jQuery plugin with isolated scope
+(function ($) {
+  $.fn.myPlugin = function () {
+    // Plugin implementation
+    return this.each(function () {
+      // Use $ safely here, no matter what it might be outside
+    });
+  };
+})(jQuery);
+```
+
+## Scope vs. Context
+
+It's important to distinguish between scope and context:
+
+- **Scope**: Concerns the accessibility of variables
+- **Context**: Concerns the value of `this` in function execution
+
+```javascript
+const user = {
+  name: 'John',
+  getName() {
+    // 'this' is the context (the user object)
+    // 'name' is accessed through the scope chain
+    return this.name;
+  },
+};
+
+console.log(user.getName()); // "John"
+
+// Same function, different context
+const func = user.getName;
+console.log(func()); // undefined (or error in strict mode)
+```
+
+## Real-World Scope Applications
+
+### 1. Module Pattern
+
+```javascript
+const userModule = (function () {
+  // Private variables
+  let users = [];
+  let nextId = 1;
+
+  // Private function
+  function generateId() {
+    return nextId++;
+  }
+
+  // Public API
+  return {
+    addUser(name) {
+      const id = generateId();
+      users.push({ id, name });
+      return id;
+    },
+    getUser(id) {
+      return users.find((user) => user.id === id);
+    },
+    getAllUsers() {
+      return [...users]; // Return a copy to prevent direct modification
+    },
+  };
+})();
+
+userModule.addUser('Alice');
+userModule.addUser('Bob');
+console.log(userModule.getAllUsers());
+// users and nextId are not accessible directly
+```
+
+### 2. Factory Functions with Private Methods
+
+```javascript
+function createPerson(name) {
+  // Private methods and variables
+  let age;
+
+  function validateAge(newAge) {
+    return typeof newAge === 'number' && newAge >= 0;
+  }
+
+  // Public interface
+  return {
+    getName() {
+      return name;
+    },
+    getAge() {
+      return age;
+    },
+    setAge(newAge) {
+      if (validateAge(newAge)) {
+        age = newAge;
+        return true;
+      }
+      return false;
+    },
+  };
+}
+
+const john = createPerson('John');
+john.setAge(30);
+console.log(john.getName()); // "John"
+console.log(john.getAge()); // 30
+```
+
+### 3. React Hooks (Internal Implementation Concept)
+
+React's useState hook relies on closures and scope for maintaining state:
+
+```javascript
+// Simplified internal implementation of React's useState
+function createReactLikeHooks() {
+  let state = [];
+  let stateIndex = 0;
+
+  function useState(initialValue) {
+    const currentIndex = stateIndex;
+
+    // Initialize state if needed
+    if (state[currentIndex] === undefined) {
+      state[currentIndex] = initialValue;
+    }
+
+    // setState function has closure over currentIndex
+    const setState = (newValue) => {
+      state[currentIndex] = newValue;
+      render(); // Trigger re-render
+    };
+
+    stateIndex++;
+    return [state[currentIndex], setState];
+  }
+
+  function resetStateIndex() {
+    stateIndex = 0;
+  }
+
+  function render() {
+    resetStateIndex();
+    // In React, this would re-run the component function
+    console.log('Rendering with state:', state);
+  }
+
+  return { useState, render };
+}
+
+// Usage example
+const { useState, render } = createReactLikeHooks();
+
+function Counter() {
+  const [count, setCount] = useState(0);
+  const [text, setText] = useState('hello');
+
+  // These functions close over the appropriate setState functions
+  function increment() {
+    setCount(count + 1);
+  }
+
+  function updateText(newText) {
+    setText(newText);
+  }
+
+  console.log({ count, text });
+  return { increment, updateText };
+}
+
+const component = Counter(); // Initial render
+component.increment(); // Updates count to 1
+component.updateText('world'); // Updates text to 'world'
+```
+
+## Debugging Scope Issues
+
+### Common Scope-Related Bugs
+
+1. **Unintended globals**:
+
+```javascript
+function buggy() {
+  oops = 'I am global!'; // Missing declaration
+}
+```
+
+2. **Variable shadowing**:
+
+```javascript
+const value = 10;
+function calculate(value) {
+  // Parameter shadows outer variable
+  return value * 2; // Uses parameter, not outer variable
+}
+```
+
+3. **Closure capturing loop variables**:
+
+```javascript
+// Bug: All buttons show the same number
+for (var i = 0; i < 3; i++) {
+  document.getElementById('btn' + i).onclick = function () {
+    alert('Button ' + i + ' clicked'); // Always shows "Button 3 clicked"
+  };
+}
+
+// Fix: Use let or an IIFE
+for (let i = 0; i < 3; i++) {
+  document.getElementById('btn' + i).onclick = function () {
+    alert('Button ' + i + ' clicked'); // Correct
+  };
+}
+```
+
+### Using Chrome DevTools to Debug Scope
+
+1. Set a breakpoint in your code
+2. When it hits, check the Scope panel to see:
+   - Local variables
+   - Closure variables
+   - Global variables
+
+This helps identify which variables are accessible at the current execution point.
+
+## Related Topics
+
+- [Closures](./closures) - Functions that remember their creation scope
+- [Hoisting](./hoisting) - How declarations are processed in JavaScript
+- [Execution Context](./execution-context) - The environment in which JavaScript code is executed
+- [This Keyword](./this-keyword) - Understanding execution context in JavaScript

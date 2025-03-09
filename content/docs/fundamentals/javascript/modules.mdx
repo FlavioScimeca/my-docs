@@ -1,0 +1,290 @@
+---
+description: Learn about JavaScript module systems, including ECMAScript Modules (ESM) and CommonJS
+title: JavaScript Modules
+---
+
+# JavaScript Modules
+
+Modules are reusable pieces of code that can be exported from one program and imported for use in another program. JavaScript has evolved through several module systems, with ECMAScript Modules (ESM) now being the standard.
+
+## Evolution of JavaScript Module Systems
+
+### Global Variables and IIFE (Pre-Modules)
+
+Before module systems, JavaScript used global variables and patterns like Immediately Invoked Function Expressions (IIFE) to create encapsulation:
+
+```javascript
+// Global variables approach
+var myLibrary = {};
+
+myLibrary.doSomething = function () {
+  // Implementation
+};
+
+// IIFE pattern for encapsulation
+var myModule = (function () {
+  // Private variables
+  var privateVar = 'I am private';
+
+  // Public interface
+  return {
+    publicMethod: function () {
+      console.log(privateVar);
+    },
+  };
+})();
+
+myModule.publicMethod(); // "I am private"
+```
+
+### CommonJS (CJS)
+
+CommonJS was developed for server-side JavaScript (Node.js) and uses a synchronous module loading approach:
+
+```javascript
+// Exporting in CommonJS (math.js)
+const PI = 3.14159;
+
+function add(a, b) {
+  return a + b;
+}
+
+function subtract(a, b) {
+  return a - b;
+}
+
+module.exports = {
+  PI,
+  add,
+  subtract,
+};
+
+// Alternative single export
+// module.exports = add;
+
+// Importing in CommonJS (app.js)
+const math = require('./math.js');
+console.log(math.add(2, 3)); // 5
+
+// Destructuring import
+const { PI, subtract } = require('./math.js');
+console.log(PI); // 3.14159
+```
+
+Key characteristics of CommonJS:
+
+- Synchronous loading (designed for server environments)
+- Dynamic imports (`require` can be called conditionally)
+- Simple syntax
+- No need for transpilation in Node.js
+- Not natively supported in browsers
+
+### AMD (Asynchronous Module Definition)
+
+AMD was designed for browser environments, allowing asynchronous loading of modules:
+
+```javascript
+// Defining a module
+define('myModule', ['dependency1', 'dependency2'], function (dep1, dep2) {
+  return {
+    doSomething: function () {
+      return dep1.method() + dep2.method();
+    },
+  };
+});
+
+// Using a module
+require(['myModule'], function (myModule) {
+  myModule.doSomething();
+});
+```
+
+AMD was popular with tools like RequireJS but has largely been replaced by ESM.
+
+### UMD (Universal Module Definition)
+
+UMD was created to provide compatibility between various module systems:
+
+```javascript
+(function (root, factory) {
+  if (typeof define === 'function' && define.amd) {
+    // AMD
+    define(['dependency'], factory);
+  } else if (typeof module === 'object' && module.exports) {
+    // CommonJS
+    module.exports = factory(require('dependency'));
+  } else {
+    // Browser globals
+    root.myModule = factory(root.dependency);
+  }
+})(typeof self !== 'undefined' ? self : this, function (dependency) {
+  // Module code goes here
+  return {
+    // Public API
+  };
+});
+```
+
+UMD is still used in libraries that need to support multiple environments.
+
+### ECMAScript Modules (ESM)
+
+ESM is the standard JavaScript module system introduced in ES6 (ES2015):
+
+```javascript
+// Exporting in ESM (math.js)
+export const PI = 3.14159;
+
+export function add(a, b) {
+  return a + b;
+}
+
+export function subtract(a, b) {
+  return a - b;
+}
+
+// Default export
+export default class Calculator {
+  // Implementation
+}
+
+// Importing in ESM (app.js)
+import Calculator, { PI, add } from './math.js';
+console.log(add(2, 3)); // 5
+
+// Namespace import
+import * as math from './math.js';
+console.log(math.PI); // 3.14159
+```
+
+Key characteristics of ESM:
+
+- Static structure (imports/exports are determined at compile time)
+- Tree-shakable (unused exports can be eliminated during bundling)
+- Asynchronous loading
+- Support for cyclic dependencies
+- Native browser support with `<script type="module">`
+
+## Module Systems Comparison
+
+| Feature            | CommonJS                      | ESM                                      |
+| ------------------ | ----------------------------- | ---------------------------------------- |
+| **Syntax**         | `require()`, `module.exports` | `import`, `export`                       |
+| **Loading**        | Synchronous                   | Asynchronous                             |
+| **Environment**    | Node.js (native)              | Browsers (native), Node.js (with config) |
+| **Tree Shaking**   | No                            | Yes                                      |
+| **Dynamic Import** | Yes (always)                  | Yes (with `import()` function)           |
+| **Scope**          | File scope                    | Module scope                             |
+| **Loading Time**   | Runtime                       | Parse time (statically analyzed)         |
+
+## Which Module System to Use?
+
+### Use ESM When:
+
+- Building modern web applications
+- Creating new libraries or frameworks
+- Working with browser environments
+- Bundling with tools like webpack, Rollup, or Vite
+- Tree-shaking is important for bundle size
+
+```javascript
+// ESM example
+// utils.js
+export function formatDate(date) {
+  return new Intl.DateTimeFormat('en-US').format(date);
+}
+
+// app.js
+import { formatDate } from './utils.js';
+console.log(formatDate(new Date()));
+```
+
+### Use CommonJS When:
+
+- Working with older Node.js codebases
+- Creating scripts for Node.js environments
+- Using modules that only support CommonJS
+- Compatibility with older build systems is required
+
+```javascript
+// CommonJS example
+// logger.js
+function log(message) {
+  console.log(`[LOG]: ${message}`);
+}
+
+module.exports = { log };
+
+// app.js
+const { log } = require('./logger.js');
+log('Application started');
+```
+
+## Dynamic Imports
+
+Both module systems support dynamic imports, though with different approaches:
+
+### Dynamic Imports in CommonJS
+
+```javascript
+// Dynamic require in CommonJS
+function loadModule(moduleName) {
+  try {
+    const module = require(`./${moduleName}`);
+    return module;
+  } catch (error) {
+    console.error(`Failed to load module ${moduleName}:`, error);
+    return null;
+  }
+}
+
+const userModule = loadModule(userSelectedModule);
+```
+
+### Dynamic Imports in ESM
+
+```javascript
+// Dynamic import in ESM
+async function loadModule(moduleName) {
+  try {
+    const module = await import(`./${moduleName}.js`);
+    return module;
+  } catch (error) {
+    console.error(`Failed to load module ${moduleName}:`, error);
+    return null;
+  }
+}
+
+loadModule('data-processor').then((module) => {
+  module.process(data);
+});
+```
+
+## Module Bundlers
+
+Module bundlers compile your modular JavaScript code for deployment:
+
+- **Webpack**: Full-featured bundler with extensive plugin ecosystem
+- **Rollup**: Focused on ES modules and tree-shaking
+- **Parcel**: Zero-configuration bundler
+- **esbuild**: Extremely fast bundler written in Go
+- **Vite**: Development server and bundler optimized for ESM
+
+Most modern bundlers work best with ESM syntax.
+
+## Best Practices
+
+1. **Choose a module system and be consistent**: Prefer ESM for new projects
+2. **Organize modules by functionality**: Each module should have a clear responsibility
+3. **Avoid circular dependencies**: While supported, they can be confusing
+4. **Export as little as possible**: Minimize the public API of each module
+5. **Use named exports for utilities**: Makes imports more explicit and enables tree-shaking
+6. **Use default exports for main components/classes**: Particularly useful for React components
+7. **Consider bundle size**: Use dynamic imports for code-splitting large applications
+
+## Related Topics
+
+- [ESM (ECMAScript Modules)](./esm) - In-depth coverage of modern JavaScript modules
+- [ESNext Features](./esnext) - Upcoming JavaScript features
+- [Modern JavaScript Patterns](./modern-patterns) - Best practices in JavaScript
+- [Node.js Development](../node-javascript) - Server-side JavaScript

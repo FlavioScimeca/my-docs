@@ -1,0 +1,1104 @@
+---
+description: In-depth exploration of JavaScript module systems, including CommonJS, AMD, UMD, and ES Modules, with practical examples and best practices
+title: JavaScript Module Systems
+---
+
+# JavaScript Module Systems
+
+JavaScript module systems allow developers to organize code into reusable, encapsulated units. Modules help avoid global namespace pollution, manage dependencies, and structure applications in a maintainable way. This guide explores the evolution of module systems in JavaScript and provides detailed insight into their usage patterns.
+
+## The Need for Modules
+
+Early JavaScript lacked a native module system, leading to several challenges:
+
+```javascript
+// Before modules: Global variables
+var userName = 'John';
+var userAge = 30;
+
+// Functions adding to global namespace
+function formatUser() {
+  return userName + ' (' + userAge + ')';
+}
+
+// Potential naming conflicts
+// What if another script also defines userName?
+```
+
+Problems with the global approach:
+
+- **Name collisions**: Different scripts could override each other's variables
+- **Unclear dependencies**: No way to explicitly state what a piece of code needs
+- **Maintenance challenges**: Difficult to understand what affects what
+- **No encapsulation**: All code shares the same global scope
+
+## Module Patterns (Pre-Module Systems)
+
+Before formal module systems, developers used patterns to simulate modules:
+
+### The IIFE (Immediately Invoked Function Expression) Pattern
+
+```javascript
+// User module using IIFE
+var userModule = (function () {
+  // Private variables
+  var userName = 'John';
+  var userAge = 30;
+
+  // Private function
+  function calculateBirthYear() {
+    return new Date().getFullYear() - userAge;
+  }
+
+  // Public API
+  return {
+    getUser: function () {
+      return {
+        name: userName,
+        age: userAge,
+      };
+    },
+    getBirthYear: function () {
+      return calculateBirthYear();
+    },
+  };
+})();
+
+// Usage
+console.log(userModule.getUser()); // {name: "John", age: 30}
+console.log(userModule.getBirthYear()); // e.g., 1993
+console.log(userModule.userName); // undefined - private!
+```
+
+### The Revealing Module Pattern
+
+```javascript
+var calculatorModule = (function () {
+  // Private variables
+  var result = 0;
+
+  // Private methods
+  function add(a, b) {
+    return a + b;
+  }
+
+  function subtract(a, b) {
+    return a - b;
+  }
+
+  function storeResult(value) {
+    result = value;
+    return result;
+  }
+
+  // Public API - revealing private methods
+  return {
+    add: add,
+    subtract: subtract,
+    getResult: function () {
+      return result;
+    },
+    calculate: function (a, b, operation) {
+      if (operation === 'add') {
+        return storeResult(add(a, b));
+      } else if (operation === 'subtract') {
+        return storeResult(subtract(a, b));
+      }
+    },
+  };
+})();
+
+// Usage
+calculatorModule.calculate(5, 3, 'add');
+console.log(calculatorModule.getResult()); // 8
+```
+
+These patterns provided basic encapsulation but lacked standardized dependency management.
+
+## CommonJS Modules
+
+CommonJS was designed for server-side JavaScript (primarily Node.js) and became the standard module system for Node.js. It uses synchronous loading, which works well in server environments.
+
+### Basic CommonJS Structure
+
+```javascript
+// user.js
+const getFullYear = () => new Date().getFullYear();
+
+// Private variables
+let age = 30;
+
+// Exporting functionality
+function User(name) {
+  this.name = name;
+  this.age = age;
+}
+
+User.prototype.getBirthYear = function () {
+  return getFullYear() - this.age;
+};
+
+// Export single item as module exports
+module.exports = User;
+
+// Alternatively, export multiple items:
+// module.exports = {
+//   User,
+//   createUser: (name) => new User(name)
+// };
+```
+
+### Importing in CommonJS
+
+```javascript
+// main.js
+const User = require('./user');
+
+// Create an instance of the imported constructor
+const john = new User('John');
+console.log(john.name); // "John"
+console.log(john.getBirthYear()); // e.g., 1993
+```
+
+### Characteristics of CommonJS
+
+```javascript
+// Loading modules with dynamic paths
+function loadModule(moduleName) {
+  try {
+    const module = require(moduleName);
+    return module;
+  } catch (e) {
+    console.error(`Failed to load module: ${moduleName}`);
+    return null;
+  }
+}
+
+// Caching behavior
+const moduleA = require('./module-a'); // First load, executes module code
+const moduleB = require('./module-a'); // Returns cached instance, doesn't re-execute
+
+console.log(moduleA === moduleB); // true - same instance
+
+// Circular dependencies (handle with care)
+// a.js
+const b = require('./b');
+module.exports = {
+  name: 'Module A',
+  getB: () => b,
+};
+
+// b.js
+const a = require('./a');
+module.exports = {
+  name: 'Module B',
+  getA: () => a,
+};
+
+// main.js - handles partial exports during circular requires
+const a = require('./a');
+const b = require('./b');
+console.log(a.name); // "Module A"
+console.log(b.name); // "Module B"
+```
+
+### Directory-Based Modules
+
+```javascript
+// Directory structure
+// user-module/
+// ├── index.js
+// ├── user.js
+// └── permissions.js
+
+// user-module/index.js
+const User = require('./user');
+const Permissions = require('./permissions');
+
+module.exports = {
+  User,
+  Permissions,
+};
+
+// main.js
+const UserModule = require('./user-module');
+const user = new UserModule.User('John');
+```
+
+## AMD (Asynchronous Module Definition)
+
+AMD was designed for browser environments where asynchronous loading is important for performance. It was popularized by RequireJS.
+
+### Basic AMD Structure
+
+```javascript
+// Define a module with dependencies
+define('userModule', ['helpers/date', 'config'], function (dateHelper, config) {
+  // Module implementation
+  let defaultAge = config.defaultUserAge;
+
+  // Private function
+  function calculateBirthYear(age) {
+    return dateHelper.getCurrentYear() - age;
+  }
+
+  // Return public API
+  return {
+    createUser: function (name, age) {
+      return {
+        name: name,
+        age: age || defaultAge,
+        birthYear: calculateBirthYear(age || defaultAge),
+      };
+    },
+  };
+});
+
+// Using the module
+require(['userModule'], function (userModule) {
+  const user = userModule.createUser('John', 30);
+  console.log(user); // {name: "John", age: 30, birthYear: 1993}
+});
+```
+
+### AMD with RequireJS Configuration
+
+```javascript
+// config.js
+requirejs.config({
+  baseUrl: 'js',
+  paths: {
+    jquery: 'lib/jquery',
+    lodash: 'https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min',
+  },
+  shim: {
+    'legacy-library': {
+      deps: ['jquery'],
+      exports: 'LegacyLib',
+    },
+  },
+});
+
+// Using multiple dependencies
+define(['jquery', 'lodash', 'app/user'], function ($, _, User) {
+  // Module that uses jQuery, Lodash, and our User module
+  $('#user-info').html(
+    _.template('<p>Name: <%= name %></p>', {
+      name: new User('John').name,
+    })
+  );
+});
+```
+
+### AMD Plugin Capabilities
+
+```javascript
+// Loading text resources with AMD's text plugin
+define(['text!templates/user.html'], function (template) {
+  function render(data) {
+    // Simple template substitution
+    return template.replace('{{name}}', data.name).replace('{{age}}', data.age);
+  }
+
+  return { render };
+});
+
+// Using the template module
+require(['userTemplate', 'userModule'], function (template, userModule) {
+  const user = userModule.createUser('John', 30);
+  document.body.innerHTML = template.render(user);
+});
+```
+
+## UMD (Universal Module Definition)
+
+UMD acts as a pattern that allows modules to work in both AMD and CommonJS environments, as well as global variable export as a fallback.
+
+```javascript
+// UMD pattern
+(function (root, factory) {
+  if (typeof define === 'function' && define.amd) {
+    // AMD. Register as an anonymous module.
+    define(['lodash'], factory);
+  } else if (typeof module === 'object' && module.exports) {
+    // Node. Does not work with strict CommonJS, but
+    // only CommonJS-like environments that support module.exports,
+    // like Node.
+    module.exports = factory(require('lodash'));
+  } else {
+    // Browser globals (root is window)
+    root.myLibrary = factory(root._);
+  }
+})(typeof self !== 'undefined' ? self : this, function (_) {
+  // Module implementation
+  function doSomething(data) {
+    return _.map(data, (item) => item * 2);
+  }
+
+  // Public API
+  return {
+    version: '1.0.0',
+    process: doSomething,
+  };
+});
+
+// Usage (works in any environment)
+// In Node.js
+const myLib = require('./my-library');
+console.log(myLib.process([1, 2, 3])); // [2, 4, 6]
+
+// In AMD
+define(['myLibrary'], function (myLib) {
+  console.log(myLib.process([1, 2, 3])); // [2, 4, 6]
+});
+
+// In Browser
+console.log(myLibrary.process([1, 2, 3])); // [2, 4, 6]
+```
+
+## ES Modules (ESM)
+
+ES Modules (introduced in ES6/ES2015) are the official standard JavaScript module system with static imports and exports.
+
+### Basic ES Modules Structure
+
+```javascript
+// user.js
+// Named exports
+export const MIN_AGE = 18;
+export const MAX_AGE = 100;
+
+export function validateAge(age) {
+  return age >= MIN_AGE && age <= MAX_AGE;
+}
+
+// Default export
+export default class User {
+  constructor(name, age) {
+    this.name = name;
+    this.age = age;
+  }
+
+  isValidAge() {
+    return validateAge(this.age);
+  }
+}
+
+// Export list syntax alternative
+// const MIN_AGE = 18;
+// const MAX_AGE = 100;
+// function validateAge(age) { /* ... */ }
+// class User { /* ... */ }
+// export { MIN_AGE, MAX_AGE, validateAge };
+// export default User;
+```
+
+### Importing in ES Modules
+
+```javascript
+// main.js
+// Import default export
+import User from './user.js';
+
+// Import named exports
+import { validateAge, MIN_AGE } from './user.js';
+
+// Rename during import
+import { validateAge as isAgeValid } from './user.js';
+
+// Import all exports as namespace
+import * as UserModule from './user.js';
+
+// Usage
+const john = new User('John', 30);
+console.log(john.isValidAge()); // true
+console.log(validateAge(15)); // false
+console.log(MIN_AGE); // 18
+
+console.log(isAgeValid(25)); // true
+console.log(UserModule.MAX_AGE); // 100
+```
+
+### Dynamic Imports
+
+```javascript
+// Static imports must be at the top level
+import './module1.js';
+
+async function loadModuleIfNeeded(condition) {
+  if (condition) {
+    // Dynamic import - returns a promise
+    const module = await import('./heavy-module.js');
+    return module.default;
+  }
+  return null;
+}
+
+// Usage
+button.addEventListener('click', async () => {
+  const HeavyComponent = await loadModuleIfNeeded(true);
+  if (HeavyComponent) {
+    const instance = new HeavyComponent();
+    instance.render();
+  }
+});
+```
+
+### Module Aggregation and Re-exporting
+
+```javascript
+// models/index.js - Barrel file
+export { default as User } from './user.js';
+export { default as Product } from './product.js';
+export { default as Order } from './order.js';
+
+// Re-exporting with renames
+export { default as UserModel } from './user.js';
+export { validateUser } from './user-validation.js';
+
+// main.js
+import { User, Product, Order } from './models/index.js';
+// Instead of:
+// import User from './models/user.js';
+// import Product from './models/product.js';
+// import Order from './models/order.js';
+```
+
+### Top-Level await (ES2020)
+
+```javascript
+// database.js
+export const connection = await createDatabaseConnection();
+export const users = await connection.collection('users');
+
+// Without top-level await (pre-ES2020)
+// let connection;
+// let users;
+//
+// async function initialize() {
+//   connection = await createDatabaseConnection();
+//   users = await connection.collection('users');
+// }
+//
+// initialize().catch(console.error);
+//
+// export { connection, users };
+```
+
+### Module Attributes and Import Assertions (Proposal)
+
+```javascript
+// Importing JSON (with import assertions)
+import config from './config.json' assert { type: 'json' };
+console.log(config.apiEndpoint);
+
+// Importing CSS (future proposal)
+import styles from './styles.css' with { type: 'css' };
+document.adoptedStyleSheets = [styles];
+```
+
+## Key Differences Between Module Systems
+
+### Static vs. Dynamic
+
+```javascript
+// CommonJS - Dynamic (can use variables in paths)
+const localeCode = getLocale();
+const translations = require(`./locales/${localeCode}.js`);
+
+// ES Modules - Static (paths must be literal strings)
+import translations from './locales/en.js'; // Can't use variables in import paths
+
+// Dynamic import in ESM
+async function loadTranslations(locale) {
+  const module = await import(`./locales/${locale}.js`);
+  return module.default;
+}
+```
+
+### Loading Behavior
+
+```javascript
+// CommonJS - synchronous loading
+const fs = require('fs'); // blocks until module is loaded
+const content = fs.readFileSync('file'); // continues execution
+
+// AMD - asynchronous loading
+require(['module1', 'module2'], function (module1, module2) {
+  // Code executes after modules are loaded
+});
+
+// ES Modules - asynchronous loading but with hoisting
+import { func } from './module.js'; // hoisted
+func(); // Works even though ESM loading is async
+```
+
+### Browser vs. Node.js Support
+
+```javascript
+// Node.js CommonJS (works in all Node.js versions)
+const path = require('path');
+
+// Node.js ES Modules
+// Option 1: Use .mjs extension
+// mymodule.mjs
+export function hello() {
+  return 'Hello';
+}
+
+// Option 2: Add "type": "module" in package.json
+// {
+//   "name": "my-package",
+//   "type": "module",
+//   ...
+// }
+
+// Browser ES Modules
+<script type='module'>
+  import {hello} from './module.js'; console.log(hello());
+</script>;
+```
+
+## Using Module Systems Together
+
+### Interoperability Between CommonJS and ES Modules
+
+#### In Node.js
+
+```javascript
+// commonjs-module.cjs
+const privateValue = 'hidden';
+
+function publicFunction() {
+  return `Function using ${privateValue}`;
+}
+
+module.exports = {
+  publicFunction,
+};
+
+// esm-module.mjs
+import { publicFunction } from './commonjs-module.cjs';
+export function enhancedFunction() {
+  return `Enhanced: ${publicFunction()}`;
+}
+
+// main.js
+// If type:module in package.json
+import { enhancedFunction } from './esm-module.mjs';
+console.log(enhancedFunction());
+
+// If default CommonJS in Node.js
+const { enhancedFunction } = require('./esm-module.mjs'); // Requires experimental flags
+```
+
+### Using Build Tools for Module Transformation
+
+```javascript
+// Using Webpack, Babel, or Rollup to compile ES Modules to other formats
+
+// webpack.config.js example
+module.exports = {
+  entry: './src/index.js',
+  output: {
+    filename: 'bundle.js',
+    path: path.resolve(__dirname, 'dist'),
+    library: 'MyLibrary',
+    libraryTarget: 'umd', // Outputs compatible format
+  },
+  module: {
+    rules: [
+      {
+        test: /\.js$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: ['@babel/preset-env'],
+          },
+        },
+      },
+    ],
+  },
+};
+```
+
+## Advanced Module Patterns
+
+### The Service Locator Pattern
+
+```javascript
+// serviceLocator.js
+const services = new Map();
+
+export function register(name, instance) {
+  services.set(name, instance);
+}
+
+export function get(name) {
+  const service = services.get(name);
+  if (!service) {
+    throw new Error(`Service "${name}" not found`);
+  }
+  return service;
+}
+
+// Usage
+import { register, get } from './serviceLocator.js';
+import Database from './database.js';
+import Logger from './logger.js';
+
+// Registration
+register('db', new Database('mongodb://localhost:27017'));
+register('logger', new Logger());
+
+// In another file
+import { get } from './serviceLocator.js';
+
+function saveUser(user) {
+  const db = get('db');
+  const logger = get('logger');
+
+  logger.info(`Saving user ${user.id}`);
+  return db.users.insert(user);
+}
+```
+
+### The Dependency Injection Container
+
+```javascript
+// di-container.js
+export class Container {
+  constructor() {
+    this.services = new Map();
+    this.singletons = new Map();
+  }
+
+  register(name, definition, dependencies = []) {
+    this.services.set(name, { definition, dependencies });
+  }
+
+  singleton(name, definition, dependencies = []) {
+    this.register(name, definition, dependencies);
+    this.services.get(name).singleton = true;
+  }
+
+  get(name) {
+    const service = this.services.get(name);
+    if (!service) {
+      throw new Error(`Service "${name}" not found`);
+    }
+
+    // Return cached singleton
+    if (service.singleton && this.singletons.has(name)) {
+      return this.singletons.get(name);
+    }
+
+    // Resolve dependencies
+    const dependencies = service.dependencies.map((dep) => this.get(dep));
+
+    // Create instance
+    const instance =
+      typeof service.definition === 'function'
+        ? new service.definition(...dependencies)
+        : service.definition;
+
+    // Cache singleton
+    if (service.singleton) {
+      this.singletons.set(name, instance);
+    }
+
+    return instance;
+  }
+}
+
+// Usage
+import { Container } from './di-container.js';
+
+// Service definitions
+class Database {
+  constructor(connectionString) {
+    this.connection = connectionString;
+  }
+}
+
+class UserRepository {
+  constructor(db) {
+    this.db = db;
+  }
+
+  findUser(id) {
+    return { id, name: 'Test User' };
+  }
+}
+
+class UserService {
+  constructor(userRepo, logger) {
+    this.userRepo = userRepo;
+    this.logger = logger;
+  }
+
+  getUser(id) {
+    this.logger.log(`Getting user ${id}`);
+    return this.userRepo.findUser(id);
+  }
+}
+
+// Setup container
+const container = new Container();
+
+// Register services
+container.register('config', { dbUrl: 'mongodb://localhost:27017' });
+container.singleton('logger', { log: console.log });
+container.singleton('db', Database, ['config']);
+container.singleton('userRepo', UserRepository, ['db']);
+container.register('userService', UserService, ['userRepo', 'logger']);
+
+// Usage
+const userService = container.get('userService');
+const user = userService.getUser(123);
+```
+
+### Lazy-Loading Modules
+
+```javascript
+// Using proxies for lazy loading
+// lazy.js
+export function createLazyProxy(importFn) {
+  let module;
+
+  return new Proxy(
+    {},
+    {
+      get(target, prop) {
+        if (!module) {
+          // Load module on first property access
+          module = importFn();
+        }
+
+        // Wait for module to load then access property
+        return Promise.resolve(module).then((m) => m[prop]);
+      },
+
+      apply(target, thisArg, args) {
+        if (!module) {
+          module = importFn();
+        }
+
+        return Promise.resolve(module).then((m) => {
+          if (typeof m === 'function') {
+            return m.apply(thisArg, args);
+          }
+          if (typeof m.default === 'function') {
+            return m.default.apply(thisArg, args);
+          }
+          throw new Error('Module is not a function');
+        });
+      },
+    }
+  );
+}
+
+// Usage
+import { createLazyProxy } from './lazy.js';
+
+const lazyModule = createLazyProxy(() => import('./heavy-module.js'));
+
+// Later, when needed:
+async function doWork() {
+  // Module loads only when a property is accessed
+  const result = await lazyModule.compute(42);
+  return result;
+}
+```
+
+## Module Best Practices
+
+### Structuring Modules
+
+```javascript
+// GOOD: Single responsibility
+// user-service.js
+export function findUser(id) {
+  /* ... */
+}
+export function createUser(data) {
+  /* ... */
+}
+export function updateUser(id, data) {
+  /* ... */
+}
+
+// BAD: Too many unrelated responsibilities
+// utils.js
+export function formatDate(date) {
+  /* ... */
+}
+export function calculateTax(amount) {
+  /* ... */
+}
+export function sendEmail(to, subject, body) {
+  /* ... */
+}
+export function validatePassword(password) {
+  /* ... */
+}
+```
+
+### Default Exports vs. Named Exports
+
+```javascript
+// Default exports are good when a module primarily exports one thing
+// math.js - BAD use of default export
+const add = (a, b) => a + b;
+const subtract = (a, b) => a - b;
+const multiply = (a, b) => a * b;
+export default { add, subtract, multiply };
+
+// Better as named exports:
+export const add = (a, b) => a + b;
+export const subtract = (a, b) => a - b;
+export const multiply = (a, b) => a * b;
+
+// Component.js - GOOD use of default export
+export default class Component {
+  // A class is often the primary export
+}
+```
+
+### Circular Dependencies Management
+
+```javascript
+// Avoid
+// a.js
+import { b } from './b.js';
+export const a = 'a';
+
+// b.js
+import { a } from './a.js';
+export const b = 'b';
+
+// Better
+// shared.js
+export const a = 'a';
+export const b = 'b';
+
+// Or refactor to avoid circularity
+// a.js
+export const a = 'a';
+
+// b.js
+import { a } from './a.js';
+export const b = 'b';
+
+// c.js (new orchestrator)
+import { a } from './a.js';
+import { b } from './b.js';
+```
+
+### Module Organization Patterns
+
+#### Feature-Based Organization
+
+```
+src/
+├── features/
+│   ├── auth/
+│   │   ├── index.js
+│   │   ├── auth-service.js
+│   │   ├── auth-api.js
+│   │   └── components/
+│   │       ├── Login.js
+│   │       └── Register.js
+│   └── products/
+│       ├── index.js
+│       ├── product-service.js
+│       └── components/
+│           ├── ProductList.js
+│           └── ProductDetail.js
+└── shared/
+    ├── api/
+    ├── utils/
+    └── components/
+```
+
+#### Layered Architecture
+
+```
+src/
+├── presentation/
+│   ├── components/
+│   └── pages/
+├── application/
+│   ├── services/
+│   └── state/
+├── domain/
+│   └── models/
+└── infrastructure/
+    ├── api/
+    └── storage/
+```
+
+### Using Barrel Files
+
+```javascript
+// components/index.js
+export { default as Button } from './Button.js';
+export { default as Input } from './Input.js';
+export { default as Select } from './Select.js';
+
+// Usage elsewhere
+import { Button, Input, Select } from './components';
+```
+
+## Performance Considerations
+
+### Module Loading Optimization
+
+```javascript
+// Code-splitting with dynamic imports
+const ProductPage = () => {
+  const [showDetails, setShowDetails] = useState(false);
+  const [ProductDetails, setProductDetails] = useState(null);
+
+  const loadDetails = async () => {
+    // Only load component when needed
+    const module = await import('./ProductDetails.js');
+    setProductDetails(() => module.default);
+    setShowDetails(true);
+  };
+
+  return (
+    <div>
+      <h1>Product</h1>
+      <button onClick={loadDetails}>Show Details</button>
+      {showDetails && ProductDetails && <ProductDetails />}
+    </div>
+  );
+};
+
+// Preloading modules when likely to be needed
+function prefetchProductDetails() {
+  import('./ProductDetails.js');
+}
+
+// Call when user hovers or navigates close to needing it
+userButton.addEventListener('mouseover', prefetchProductDetails);
+```
+
+### Tree Shaking
+
+```javascript
+// library.js - tree-shakable exports
+export function feature1() {
+  /* ... */
+}
+export function feature2() {
+  /* ... */
+}
+export function feature3() {
+  /* ... */
+}
+
+// main.js - only imports what's needed
+import { feature1 } from './library.js';
+
+// After build optimization, feature2 and feature3 are removed
+```
+
+### Bundling Strategies
+
+```javascript
+// webpack.config.js
+module.exports = {
+  entry: {
+    main: './src/index.js',
+    vendor: './src/vendor.js',
+  },
+  output: {
+    filename: '[name].[contenthash].js',
+    path: path.resolve(__dirname, 'dist'),
+  },
+  optimization: {
+    splitChunks: {
+      chunks: 'all',
+      cacheGroups: {
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendors',
+          chunks: 'all',
+        },
+      },
+    },
+  },
+};
+```
+
+## Module System Ecosystem and Tools
+
+### Package Managers and Module Resolution
+
+```javascript
+// package.json
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "main": "dist/index.js", // CommonJS entry
+  "module": "dist/index.mjs", // ES module entry
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    },
+    "./utils": {
+      "import": "./dist/utils.mjs",
+      "require": "./dist/utils.js"
+    }
+  },
+  "dependencies": {
+    "lodash-es": "^4.17.21"
+  }
+}
+```
+
+### Module Bundlers
+
+```javascript
+// Rollup example for library bundling
+// rollup.config.js
+import resolve from '@rollup/plugin-node-resolve';
+import commonjs from '@rollup/plugin-commonjs';
+import { terser } from 'rollup-plugin-terser';
+
+export default {
+  input: 'src/index.js',
+  output: [
+    {
+      file: 'dist/bundle.js',
+      format: 'cjs',
+    },
+    {
+      file: 'dist/bundle.mjs',
+      format: 'es',
+    },
+    {
+      file: 'dist/bundle.umd.js',
+      format: 'umd',
+      name: 'MyLibrary',
+    },
+  ],
+  plugins: [resolve(), commonjs(), terser()],
+};
+```
+
+## Related Topics
+
+- [JavaScript Scope](./scope) - Understanding scope and closures
+- [ES6 Features](./es6-features) - Modern JavaScript capabilities
+- [Build Tools](../tooling/build-tools) - Tools for transpiling and bundling modules
+- [JavaScript Runtime](./javascript-runtime) - How modules are executed in different environments
+- [Performance Optimization](./performance-optimization) - Strategies for optimizing JavaScript code
+
+```
+
+```

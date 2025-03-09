@@ -1,0 +1,472 @@
+---
+description: Understanding JavaScript execution context, scope chains, call stack, and the event loop
+title: JavaScript Execution Context
+---
+
+# JavaScript Execution Context
+
+The execution context is one of the most fundamental concepts in JavaScript. It's the environment in which JavaScript code is evaluated and executed. Understanding execution contexts is crucial for mastering JavaScript, as it explains variable scoping, hoisting, and the behavior of the `this` keyword.
+
+## What is Execution Context?
+
+An execution context can be thought of as a container that stores variables, function declarations, and the value of `this` for the code being executed. It's created whenever JavaScript code runs—whether globally, in a function, or in an evaluation.
+
+## Types of Execution Contexts
+
+JavaScript has three types of execution contexts:
+
+1. **Global Execution Context (GEC)** - The default context created when a script starts running
+2. **Function Execution Context (FEC)** - Created each time a function is called
+3. **Eval Execution Context** - Created when code is executed inside an `eval()` function (rarely used)
+
+## Phases of Execution Context
+
+Each execution context has two phases:
+
+### 1. Creation Phase
+
+During the creation phase, JavaScript performs these tasks:
+
+- Creates the Variable Environment (for variables and functions)
+- Creates the Scope Chain (for accessing variables outside the current context)
+- Determines the value of `this`
+
+This is where "hoisting" happens—JavaScript allocates memory for variables and function declarations before executing the code.
+
+### 2. Execution Phase
+
+In this phase, JavaScript runs the code line-by-line, assigning values and executing functions.
+
+## The Global Execution Context
+
+The global execution context is created when a JavaScript program starts running:
+
+```javascript
+// Global execution context created at the start
+let globalVar = 'I am global';
+let num = 42;
+
+function displayGlobal() {
+  console.log(globalVar); // Can access global variable
+}
+```
+
+The environment in creation phase:
+
+```javascript
+// What the environment looks like during creation phase
+GlobalExecutionContext = {
+  VariableEnvironment: {
+    globalVar: undefined, // Memory space allocated but not assigned
+    num: undefined,       // Memory space allocated but not assigned
+    displayGlobal: <function reference> // Function declaration fully hoisted
+  },
+  this: <global object>, // window in browser, global in Node.js
+  ScopeChain: [GlobalVariableEnvironment]
+}
+```
+
+## Function Execution Context
+
+When a function is called, a new execution context is created and pushed onto the call stack:
+
+```javascript
+function outer() {
+  let a = 10;
+
+  function inner() {
+    let b = 20;
+    console.log(a + b); // 30
+  }
+
+  inner(); // A new function execution context is created
+}
+
+outer(); // A new function execution context is created
+```
+
+When `outer` is called, its execution context looks like:
+
+```javascript
+OuterFunctionExecutionContext = {
+  VariableEnvironment: {
+    a: undefined, // During creation phase
+    inner: <function reference>
+  },
+  this: <depends on how outer was called>,
+  ScopeChain: [OuterVariableEnvironment, GlobalVariableEnvironment]
+}
+```
+
+When `inner` is called, its execution context looks like:
+
+```javascript
+InnerFunctionExecutionContext = {
+  VariableEnvironment: {
+    b: undefined // During creation phase
+  },
+  this: <depends on how inner was called>,
+  ScopeChain: [InnerVariableEnvironment, OuterVariableEnvironment, GlobalVariableEnvironment]
+}
+```
+
+## The Call Stack
+
+The call stack is a data structure that JavaScript uses to keep track of execution contexts:
+
+- When a function is called, its execution context is pushed onto the stack
+- When a function completes, its execution context is popped off the stack
+- The context at the top of the stack is the currently executing code
+
+```javascript
+function first() {
+  console.log('First function');
+  second();
+  console.log('Back to first');
+}
+
+function second() {
+  console.log('Second function');
+  third();
+  console.log('Back to second');
+}
+
+function third() {
+  console.log('Third function');
+}
+
+first();
+```
+
+The call stack evolves:
+
+1. Push Global Execution Context
+2. Call `first()` → Push first's execution context
+3. Call `second()` → Push second's execution context
+4. Call `third()` → Push third's execution context
+5. `third()` completes → Pop third's execution context
+6. `second()` completes → Pop second's execution context
+7. `first()` completes → Pop first's execution context
+8. Only Global Execution Context remains
+
+## Variable Environment and Scope Chain
+
+Each execution context has its own variable environment and access to outer environments through the scope chain:
+
+```javascript
+const global = 'GLOBAL';
+
+function outer() {
+  const outerVar = 'OUTER';
+
+  function middle() {
+    const middleVar = 'MIDDLE';
+
+    function inner() {
+      const innerVar = 'INNER';
+
+      // Can access all variables
+      console.log(innerVar); // INNER
+      console.log(middleVar); // MIDDLE
+      console.log(outerVar); // OUTER
+      console.log(global); // GLOBAL
+    }
+
+    inner();
+  }
+
+  middle();
+}
+
+outer();
+```
+
+The scope chain for `inner` looks like:
+`inner` → `middle` → `outer` → `global`
+
+When a variable is referenced, JavaScript looks up the scope chain until it finds the variable:
+
+1. Check current context's variable environment
+2. If not found, check the parent execution context's variable environment
+3. Continue up the scope chain until found or until reaching the global context
+4. If not found even in global context, it's a `ReferenceError`
+
+## Execution Context and Closures
+
+Closures work because function execution contexts capture the scope chain at their creation:
+
+```javascript
+function createCounter() {
+  let count = 0; // This variable becomes part of the closure
+
+  return function increment() {
+    count++;
+    return count;
+  };
+}
+
+const counter = createCounter();
+console.log(counter()); // 1
+console.log(counter()); // 2
+```
+
+When `createCounter` runs, it creates a function execution context with `count` in its variable environment. Even though `createCounter` completes and its context is popped off the stack, the inner function maintains a reference to the variable environment where `count` lives.
+
+## Block Scoping with let and const
+
+ES6 introduced block-scoped variables with `let` and `const`, which are stored differently than `var`:
+
+```javascript
+function blockScopeExample() {
+  var functionScopedVar = 'I am function-scoped';
+
+  if (true) {
+    var sameVar = 'Also function-scoped';
+    let blockScopedLet = 'I am block-scoped';
+    const blockScopedConst = 'I am also block-scoped';
+
+    console.log(blockScopedLet); // Accessible
+  }
+
+  console.log(sameVar); // Accessible
+  // console.log(blockScopedLet); // ReferenceError
+}
+```
+
+For block-scoped variables, JavaScript creates a separate environment record for each block.
+
+## Execution Context and this
+
+The value of `this` is determined in the creation phase of the execution context:
+
+```javascript
+const user = {
+  name: 'John',
+  greet() {
+    console.log(`Hello, I'm ${this.name}`);
+  },
+};
+
+user.greet(); // this = user
+const greetFn = user.greet;
+greetFn(); // this = global object (or undefined in strict mode)
+```
+
+Each time a function is called, a new execution context is created with a potentially different `this` value, depending on how the function is called.
+
+## The JavaScript Runtime Model
+
+The JavaScript runtime consists of:
+
+1. **Heap**: Memory allocation where objects, variables, and function definitions are stored
+2. **Call Stack**: Where execution contexts are stacked
+3. **Web APIs** (in browsers): Handling async operations like DOM, AJAX, setTimeout, etc.
+4. **Callback Queue**: Where callbacks wait to be processed
+5. **Event Loop**: Monitors call stack and callback queue, pushing callbacks onto the stack when it's empty
+
+## Asynchronous Execution Context
+
+Asynchronous code execution gets more complex with callbacks, promises, and async/await:
+
+```javascript
+console.log('Start');
+
+setTimeout(function () {
+  console.log('Timeout callback');
+}, 0);
+
+Promise.resolve().then(function () {
+  console.log('Promise resolved');
+});
+
+console.log('End');
+
+// Output:
+// Start
+// End
+// Promise resolved
+// Timeout callback
+```
+
+Here's what happens:
+
+1. Global execution context is created
+2. `console.log('Start')` is executed
+3. `setTimeout` callback is registered with Web APIs
+4. Promise handler is added to the microtask queue
+5. `console.log('End')` is executed
+6. Global execution context code completes
+7. Event loop checks microtask queue first → executes Promise handler
+8. Event loop checks callback queue → executes setTimeout callback
+
+## Microtasks vs. Macrotasks
+
+JavaScript has two types of task queues:
+
+1. **Microtask Queue**: Higher priority, processed after the current execution context and before the next macrotask
+
+   - Promise callbacks (.then, .catch, .finally)
+   - queueMicrotask()
+   - MutationObserver callbacks
+
+2. **Macrotask Queue (Task Queue)**: Lower priority
+   - setTimeout, setInterval callbacks
+   - I/O operations
+   - UI rendering
+
+```javascript
+console.log('Script start');
+
+setTimeout(() => {
+  console.log('setTimeout');
+}, 0);
+
+Promise.resolve()
+  .then(() => console.log('Promise 1'))
+  .then(() => console.log('Promise 2'));
+
+console.log('Script end');
+
+// Output:
+// Script start
+// Script end
+// Promise 1
+// Promise 2
+// setTimeout
+```
+
+## Execution Context in Async/Await
+
+With `async/await`, the execution context behavior gets more intuitive:
+
+```javascript
+async function fetchUserData() {
+  console.log('Fetching user...');
+
+  // This pauses the current execution context
+  const user = await fetchUser();
+
+  // When the promise resolves, execution continues in a new microtask
+  console.log('User:', user);
+  return user;
+}
+
+console.log('Before fetchUserData');
+fetchUserData();
+console.log('After fetchUserData call');
+```
+
+Under the hood, `await` pauses the execution of the async function, exits its execution context, and allows other code to run. When the awaited promise resolves, the function's execution context is reconstructed and continues from where it left off.
+
+## The Event Loop in Detail
+
+The event loop is crucial for understanding JavaScript's runtime behavior:
+
+```javascript
+while (true) {
+  // Phase 1: Check if call stack is empty
+  if (callStack.isEmpty() && scriptIsFinished) {
+    // Phase 2: Check and process microtasks until queue is empty
+    while (!microtaskQueue.isEmpty()) {
+      const microtask = microtaskQueue.dequeue();
+      execute(microtask);
+    }
+
+    // Phase 3: Render UI updates (browser only)
+    if (needsRender) {
+      renderUI();
+    }
+
+    // Phase 4: Handle one macrotask
+    if (!macrotaskQueue.isEmpty()) {
+      const macrotask = macrotaskQueue.dequeue();
+      execute(macrotask);
+    }
+  }
+}
+```
+
+This model explains why microtasks always execute before the next macrotask and why excessive synchronous or microtask work can block UI updates.
+
+## Memory Management and Execution Context
+
+Understanding execution contexts helps with memory management, especially for closures:
+
+```javascript
+function createHeavyObject() {
+  // Heavy object with 10,000 items
+  const largeArray = new Array(10000).fill('data');
+
+  return function processArray() {
+    // Only uses the array length
+    return `Array has ${largeArray.length} items`;
+  };
+}
+
+const getInfo = createHeavyObject();
+console.log(getInfo()); // Array has 10000 items
+```
+
+The entire `largeArray` stays in memory because the closure's execution context retains a reference to it. To optimize:
+
+```javascript
+function createOptimizedHeavyObject() {
+  // Heavy object with 10,000 items
+  const largeArray = new Array(10000).fill('data');
+  const length = largeArray.length; // Extract just what we need
+
+  return function processArray() {
+    // Only uses the length value
+    return `Array has ${length} items`;
+  };
+  // largeArray can be garbage collected
+}
+```
+
+## Debugging Execution Context
+
+When debugging in Chrome DevTools or other debuggers, you can inspect the call stack and scope chain:
+
+1. Set a breakpoint in your code
+2. When the breakpoint hits, check:
+   - "Call Stack" panel to see the execution context stack
+   - "Scope" panel to see local, closure, and global variables
+
+## Practical Example: Recursion and Stack Overflow
+
+Recursive functions create a new execution context for each call, which can lead to stack overflow:
+
+```javascript
+// Dangerous recursive function
+function countDown(n) {
+  console.log(n);
+  if (n > 0) {
+    countDown(n - 1);
+  }
+}
+
+countDown(10000); // Stack overflow for large values
+```
+
+With tail-call optimization (in strict mode, on supporting engines):
+
+```javascript
+'use strict';
+// Optimized version with tail recursion
+function countDownOptimized(n) {
+  console.log(n);
+  if (n > 0) {
+    return countDownOptimized(n - 1); // Tail call
+  }
+}
+
+countDownOptimized(10000); // Works on engines with tail-call optimization
+```
+
+## Related Topics
+
+- [Hoisting](./hoisting) - How variable and function declarations are processed
+- [Closures](./closures) - Functions that remember their creation environment
+- [Scope](./scope) - How variable access is determined
+- [This Keyword](./this-keyword) - Understanding the execution context's `this` value
+- [Event Loop](./event-loop) - Deeper dive into JavaScript's concurrency model

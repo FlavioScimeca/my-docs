@@ -1,0 +1,526 @@
+---
+description: A comprehensive guide to JavaScript Decorators, including class decorators, method decorators, property decorators, and practical examples
+title: JavaScript Decorators
+---
+
+# JavaScript Decorators
+
+Decorators provide a way to add annotations and modify classes and class members. This guide covers various types of decorators and their practical applications.
+
+## Class Decorators
+
+### Basic Usage
+
+```javascript
+// Simple class decorator
+function logged(target) {
+  console.log(`Creating instance of ${target.name}`);
+  return target;
+}
+
+@logged
+class Example {
+  constructor() {
+    console.log('Constructor called');
+  }
+}
+
+// Decorator factory
+function singleton(target) {
+  let instance;
+
+  return class Singleton extends target {
+    constructor(...args) {
+      if (!instance) {
+        instance = new target(...args);
+      }
+      return instance;
+    }
+  };
+}
+
+@singleton
+class Database {
+  constructor(url) {
+    this.url = url;
+  }
+}
+```
+
+### Advanced Class Decorators
+
+```javascript
+// Decorator with parameters
+function component(options) {
+  return function (target) {
+    target.prototype.options = options;
+    target.prototype.render = function () {
+      console.log(`Rendering ${options.selector}`);
+    };
+  };
+}
+
+@component({
+  selector: 'app-root',
+  template: '<div>Hello</div>',
+})
+class AppComponent {
+  // Component logic
+}
+
+// Mixin decorator
+function mixin(...mixins) {
+  return function (target) {
+    Object.assign(target.prototype, ...mixins);
+  };
+}
+
+const TimestampMixin = {
+  getTimestamp() {
+    return new Date().toISOString();
+  },
+};
+
+const LoggerMixin = {
+  log(message) {
+    console.log(`[${this.getTimestamp()}] ${message}`);
+  },
+};
+
+@mixin(TimestampMixin, LoggerMixin)
+class Service {
+  // Service logic
+}
+```
+
+## Method Decorators
+
+### Basic Usage
+
+```javascript
+// Method decorator
+function log(target, propertyKey, descriptor) {
+  const originalMethod = descriptor.value;
+
+  descriptor.value = function (...args) {
+    console.log(`Calling ${propertyKey} with args:`, args);
+    const result = originalMethod.apply(this, args);
+    console.log(`Result:`, result);
+    return result;
+  };
+
+  return descriptor;
+}
+
+class Calculator {
+  @log
+  add(a, b) {
+    return a + b;
+  }
+}
+
+// Async method decorator
+function asyncLog(target, propertyKey, descriptor) {
+  const originalMethod = descriptor.value;
+
+  descriptor.value = async function (...args) {
+    console.log(`Starting ${propertyKey}`);
+    const result = await originalMethod.apply(this, args);
+    console.log(`Completed ${propertyKey}`);
+    return result;
+  };
+
+  return descriptor;
+}
+
+class API {
+  @asyncLog
+  async fetchData() {
+    // Fetch data
+  }
+}
+```
+
+### Advanced Method Decorators
+
+```javascript
+// Retry decorator
+function retry(attempts = 3, delay = 1000) {
+  return function (target, propertyKey, descriptor) {
+    const originalMethod = descriptor.value;
+
+    descriptor.value = async function (...args) {
+      for (let i = 0; i < attempts; i++) {
+        try {
+          return await originalMethod.apply(this, args);
+        } catch (error) {
+          if (i === attempts - 1) throw error;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+    };
+
+    return descriptor;
+  };
+}
+
+// Memoization decorator
+function memoize(target, propertyKey, descriptor) {
+  const originalMethod = descriptor.value;
+  const cache = new Map();
+
+  descriptor.value = function (...args) {
+    const key = JSON.stringify(args);
+
+    if (cache.has(key)) {
+      return cache.get(key);
+    }
+
+    const result = originalMethod.apply(this, args);
+    cache.set(key, result);
+    return result;
+  };
+
+  return descriptor;
+}
+
+class MathUtils {
+  @memoize
+  fibonacci(n) {
+    if (n <= 1) return n;
+    return this.fibonacci(n - 1) + this.fibonacci(n - 2);
+  }
+
+  @retry(3, 1000)
+  async fetchData() {
+    // Fetch data that might fail
+  }
+}
+```
+
+## Property Decorators
+
+### Basic Usage
+
+```javascript
+// Property validation decorator
+function required(target, propertyKey) {
+  let value;
+
+  const getter = function () {
+    return value;
+  };
+
+  const setter = function (newValue) {
+    if (newValue === undefined || newValue === null) {
+      throw new Error(`${propertyKey} is required`);
+    }
+    value = newValue;
+  };
+
+  Object.defineProperty(target, propertyKey, {
+    get: getter,
+    set: setter,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+class User {
+  @required
+  name;
+
+  constructor(name) {
+    this.name = name;
+  }
+}
+```
+
+### Advanced Property Decorators
+
+```javascript
+// Type validation decorator
+function type(typeCheck) {
+  return function (target, propertyKey) {
+    let value;
+
+    const getter = function () {
+      return value;
+    };
+
+    const setter = function (newValue) {
+      if (!typeCheck(newValue)) {
+        throw new TypeError(`Invalid type for ${propertyKey}`);
+      }
+      value = newValue;
+    };
+
+    Object.defineProperty(target, propertyKey, {
+      get: getter,
+      set: setter,
+      enumerable: true,
+      configurable: true,
+    });
+  };
+}
+
+// Observable property decorator
+function observable(target, propertyKey) {
+  const subscribers = new Set();
+  let value;
+
+  Object.defineProperty(target, propertyKey, {
+    get() {
+      return value;
+    },
+    set(newValue) {
+      const oldValue = value;
+      value = newValue;
+
+      subscribers.forEach((callback) => {
+        callback(newValue, oldValue);
+      });
+    },
+  });
+
+  // Add subscriber method
+  target[
+    `subscribe${propertyKey.charAt(0).toUpperCase()}${propertyKey.slice(1)}`
+  ] = function (callback) {
+    subscribers.add(callback);
+    return () => subscribers.delete(callback);
+  };
+}
+
+class Temperature {
+  @type((value) => typeof value === 'number')
+  celsius;
+
+  @observable
+  fahrenheit;
+
+  constructor(celsius) {
+    this.celsius = celsius;
+    this.fahrenheit = (celsius * 9) / 5 + 32;
+  }
+}
+```
+
+## Parameter Decorators
+
+### Basic Usage
+
+```javascript
+// Parameter validation decorator
+function validate(validator) {
+  return function (target, propertyKey, parameterIndex) {
+    const originalMethod = target[propertyKey];
+
+    target[propertyKey] = function (...args) {
+      if (!validator(args[parameterIndex])) {
+        throw new Error(`Invalid parameter at position ${parameterIndex}`);
+      }
+      return originalMethod.apply(this, args);
+    };
+  };
+}
+
+class Calculator {
+  add(
+    @validate((n) => typeof n === 'number') a,
+    @validate((n) => typeof n === 'number') b
+  ) {
+    return a + b;
+  }
+}
+```
+
+## Practical Examples
+
+### API Client
+
+```javascript
+// API client with decorators
+function endpoint(path) {
+  return function (target, propertyKey, descriptor) {
+    const originalMethod = descriptor.value;
+
+    descriptor.value = async function (...args) {
+      const url = `${this.baseUrl}${path}`;
+      const config = originalMethod.apply(this, args);
+
+      try {
+        const response = await fetch(url, config);
+        if (!response.ok) throw new Error(response.statusText);
+        return await response.json();
+      } catch (error) {
+        console.error(`API Error: ${error.message}`);
+        throw error;
+      }
+    };
+
+    return descriptor;
+  };
+}
+
+class API {
+  constructor(baseUrl) {
+    this.baseUrl = baseUrl;
+  }
+
+  @endpoint('/users')
+  getUsers() {
+    return { method: 'GET' };
+  }
+
+  @endpoint('/users')
+  createUser(data) {
+    return {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    };
+  }
+}
+```
+
+### Form Validation
+
+```javascript
+// Form validation decorators
+function minLength(length) {
+  return function (target, propertyKey) {
+    let value;
+
+    const validator = {
+      get() {
+        return value;
+      },
+      set(newValue) {
+        if (newValue.length < length) {
+          throw new Error(
+            `${propertyKey} must be at least ${length} characters`
+          );
+        }
+        value = newValue;
+      },
+    };
+
+    Object.defineProperty(target, propertyKey, validator);
+  };
+}
+
+function email(target, propertyKey) {
+  let value;
+
+  const validator = {
+    get() {
+      return value;
+    },
+    set(newValue) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(newValue)) {
+        throw new Error(`${propertyKey} must be a valid email`);
+      }
+      value = newValue;
+    },
+  };
+
+  Object.defineProperty(target, propertyKey, validator);
+}
+
+class UserForm {
+  @minLength(3)
+  name;
+
+  @email
+  email;
+
+  constructor(data) {
+    Object.assign(this, data);
+  }
+
+  validate() {
+    return true; // All decorators passed
+  }
+}
+```
+
+### Dependency Injection
+
+```javascript
+// Simple dependency injection system
+const Container = new Map();
+
+function injectable(target) {
+  Container.set(target.name, target);
+}
+
+function inject(target, propertyKey) {
+  const type = Reflect.getMetadata('design:type', target, propertyKey);
+  const instance = Container.get(type.name);
+
+  Object.defineProperty(target, propertyKey, {
+    get: () => instance,
+  });
+}
+
+@injectable
+class UserService {
+  getUsers() {
+    return ['User 1', 'User 2'];
+  }
+}
+
+@injectable
+class UserController {
+  @inject
+  userService: UserService;
+
+  getUsers() {
+    return this.userService.getUsers();
+  }
+}
+```
+
+## Best Practices
+
+```javascript
+// Composing decorators
+function compose(...decorators) {
+  return function (target, propertyKey, descriptor) {
+    return decorators.reduceRight((desc, decorator) => {
+      return decorator(target, propertyKey, desc);
+    }, descriptor);
+  };
+}
+
+// Decorator ordering
+class Example {
+  @compose(log, memoize, retry(3, 1000))
+  async expensiveOperation() {
+    // Operation logic
+  }
+}
+
+// Error handling in decorators
+function safeDecorator(decorator) {
+  return function (...args) {
+    try {
+      return decorator(...args);
+    } catch (error) {
+      console.error('Decorator error:', error);
+      // Return original descriptor or handle error
+    }
+  };
+}
+```
+
+## Related Topics
+
+- [TypeScript](./typescript) - TypeScript decorators
+- [Design Patterns](./design-patterns) - Decorator pattern
+- [Metadata Reflection](./metadata-reflection) - Reflection API
+- [Class Features](./class-features) - JavaScript classes

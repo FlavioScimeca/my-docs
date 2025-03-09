@@ -1,0 +1,791 @@
+---
+description: Understanding JavaScript's prototype-based inheritance system, prototype chains, and object creation patterns
+title: JavaScript Prototypal Inheritance
+---
+
+# JavaScript Prototypal Inheritance
+
+Unlike class-based languages like Java or C++, JavaScript uses a prototype-based inheritance model. This system allows objects to inherit properties and methods directly from other objects, creating a prototype chain. Understanding prototypal inheritance is essential for mastering JavaScript's object-oriented capabilities.
+
+## Prototypes in JavaScript
+
+In JavaScript, every object has an internal link to another object called its **prototype**. When you try to access a property that doesn't exist on an object, JavaScript automatically looks for it in the object's prototype, and if not found, in the prototype's prototype, continuing up the chain until it reaches an object with a `null` prototype.
+
+### The Prototype Chain
+
+```javascript
+const animal = {
+  eats: true,
+  walk() {
+    console.log('Animal walking');
+  },
+};
+
+const rabbit = {
+  jumps: true,
+  __proto__: animal, // Sets animal as rabbit's prototype
+};
+
+const longEar = {
+  earLength: 10,
+  __proto__: rabbit, // Sets rabbit as longEar's prototype
+};
+
+// Property access works up the prototype chain
+console.log(longEar.jumps); // true (from rabbit)
+console.log(longEar.eats); // true (from animal)
+longEar.walk(); // "Animal walking" (method from animal)
+```
+
+> Note: The `__proto__` property is now considered legacy. Modern code should use `Object.getPrototypeOf()` and `Object.setPrototypeOf()` or `Object.create()`.
+
+## Object.prototype
+
+The default prototype for most objects is `Object.prototype`, which provides common methods like `toString()`, `hasOwnProperty()`, etc.
+
+```javascript
+const obj = {};
+console.log(Object.getPrototypeOf(obj) === Object.prototype); // true
+
+// Using inherited methods
+console.log(obj.toString()); // "[object Object]"
+console.log(obj.hasOwnProperty('name')); // false
+```
+
+The complete prototype chain typically ends with `Object.prototype`, whose prototype is `null`:
+
+```javascript
+console.log(Object.getPrototypeOf(Object.prototype)); // null
+```
+
+## Constructor Functions and Prototypes
+
+Constructor functions provide a pattern for creating objects with shared properties and methods:
+
+```javascript
+function Animal(name) {
+  this.name = name;
+}
+
+// Adding methods to the prototype
+Animal.prototype.eat = function () {
+  console.log(`${this.name} is eating.`);
+};
+
+Animal.prototype.walk = function () {
+  console.log(`${this.name} is walking.`);
+};
+
+// Creating instances
+const dog = new Animal('Rex');
+const cat = new Animal('Whiskers');
+
+dog.eat(); // "Rex is eating."
+cat.walk(); // "Whiskers is walking."
+
+// Verifying the prototype chain
+console.log(dog.__proto__ === Animal.prototype); // true
+console.log(dog.__proto__.__proto__ === Object.prototype); // true
+```
+
+When you call a constructor function with `new`:
+
+1. A new empty object is created
+2. The object's `[[Prototype]]` (internal prototype) is set to the constructor's `.prototype` property
+3. The constructor function is called with `this` bound to the new object
+4. The object is returned (if the constructor doesn't return a different object)
+
+## Inheriting Between Constructor Functions
+
+You can create inheritance relationships between constructor functions:
+
+```javascript
+function Animal(name) {
+  this.name = name;
+}
+
+Animal.prototype.eat = function () {
+  console.log(`${this.name} is eating.`);
+};
+
+function Dog(name, breed) {
+  // Call the parent constructor
+  Animal.call(this, name);
+  this.breed = breed;
+}
+
+// Set up the prototype chain (pre-ES6 approach)
+Dog.prototype = Object.create(Animal.prototype);
+// Fix the constructor property
+Dog.prototype.constructor = Dog;
+
+// Add methods specific to Dog
+Dog.prototype.bark = function () {
+  console.log(`${this.name} is barking.`);
+};
+
+// Override parent methods
+Dog.prototype.eat = function () {
+  console.log(`${this.name} is eating like a dog.`);
+};
+
+const rex = new Dog('Rex', 'German Shepherd');
+rex.eat(); // "Rex is eating like a dog."
+rex.bark(); // "Rex is barking."
+console.log(rex.breed); // "German Shepherd"
+
+// Checking the prototype chain
+console.log(rex instanceof Dog); // true
+console.log(rex instanceof Animal); // true
+console.log(rex instanceof Object); // true
+```
+
+## ES6 Classes and Prototypal Inheritance
+
+ES6 classes provide a more familiar syntax for creating objects and implementing inheritance, but they still use prototypal inheritance under the hood:
+
+```javascript
+class Animal {
+  constructor(name) {
+    this.name = name;
+  }
+
+  eat() {
+    console.log(`${this.name} is eating.`);
+  }
+
+  walk() {
+    console.log(`${this.name} is walking.`);
+  }
+}
+
+class Dog extends Animal {
+  constructor(name, breed) {
+    super(name); // Call parent constructor
+    this.breed = breed;
+  }
+
+  bark() {
+    console.log(`${this.name} is barking.`);
+  }
+
+  // Override parent method
+  eat() {
+    console.log(`${this.name} is eating like a dog.`);
+  }
+}
+
+const rex = new Dog('Rex', 'German Shepherd');
+rex.eat(); // "Rex is eating like a dog."
+rex.walk(); // "Rex is walking."
+rex.bark(); // "Rex is barking."
+
+// The prototype chain is still there
+console.log(Object.getPrototypeOf(rex) === Dog.prototype); // true
+console.log(Object.getPrototypeOf(Dog.prototype) === Animal.prototype); // true
+```
+
+## Different Ways to Create Objects and Set Prototypes
+
+### Object Literals
+
+```javascript
+const animal = {
+  eats: true,
+};
+
+// Modern approach to set prototype
+const rabbit = Object.create(animal, {
+  jumps: {
+    value: true,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  },
+});
+
+console.log(rabbit.jumps); // true
+console.log(rabbit.eats); // true
+```
+
+### Object.create() with null
+
+Creates an object with no prototype, meaning it doesn't inherit any Object methods:
+
+```javascript
+const noProtoObject = Object.create(null);
+
+// The object has no inherited methods
+console.log(noProtoObject.toString); // undefined
+console.log(noProtoObject.hasOwnProperty); // undefined
+
+// Adding properties works normally
+noProtoObject.name = 'Pure object';
+console.log(noProtoObject.name); // "Pure object"
+```
+
+### Factory Functions
+
+```javascript
+function createAnimal(name) {
+  return {
+    name,
+    eat() {
+      console.log(`${name} is eating.`);
+    },
+  };
+}
+
+function createDog(name, breed) {
+  // Create the base animal
+  const animal = createAnimal(name);
+
+  // Add dog-specific properties and methods
+  return {
+    ...animal,
+    breed,
+    bark() {
+      console.log(`${name} is barking.`);
+    },
+  };
+}
+
+const rex = createDog('Rex', 'German Shepherd');
+rex.eat(); // "Rex is eating."
+rex.bark(); // "Rex is barking."
+```
+
+## Property Shadowing
+
+When you add a property to an object that already exists in the prototype chain, you create a shadowed property:
+
+```javascript
+const animal = {
+  eats: true,
+  walk() {
+    console.log('Animal walking');
+  },
+};
+
+const rabbit = Object.create(animal);
+rabbit.walk = function () {
+  console.log('Rabbit hopping');
+};
+
+rabbit.walk(); // "Rabbit hopping" (uses own method)
+animal.walk(); // "Animal walking" (prototype method unchanged)
+```
+
+Important behaviors:
+
+- Properties are always set on the object itself, not its prototype
+- The `this` value in prototype methods refers to the calling object, not the prototype
+- Setting a property that exists in the prototype chain creates a new property on the object
+
+## Checking Prototype Relationships
+
+Various ways to examine the prototype chain:
+
+```javascript
+const rabbit = Object.create(animal);
+
+// Modern methods
+console.log(Object.getPrototypeOf(rabbit) === animal); // true
+console.log(animal.isPrototypeOf(rabbit)); // true
+
+// Check if a property is an object's own (not inherited)
+console.log(rabbit.hasOwnProperty('eats')); // false
+console.log(animal.hasOwnProperty('eats')); // true
+
+// Get an object's own properties
+console.log(Object.getOwnPropertyNames(rabbit)); // []
+```
+
+## Real-World Patterns Using Prototypal Inheritance
+
+### Mixins Pattern
+
+Adding methods from multiple sources without direct inheritance:
+
+```javascript
+// Our base object constructor
+function Animal(name) {
+  this.name = name;
+}
+
+// Mixin for swimming animals
+const SwimmerMixin = {
+  swim() {
+    console.log(`${this.name} is swimming.`);
+  },
+  dive() {
+    console.log(`${this.name} is diving.`);
+  },
+};
+
+// Mixin for flying animals
+const FlyerMixin = {
+  fly() {
+    console.log(`${this.name} is flying.`);
+  },
+  land() {
+    console.log(`${this.name} is landing.`);
+  },
+};
+
+// Create a Duck constructor
+function Duck(name) {
+  Animal.call(this, name);
+}
+
+// Set up inheritance
+Duck.prototype = Object.create(Animal.prototype);
+Duck.prototype.constructor = Duck;
+
+// Add mixins
+Object.assign(Duck.prototype, SwimmerMixin, FlyerMixin);
+
+// Create a duck
+const donald = new Duck('Donald');
+donald.swim(); // "Donald is swimming."
+donald.fly(); // "Donald is flying."
+```
+
+### Delegate Prototype Pattern
+
+Focusing on behavior delegation rather than inheritance:
+
+```javascript
+const actions = {
+  walk() {
+    return `${this.name} is walking`;
+  },
+  eat(food) {
+    return `${this.name} is eating ${food}`;
+  },
+};
+
+function createAnimal(name) {
+  return Object.create(actions, {
+    name: {
+      value: name,
+      writable: true,
+      enumerable: true,
+    },
+  });
+}
+
+const leo = createAnimal('Leo');
+console.log(leo.walk()); // "Leo is walking"
+console.log(leo.eat('meat')); // "Leo is eating meat"
+```
+
+### Composition Over Inheritance
+
+```javascript
+// Behavior functions
+function walker(state) {
+  return {
+    walk() {
+      console.log(`${state.name} is walking`);
+      return this;
+    },
+  };
+}
+
+function eater(state) {
+  return {
+    eat(food) {
+      console.log(`${state.name} is eating ${food}`);
+      state.energy += 10;
+      return this;
+    },
+  };
+}
+
+function sleeper(state) {
+  return {
+    sleep(hours) {
+      console.log(`${state.name} is sleeping for ${hours} hours`);
+      state.energy += hours * 5;
+      return this;
+    },
+  };
+}
+
+// Compose an animal
+function createAnimal(name) {
+  const state = {
+    name,
+    energy: 100,
+  };
+
+  return Object.assign({}, walker(state), eater(state), sleeper(state), {
+    getEnergy() {
+      return state.energy;
+    },
+  });
+}
+
+// Create specialized animals by adding behaviors
+function createDog(name) {
+  const dog = createAnimal(name);
+
+  return Object.assign(dog, {
+    bark() {
+      console.log(`${name} is barking`);
+      dog.energy -= 1;
+      return this;
+    },
+  });
+}
+
+// Use the composed object
+const rex = createDog('Rex');
+rex.walk().eat('dog food').bark().sleep(2);
+
+console.log(`Energy level: ${rex.getEnergy()}`); // "Energy level: 119"
+```
+
+## Performance Considerations
+
+The prototype chain has performance implications:
+
+```javascript
+// Performance test for property lookup
+const directObj = { prop: 'value' };
+const protoObj = Object.create({ prop: 'value' });
+
+// Time property access (simplified example)
+console.time('direct');
+for (let i = 0; i < 1000000; i++) {
+  directObj.prop;
+}
+console.timeEnd('direct');
+
+console.time('prototype');
+for (let i = 0; i < 1000000; i++) {
+  protoObj.prop;
+}
+console.timeEnd('prototype');
+```
+
+Best practices for performance:
+
+1. Keep prototype chains short (avoid deep inheritance)
+2. Place frequently accessed properties directly on objects, not on prototypes
+3. Be cautious with dynamic modifications to `Object.prototype`
+
+## Common Pitfalls
+
+### Mutating Shared Prototypes
+
+```javascript
+function Animal() {}
+Animal.prototype.legs = []; // Shared array for all instances!
+
+const dog = new Animal();
+const cat = new Animal();
+
+// Modifying the array on one instance affects all instances
+dog.legs.push('leg1', 'leg2');
+console.log(cat.legs); // ['leg1', 'leg2'] - Unexpected!
+
+// Better approach: Initialize arrays in the constructor
+function BetterAnimal() {
+  this.legs = []; // Each instance gets its own array
+}
+
+const goodDog = new BetterAnimal();
+const goodCat = new BetterAnimal();
+
+goodDog.legs.push('leg1', 'leg2');
+console.log(goodCat.legs); // [] - As expected
+```
+
+### Forgetting to Use `new` with Constructors
+
+```javascript
+function Animal(name) {
+  this.name = name;
+}
+
+// Without 'new', 'this' refers to the global object
+const badDog = Animal('Rex'); // No error, but doesn't work as expected
+console.log(badDog); // undefined
+console.log(window.name); // "Rex" in browsers (global pollution)
+
+// Better pattern: Constructor that works without 'new'
+function SafeAnimal(name) {
+  // Check if 'this' is an instance of SafeAnimal
+  if (!(this instanceof SafeAnimal)) {
+    return new SafeAnimal(name);
+  }
+  this.name = name;
+}
+
+const dog1 = new SafeAnimal('Rex');
+const dog2 = SafeAnimal('Max'); // Still works correctly
+console.log(dog1.name); // "Rex"
+console.log(dog2.name); // "Max"
+```
+
+### Overwriting the Constructor Property
+
+```javascript
+function Animal() {}
+function Dog() {}
+
+// Incorrect inheritance pattern
+Dog.prototype = Animal.prototype; // Both prototypes point to same object!
+
+// Adding a method to Dog.prototype also adds it to Animal.prototype
+Dog.prototype.bark = function () {
+  console.log('Woof!');
+};
+
+const animal = new Animal();
+animal.bark(); // "Woof!" - Animals shouldn't bark!
+
+// Correct approach
+function FixedDog() {}
+FixedDog.prototype = Object.create(Animal.prototype);
+FixedDog.prototype.constructor = FixedDog; // Fix the constructor
+```
+
+## Modern Inheritance Patterns
+
+### Using ES6 Classes
+
+```javascript
+class Base {
+  constructor(props) {
+    this.props = props;
+  }
+
+  method1() {
+    return 'Method from Base';
+  }
+}
+
+class Derived extends Base {
+  constructor(props, extraProps) {
+    super(props);
+    this.extraProps = extraProps;
+  }
+
+  method2() {
+    return 'Method from Derived';
+  }
+
+  // Override base method
+  method1() {
+    return `Overridden: ${super.method1()}`;
+  }
+}
+
+const instance = new Derived('base props', 'extra props');
+console.log(instance.method1()); // "Overridden: Method from Base"
+console.log(instance.method2()); // "Method from Derived"
+```
+
+### Object.create with Multiple Mixins
+
+```javascript
+// Base behaviors
+const walker = {
+  walk() {
+    console.log(`${this.name} is walking`);
+    return this;
+  },
+};
+
+const swimmer = {
+  swim() {
+    console.log(`${this.name} is swimming`);
+    return this;
+  },
+};
+
+const flyer = {
+  fly() {
+    console.log(`${this.name} is flying`);
+    return this;
+  },
+};
+
+// Create objects with multiple behaviors
+function createDuck(name) {
+  // Start with a base object
+  const duck = Object.create(walker);
+
+  // Add the name property
+  Object.defineProperty(duck, 'name', {
+    value: name,
+    writable: true,
+    enumerable: true,
+  });
+
+  // Mix in additional behaviors
+  Object.setPrototypeOf(
+    duck,
+    Object.setPrototypeOf(Object.create(swimmer), Object.getPrototypeOf(duck))
+  );
+
+  Object.setPrototypeOf(
+    duck,
+    Object.setPrototypeOf(Object.create(flyer), Object.getPrototypeOf(duck))
+  );
+
+  return duck;
+}
+
+// Simplified approach using Object.assign
+function createDuckSimple(name) {
+  return Object.assign(
+    Object.create(Object.assign({}, walker, swimmer, flyer)),
+    { name }
+  );
+}
+
+const donald = createDuckSimple('Donald');
+donald.walk().swim().fly();
+```
+
+## Prototypal Inheritance in Libraries and Frameworks
+
+### Backbone.js Inheritance Model
+
+Backbone.js uses a function called `extend` to set up inheritance:
+
+```javascript
+// Simplified Backbone.js-style extend function
+function extend(protoProps, staticProps) {
+  const parent = this;
+  let child;
+
+  // The constructor function for the new subclass
+  if (
+    protoProps &&
+    Object.prototype.hasOwnProperty.call(protoProps, 'constructor')
+  ) {
+    child = protoProps.constructor;
+  } else {
+    child = function () {
+      return parent.apply(this, arguments);
+    };
+  }
+
+  // Add static properties to the constructor function
+  Object.assign(child, parent, staticProps);
+
+  // Set the prototype chain to inherit from parent
+  child.prototype = Object.create(parent.prototype);
+  child.prototype.constructor = child;
+
+  // Add instance properties
+  if (protoProps) Object.assign(child.prototype, protoProps);
+
+  // Set a reference to the parent prototype
+  child.__super__ = parent.prototype;
+
+  return child;
+}
+
+// Base Model
+function Model(attributes) {
+  this.attributes = attributes || {};
+}
+
+Model.prototype.get = function (attr) {
+  return this.attributes[attr];
+};
+
+Model.prototype.set = function (attr, value) {
+  this.attributes[attr] = value;
+  return this;
+};
+
+Model.extend = extend;
+
+// Creating a new "class"
+const User = Model.extend({
+  initialize: function (attributes) {
+    this.attributes = attributes || {};
+    console.log('User initialized');
+  },
+
+  fullName: function () {
+    return `${this.get('firstName')} ${this.get('lastName')}`;
+  },
+});
+
+const user = new User({ firstName: 'John', lastName: 'Doe' });
+console.log(user.fullName()); // "John Doe"
+```
+
+### React Component Inheritance (Pre-Hooks)
+
+```javascript
+// Simplified React.Component-like inheritance
+class Component {
+  constructor(props) {
+    this.props = props;
+    this.state = {};
+  }
+
+  setState(newState) {
+    this.state = { ...this.state, ...newState };
+    this.render();
+  }
+
+  render() {
+    throw new Error('Render method must be implemented');
+  }
+}
+
+// Create a Button component
+class Button extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { clicked: false };
+  }
+
+  handleClick() {
+    this.setState({ clicked: true });
+  }
+
+  render() {
+    return `<button class="${this.state.clicked ? 'clicked' : ''}">${
+      this.props.label
+    }</button>`;
+  }
+}
+
+const button = new Button({ label: 'Click Me' });
+console.log(button.render()); // <button class="">Click Me</button>
+button.handleClick();
+console.log(button.render()); // <button class="clicked">Click Me</button>
+```
+
+## When to Use Prototypal Inheritance
+
+Prototypal inheritance is ideal for:
+
+1. **Creating object hierarchies** where behaviors cascade from general to specific
+2. **Memory optimization** when many objects need to share methods
+3. **Frameworks and libraries** that need to provide extensible components
+4. **Behaviors delegation** between objects with an "is-a" relationship
+
+However, for many modern JavaScript applications, consider:
+
+- **Composition** over inheritance for more flexible code
+- **Functional programming** approaches that avoid complex object hierarchies
+- **Pure object composition** with mixins for behavior sharing
+
+## Related Topics
+
+- [Object-Oriented JavaScript](./object-oriented) - JavaScript's object-oriented programming patterns
+- [ES6 Classes](./es6-classes) - Modern class syntax in JavaScript
+- [This Keyword](./this-keyword) - Understanding function context
+- [JavaScript Design Patterns](./design-patterns) - Common patterns for structuring JavaScript code

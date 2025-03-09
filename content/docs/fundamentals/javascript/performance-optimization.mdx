@@ -1,0 +1,632 @@
+---
+description: A comprehensive guide to JavaScript performance optimization techniques, covering code optimization, memory management, rendering performance, and best practices
+title: Performance Optimization Techniques in JavaScript
+---
+
+# Performance Optimization Techniques in JavaScript
+
+Performance optimization is crucial for creating fast, responsive web applications. This guide covers various techniques and best practices for optimizing JavaScript performance.
+
+## Code Optimization
+
+### Variable and Function Optimization
+
+```javascript
+// Bad - recreating function in loop
+for (let i = 0; i < 1000; i++) {
+  const handler = function (e) {
+    console.log(e);
+  };
+  element.addEventListener('click', handler);
+}
+
+// Good - function defined once outside loop
+const handler = function (e) {
+  console.log(e);
+};
+for (let i = 0; i < 1000; i++) {
+  element.addEventListener('click', handler);
+}
+
+// Bad - creating new objects in loop
+function createObjects() {
+  const objects = [];
+  for (let i = 0; i < 1000; i++) {
+    objects.push({
+      id: i,
+      handler: function () {
+        console.log(i);
+      },
+    });
+  }
+  return objects;
+}
+
+// Good - reusing object prototype
+const objectProto = {
+  handler: function () {
+    console.log(this.id);
+  },
+};
+
+function createOptimizedObjects() {
+  const objects = [];
+  for (let i = 0; i < 1000; i++) {
+    const obj = Object.create(objectProto);
+    obj.id = i;
+    objects.push(obj);
+  }
+  return objects;
+}
+```
+
+### Loop Optimization
+
+```javascript
+// Bad - accessing array length in each iteration
+for (let i = 0; i < array.length; i++) {
+  // Process array[i]
+}
+
+// Good - cache array length
+const len = array.length;
+for (let i = 0; i < len; i++) {
+  // Process array[i]
+}
+
+// Better - use for...of for arrays
+for (const item of array) {
+  // Process item
+}
+
+// Best for simple operations - use array methods
+array.forEach((item) => {
+  // Process item
+});
+
+// For transformations, use map/filter/reduce
+const transformed = array
+  .filter((item) => item.active)
+  .map((item) => item.value)
+  .reduce((sum, value) => sum + value, 0);
+```
+
+### String Concatenation
+
+```javascript
+// Bad - using + operator in loop
+let result = '';
+for (let i = 0; i < 1000; i++) {
+  result += items[i];
+}
+
+// Good - using array join
+const result = items.join('');
+
+// Good - using template literals for readability
+const result = `${prefix}${content}${suffix}`;
+
+// For building large strings
+const parts = [];
+for (let i = 0; i < 1000; i++) {
+  parts.push(items[i]);
+}
+const result = parts.join('');
+```
+
+## Memory Management
+
+### Memory Leaks Prevention
+
+```javascript
+// Bad - creating closure that holds reference
+function createHandler() {
+  const heavyData = new Array(10000).fill('data');
+
+  return function () {
+    console.log(heavyData.length);
+  };
+}
+
+// Good - only keep what's needed
+function createHandler() {
+  const heavyData = new Array(10000).fill('data');
+  const dataLength = heavyData.length;
+
+  return function () {
+    console.log(dataLength);
+  };
+}
+
+// Bad - not removing event listeners
+function addHandler() {
+  document.addEventListener('click', this.handleClick);
+}
+
+// Good - cleaning up event listeners
+class Component {
+  constructor() {
+    this.handleClick = this.handleClick.bind(this);
+  }
+
+  mount() {
+    document.addEventListener('click', this.handleClick);
+  }
+
+  unmount() {
+    document.removeEventListener('click', this.handleClick);
+  }
+
+  handleClick(e) {
+    console.log('clicked');
+  }
+}
+```
+
+### Garbage Collection Optimization
+
+```javascript
+// Bad - holding references to unused objects
+let cache = {};
+
+function processData(data) {
+  cache[data.id] = data;
+  // Process data...
+}
+
+// Good - using WeakMap for automatic garbage collection
+const cache = new WeakMap();
+
+function processData(data) {
+  cache.set(data, processedValue);
+  // Process data...
+}
+
+// Bad - circular references
+const parent = { name: 'parent' };
+const child = { name: 'child' };
+parent.child = child;
+child.parent = parent;
+
+// Good - weak references for back-references
+const parent = { name: 'parent' };
+const child = { name: 'child' };
+parent.child = child;
+child.parent = new WeakRef(parent);
+```
+
+## DOM Performance
+
+### Minimizing DOM Operations
+
+```javascript
+// Bad - multiple DOM operations
+for (let i = 0; i < 1000; i++) {
+  container.innerHTML += `<div>${i}</div>`;
+}
+
+// Good - batch DOM operations
+const fragment = document.createDocumentFragment();
+for (let i = 0; i < 1000; i++) {
+  const div = document.createElement('div');
+  div.textContent = i;
+  fragment.appendChild(div);
+}
+container.appendChild(fragment);
+
+// Bad - frequent DOM queries
+function updateElements() {
+  document.querySelectorAll('.item').forEach((item) => {
+    item.style.color = 'red';
+  });
+}
+
+// Good - cache DOM queries
+const items = document.querySelectorAll('.item');
+function updateElements() {
+  items.forEach((item) => {
+    item.style.color = 'red';
+  });
+}
+```
+
+### Layout Optimization
+
+```javascript
+// Bad - causing multiple reflows
+const element = document.getElementById('myElement');
+element.style.width = '100px';
+element.style.height = '100px';
+element.style.margin = '10px';
+
+// Good - batch style changes
+const element = document.getElementById('myElement');
+element.style.cssText = 'width: 100px; height: 100px; margin: 10px;';
+
+// Better - use CSS classes
+element.classList.add('my-styles');
+
+// Bad - reading layout properties in a loop
+for (let i = 0; i < elements.length; i++) {
+  const height = elements[i].offsetHeight;
+  // Use height...
+}
+
+// Good - read layout properties first
+const heights = Array.from(elements).map((el) => el.offsetHeight);
+for (let i = 0; i < heights.length; i++) {
+  // Use heights[i]...
+}
+```
+
+### Event Delegation
+
+```javascript
+// Bad - attaching events to multiple elements
+document.querySelectorAll('.button').forEach((button) => {
+  button.addEventListener('click', handleClick);
+});
+
+// Good - using event delegation
+document.addEventListener('click', (e) => {
+  if (e.target.matches('.button')) {
+    handleClick(e);
+  }
+});
+
+// Enhanced event delegation with closest
+document.addEventListener('click', (e) => {
+  const button = e.target.closest('.button');
+  if (button) {
+    handleClick(e, button);
+  }
+});
+```
+
+## Async Operations
+
+### Promise Optimization
+
+```javascript
+// Bad - sequential promises
+async function fetchAllData() {
+  const result1 = await fetch(url1);
+  const result2 = await fetch(url2);
+  const result3 = await fetch(url3);
+  return [result1, result2, result3];
+}
+
+// Good - parallel promises
+async function fetchAllData() {
+  const results = await Promise.all([fetch(url1), fetch(url2), fetch(url3)]);
+  return results;
+}
+
+// Better - with error handling
+async function fetchAllData() {
+  try {
+    const results = await Promise.allSettled([
+      fetch(url1),
+      fetch(url2),
+      fetch(url3),
+    ]);
+
+    return results.map((result) =>
+      result.status === 'fulfilled' ? result.value : null
+    );
+  } catch (error) {
+    console.error('Fetch error:', error);
+    return [];
+  }
+}
+```
+
+### Async Resource Loading
+
+```javascript
+// Lazy loading modules
+async function loadFeature() {
+  try {
+    const module = await import('./feature.js');
+    return module.default;
+  } catch (error) {
+    console.error('Module loading failed:', error);
+    return null;
+  }
+}
+
+// Lazy loading images
+function lazyLoadImage(img) {
+  if ('loading' in HTMLImageElement.prototype) {
+    img.loading = 'lazy';
+  } else {
+    // Fallback to Intersection Observer
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const img = entry.target;
+          img.src = img.dataset.src;
+          observer.unobserve(img);
+        }
+      });
+    });
+    observer.observe(img);
+  }
+}
+```
+
+## Caching and Memoization
+
+### Function Memoization
+
+```javascript
+// Simple memoization
+function memoize(fn) {
+  const cache = new Map();
+
+  return function (...args) {
+    const key = JSON.stringify(args);
+    if (cache.has(key)) {
+      return cache.get(key);
+    }
+
+    const result = fn.apply(this, args);
+    cache.set(key, result);
+    return result;
+  };
+}
+
+// Usage
+const expensiveFunction = memoize((n) => {
+  // Expensive computation
+  return n * n;
+});
+
+// Advanced memoization with LRU cache
+class LRUCache {
+  constructor(capacity) {
+    this.capacity = capacity;
+    this.cache = new Map();
+  }
+
+  get(key) {
+    if (!this.cache.has(key)) return undefined;
+
+    const value = this.cache.get(key);
+    this.cache.delete(key);
+    this.cache.set(key, value);
+    return value;
+  }
+
+  put(key, value) {
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.capacity) {
+      this.cache.delete(this.cache.keys().next().value);
+    }
+    this.cache.set(key, value);
+  }
+}
+
+function memoizeWithLRU(fn, capacity = 100) {
+  const cache = new LRUCache(capacity);
+
+  return function (...args) {
+    const key = JSON.stringify(args);
+    const cached = cache.get(key);
+
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const result = fn.apply(this, args);
+    cache.put(key, result);
+    return result;
+  };
+}
+```
+
+## Performance Monitoring
+
+### Performance Measurement
+
+```javascript
+// Using Performance API
+const start = performance.now();
+// Execute code
+const end = performance.now();
+console.log(`Operation took ${end - start}ms`);
+
+// Using Performance Marks and Measures
+performance.mark('startOperation');
+// Execute code
+performance.mark('endOperation');
+performance.measure('operationDuration', 'startOperation', 'endOperation');
+
+const measurements = performance.getEntriesByType('measure');
+console.log(measurements);
+
+// Custom performance monitoring
+class PerformanceMonitor {
+  constructor() {
+    this.measurements = new Map();
+  }
+
+  start(label) {
+    this.measurements.set(label, performance.now());
+  }
+
+  end(label) {
+    const startTime = this.measurements.get(label);
+    if (startTime) {
+      const duration = performance.now() - startTime;
+      this.measurements.delete(label);
+      console.log(`${label}: ${duration}ms`);
+      return duration;
+    }
+    return null;
+  }
+}
+
+const monitor = new PerformanceMonitor();
+monitor.start('operation');
+// Execute code
+monitor.end('operation');
+```
+
+### Memory Monitoring
+
+```javascript
+// Using Performance Memory API
+function checkMemory() {
+  if (performance.memory) {
+    console.log('Memory Usage:', {
+      usedJSHeapSize: performance.memory.usedJSHeapSize,
+      totalJSHeapSize: performance.memory.totalJSHeapSize,
+      jsHeapSizeLimit: performance.memory.jsHeapSizeLimit,
+    });
+  }
+}
+
+// Memory leak detection helper
+class MemoryLeakDetector {
+  constructor() {
+    this.snapshots = [];
+  }
+
+  takeSnapshot() {
+    if (performance.memory) {
+      this.snapshots.push({
+        timestamp: Date.now(),
+        usage: performance.memory.usedJSHeapSize,
+      });
+    }
+  }
+
+  analyze() {
+    if (this.snapshots.length < 2) return null;
+
+    const growth = this.snapshots.reduce((acc, curr, i, arr) => {
+      if (i === 0) return acc;
+      const growth = curr.usage - arr[i - 1].usage;
+      return acc + growth;
+    }, 0);
+
+    return {
+      averageGrowth: growth / (this.snapshots.length - 1),
+      totalGrowth: growth,
+      snapshots: this.snapshots,
+    };
+  }
+}
+
+const detector = new MemoryLeakDetector();
+// Take snapshots periodically
+setInterval(() => detector.takeSnapshot(), 1000);
+// Analyze after some time
+setTimeout(() => console.log(detector.analyze()), 10000);
+```
+
+## Best Practices
+
+### Code Splitting
+
+```javascript
+// Dynamic imports for route-based code splitting
+async function loadRoute(route) {
+  try {
+    const module = await import(`./routes/${route}.js`);
+    return module.default;
+  } catch (error) {
+    console.error('Route loading failed:', error);
+    return null;
+  }
+}
+
+// Component lazy loading
+const LazyComponent = React.lazy(() => import('./HeavyComponent'));
+
+function App() {
+  return (
+    <Suspense fallback={<Loading />}>
+      <LazyComponent />
+    </Suspense>
+  );
+}
+```
+
+### Web Workers
+
+```javascript
+// Creating a Web Worker
+const worker = new Worker('worker.js');
+
+// Main thread
+worker.postMessage({ type: 'PROCESS', data: largeArray });
+
+worker.onmessage = function (e) {
+  console.log('Processed result:', e.data);
+};
+
+// worker.js
+self.onmessage = function (e) {
+  if (e.data.type === 'PROCESS') {
+    const result = processData(e.data.data);
+    self.postMessage(result);
+  }
+};
+
+// Worker Pool implementation
+class WorkerPool {
+  constructor(workerScript, size) {
+    this.workers = Array(size)
+      .fill()
+      .map(() => new Worker(workerScript));
+    this.queue = [];
+    this.activeWorkers = new Set();
+  }
+
+  process(data) {
+    return new Promise((resolve, reject) => {
+      const task = { data, resolve, reject };
+
+      const availableWorker = this.workers.find(
+        (w) => !this.activeWorkers.has(w)
+      );
+
+      if (availableWorker) {
+        this.runTask(availableWorker, task);
+      } else {
+        this.queue.push(task);
+      }
+    });
+  }
+
+  runTask(worker, task) {
+    this.activeWorkers.add(worker);
+
+    worker.onmessage = (e) => {
+      this.activeWorkers.delete(worker);
+      task.resolve(e.data);
+
+      if (this.queue.length > 0) {
+        this.runTask(worker, this.queue.shift());
+      }
+    };
+
+    worker.onerror = (error) => {
+      this.activeWorkers.delete(worker);
+      task.reject(error);
+    };
+
+    worker.postMessage(task.data);
+  }
+}
+```
+
+## Related Topics
+
+- [Memory Management](./memory-management) - Detailed guide on memory management
+- [Web Workers](./web-workers) - Using Web Workers for parallel processing
+- [Browser Storage](./browser-storage) - Optimizing data storage
+- [Network Performance](./network-performance) - Optimizing network requests

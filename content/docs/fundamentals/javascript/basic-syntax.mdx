@@ -1,0 +1,169 @@
+---
+description: Learn about JavaScript variables, data types, operators, and control flow structures
+title: JavaScript Basic Syntax
+---
+
+# JavaScript Basic Syntax
+
+This section covers the foundational elements of JavaScript syntax, including:
+
+- Variables and data types
+- Operators
+- Control flow structures
+
+## Variables and Data Types
+
+JavaScript has three ways to declare variables:
+
+```javascript
+// Variables
+let name = 'John'; // Block-scoped variable
+const age = 30; // Constant (cannot be reassigned)
+var isActive = true; // Function-scoped variable (avoid using)
+```
+
+### Primitive Data Types
+
+JavaScript has seven primitive data types:
+
+```javascript
+let string = 'Hello, world!'; // String
+let number = 42; // Number
+let boolean = true; // Boolean
+let nullValue = null; // Null
+let undefinedValue = undefined; // Undefined
+let symbolValue = Symbol('unique'); // Symbol
+let bigIntValue = 9007199254740991n; // BigInt
+```
+
+### Complex Data Types
+
+JavaScript has complex data types for collections and objects:
+
+```javascript
+// Arrays
+let array = [1, 2, 3, 'four', { five: 5 }];
+
+// Objects
+let object = { name: 'John', age: 30 };
+```
+
+## Operators
+
+### Arithmetic Operators
+
+```javascript
+let sum = 5 + 3; // Addition: 8
+let difference = 10 - 5; // Subtraction: 5
+let product = 4 * 2; // Multiplication: 8
+let quotient = 20 / 5; // Division: 4
+let remainder = 10 % 3; // Modulus (remainder): 1
+let exponent = 2 ** 3; // Exponentiation: 8 (2³)
+```
+
+### Comparison Operators
+
+```javascript
+let equal = 5 == '5'; // Loose equality: true (compares values after conversion)
+let strictEqual = 5 === '5'; // Strict equality: false (compares values and types)
+let notEqual = 5 != '5'; // Loose inequality: false
+let strictNotEqual = 5 !== '5'; // Strict inequality: true
+let greaterThan = 10 > 5; // Greater than: true
+let lessThan = 5 < 10; // Less than: true
+let greaterOrEqual = 10 >= 10; // Greater than or equal to: true
+let lessOrEqual = 5 <= 5; // Less than or equal to: true
+```
+
+### Logical Operators
+
+```javascript
+let and = true && false; // Logical AND: false
+let or = true || false; // Logical OR: true
+let not = !true; // Logical NOT: false
+
+// Short-circuit evaluation
+let result = someValue || defaultValue; // Returns someValue if truthy, otherwise defaultValue
+let shouldExecute = isValid && doSomething(); // doSomething() only runs if isValid is true
+```
+
+### Assignment Operators
+
+```javascript
+let x = 10; // Basic assignment
+x += 5; // Addition assignment: x = x + 5 (15)
+x -= 3; // Subtraction assignment: x = x - 3 (12)
+x *= 2; // Multiplication assignment: x = x * 2 (24)
+x /= 4; // Division assignment: x = x / 4 (6)
+x %= 4; // Modulus assignment: x = x % 4 (2)
+x **= 2; // Exponentiation assignment: x = x ** 2 (4)
+```
+
+## Control Flow
+
+### Conditional Statements
+
+```javascript
+// if, else if, else
+if (age >= 18) {
+  console.log('Adult');
+} else if (age >= 13) {
+  console.log('Teenager');
+} else {
+  console.log('Child');
+}
+
+// Switch statement
+switch (day) {
+  case 'Monday':
+    console.log('Start of the week');
+    break;
+  case 'Friday':
+    console.log('End of the work week');
+    break;
+  default:
+    console.log('Another day');
+}
+
+// Ternary operator (conditional)
+let status = age >= 18 ? 'Adult' : 'Minor';
+```
+
+### Loops
+
+```javascript
+// For loop
+for (let i = 0; i < 5; i++) {
+  console.log(i); // Outputs: 0, 1, 2, 3, 4
+}
+
+// For...of loop (iterates over values in arrays, strings, etc.)
+let fruits = ['apple', 'banana', 'orange'];
+for (let fruit of fruits) {
+  console.log(fruit); // Outputs: apple, banana, orange
+}
+
+// For...in loop (iterates over object properties or array indices)
+for (let index in fruits) {
+  console.log(index, fruits[index]); // Outputs: 0 apple, 1 banana, 2 orange
+}
+
+// While loop
+let counter = 0;
+while (counter < 5) {
+  console.log(counter); // Outputs: 0, 1, 2, 3, 4
+  counter++;
+}
+
+// Do...while loop (always executes at least once)
+let i = 0;
+do {
+  console.log(i); // Outputs: 0, 1, 2, 3, 4
+  i++;
+} while (i < 5);
+```
+
+## Related Topics
+
+- [Functions](./functions) - Working with JavaScript functions and scope
+- [Objects and Arrays](./objects-arrays) - Advanced operations with complex data structures
+- [Modern Features](./modern-features) - Including destructuring, optional chaining, and template literals

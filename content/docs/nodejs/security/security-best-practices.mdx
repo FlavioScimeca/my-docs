@@ -1,0 +1,462 @@
+---
+description: A comprehensive guide to Security Best Practices in Node.js, including authentication, authorization, encryption, input validation, and protection against common vulnerabilities
+title: Security Best Practices
+---
+
+# Security Best Practices
+
+Learn how to implement security best practices in Node.js applications, including authentication, authorization, data protection, and vulnerability prevention.
+
+## Authentication
+
+### JWT Authentication
+
+```javascript
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+
+class AuthenticationService {
+  constructor(config) {
+    this.config = {
+      jwtSecret: config.jwtSecret,
+      jwtExpiration: config.jwtExpiration || '1h',
+      saltRounds: config.saltRounds || 10,
+      ...config,
+    };
+  }
+
+  async hashPassword(password) {
+    return await bcrypt.hash(password, this.config.saltRounds);
+  }
+
+  async comparePasswords(password, hashedPassword) {
+    return await bcrypt.compare(password, hashedPassword);
+  }
+
+  generateToken(payload) {
+    return jwt.sign(payload, this.config.jwtSecret, {
+      expiresIn: this.config.jwtExpiration,
+    });
+  }
+
+  verifyToken(token) {
+    try {
+      return jwt.verify(token, this.config.jwtSecret);
+    } catch (error) {
+      throw new AuthenticationError('Invalid token', 'INVALID_TOKEN');
+    }
+  }
+
+  extractTokenFromHeader(header) {
+    if (!header || !header.startsWith('Bearer ')) {
+      throw new AuthenticationError('No token provided', 'NO_TOKEN');
+    }
+    return header.split(' ')[1];
+  }
+}
+
+// Middleware for JWT authentication
+const authenticateJWT = (authService) => async (req, res, next) => {
+  try {
+    const token = authService.extractTokenFromHeader(req.headers.authorization);
+    const decoded = authService.verifyToken(token);
+    req.user = decoded;
+    next();
+  } catch (error) {
+    res.status(401).json({ error: 'Unauthorized' });
+  }
+};
+
+// Usage example
+const authService = new AuthenticationService({
+  jwtSecret: process.env.JWT_SECRET,
+});
+
+app.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    const user = await findUserByUsername(username);
+
+    if (
+      !user ||
+      !(await authService.comparePasswords(password, user.password))
+    ) {
+      throw new AuthenticationError(
+        'Invalid credentials',
+        'INVALID_CREDENTIALS'
+      );
+    }
+
+    const token = authService.generateToken({ id: user.id, username });
+    res.json({ token });
+  } catch (error) {
+    res.status(401).json({ error: error.message });
+  }
+});
+```
+
+### Session Management
+
+```javascript
+const session = require('express-session');
+const RedisStore = require('connect-redis').default;
+
+class SessionManager {
+  constructor(config) {
+    this.config = {
+      secret: config.secret,
+      store: this.createStore(config.redis),
+      cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        sameSite: 'strict',
+      },
+      resave: false,
+      saveUninitialized: false,
+      name: 'sessionId',
+      ...config,
+    };
+  }
+
+  createStore(redisClient) {
+    return new RedisStore({
+      client: redisClient,
+      prefix: 'session:',
+    });
+  }
+
+  getMiddleware() {
+    return session(this.config);
+  }
+
+  static createCSRFToken() {
+    return crypto.randomBytes(32).toString('hex');
+  }
+
+  static validateCSRFToken(token, storedToken) {
+    return crypto.timingSafeEqual(Buffer.from(token), Buffer.from(storedToken));
+  }
+}
+```
+
+## Authorization
+
+### Role-Based Access Control (RBAC)
+
+```javascript
+class RBACManager {
+  constructor() {
+    this.roles = new Map();
+    this.permissions = new Set();
+  }
+
+  addRole(role, permissions = []) {
+    this.roles.set(role, new Set(permissions));
+  }
+
+  addPermission(role, permission) {
+    if (!this.roles.has(role)) {
+      this.roles.set(role, new Set());
+    }
+    this.roles.get(role).add(permission);
+    this.permissions.add(permission);
+  }
+
+  hasPermission(role, permission) {
+    return this.roles.has(role) && this.roles.get(role).has(permission);
+  }
+
+  getRolePermissions(role) {
+    return Array.from(this.roles.get(role) || []);
+  }
+}
+
+// Middleware for checking permissions
+const checkPermission = (rbac, permission) => (req, res, next) => {
+  if (!req.user || !req.user.role) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  if (!rbac.hasPermission(req.user.role, permission)) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  next();
+};
+
+// Usage example
+const rbac = new RBACManager();
+rbac.addRole('admin', ['read:users', 'write:users', 'delete:users']);
+rbac.addRole('user', ['read:users']);
+
+app.get(
+  '/users',
+  authenticateJWT(authService),
+  checkPermission(rbac, 'read:users'),
+  async (req, res) => {
+    // Handle request
+  }
+);
+```
+
+## Input Validation & Sanitization
+
+### Request Validation
+
+```javascript
+const { body, param, query, validationResult } = require('express-validator');
+
+class ValidationMiddleware {
+  static validate(validations) {
+    return async (req, res, next) => {
+      await Promise.all(validations.map((validation) => validation.run(req)));
+
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+
+      next();
+    };
+  }
+
+  static sanitizeInput(input) {
+    return input
+      .replace(/[<>]/g, '') // Remove < and >
+      .trim();
+  }
+
+  static validateEmail(email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  }
+
+  static validatePassword(password) {
+    const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{8,}$/;
+    return passwordRegex.test(password);
+  }
+}
+
+// Usage example
+app.post(
+  '/users',
+  ValidationMiddleware.validate([
+    body('email').isEmail().normalizeEmail(),
+    body('password')
+      .isLength({ min: 8 })
+      .matches(/^(?=.*[A-Za-z])(?=.*\d)/),
+    body('name').trim().isLength({ min: 2 }).escape(),
+  ]),
+  async (req, res) => {
+    // Handle request
+  }
+);
+```
+
+## Data Protection
+
+### Encryption Service
+
+```javascript
+const crypto = require('crypto');
+
+class EncryptionService {
+  constructor(config) {
+    this.algorithm = 'aes-256-gcm';
+    this.key = crypto.scryptSync(config.secret, 'salt', 32);
+  }
+
+  encrypt(text) {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv(this.algorithm, this.key, iv);
+
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+
+    const authTag = cipher.getAuthTag();
+
+    return {
+      encrypted,
+      iv: iv.toString('hex'),
+      authTag: authTag.toString('hex'),
+    };
+  }
+
+  decrypt(encrypted, iv, authTag) {
+    const decipher = crypto.createDecipheriv(
+      this.algorithm,
+      this.key,
+      Buffer.from(iv, 'hex')
+    );
+
+    decipher.setAuthTag(Buffer.from(authTag, 'hex'));
+
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+
+    return decrypted;
+  }
+
+  static hashData(data) {
+    return crypto.createHash('sha256').update(data).digest('hex');
+  }
+}
+```
+
+### Secure Headers
+
+```javascript
+const helmet = require('helmet');
+
+class SecurityHeaders {
+  static getMiddleware() {
+    return [
+      helmet(),
+      helmet.contentSecurityPolicy({
+        directives: {
+          defaultSrc: ["'self'"],
+          scriptSrc: ["'self'", "'unsafe-inline'"],
+          styleSrc: ["'self'", "'unsafe-inline'"],
+          imgSrc: ["'self'", 'data:', 'https:'],
+          connectSrc: ["'self'"],
+          fontSrc: ["'self'"],
+          objectSrc: ["'none'"],
+          mediaSrc: ["'self'"],
+          frameSrc: ["'none'"],
+        },
+      }),
+      helmet.referrerPolicy({ policy: 'same-origin' }),
+    ];
+  }
+
+  static configureCORS(options = {}) {
+    return (req, res, next) => {
+      res.header('Access-Control-Allow-Origin', options.origin || '*');
+      res.header(
+        'Access-Control-Allow-Methods',
+        options.methods || 'GET,POST,PUT,DELETE'
+      );
+      res.header(
+        'Access-Control-Allow-Headers',
+        options.headers || 'Content-Type,Authorization'
+      );
+      next();
+    };
+  }
+}
+```
+
+## Protection Against Common Vulnerabilities
+
+### Rate Limiting
+
+```javascript
+const rateLimit = require('express-rate-limit');
+const RedisStore = require('rate-limit-redis');
+
+class RateLimiter {
+  constructor(redisClient) {
+    this.redisClient = redisClient;
+  }
+
+  createLimiter(options = {}) {
+    return rateLimit({
+      store: new RedisStore({
+        client: this.redisClient,
+        prefix: 'rate-limit:',
+      }),
+      windowMs: options.windowMs || 15 * 60 * 1000, // 15 minutes
+      max: options.max || 100,
+      message: options.message || 'Too many requests',
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+  }
+
+  createLoginLimiter() {
+    return this.createLimiter({
+      windowMs: 60 * 60 * 1000, // 1 hour
+      max: 5,
+      message: 'Too many login attempts',
+    });
+  }
+}
+```
+
+### SQL Injection Prevention
+
+```javascript
+class SQLSanitizer {
+  static sanitizeInput(input) {
+    if (typeof input !== 'string') {
+      return input;
+    }
+
+    return input.replace(/'/g, "''").replace(/\\/g, '\\\\');
+  }
+
+  static createParameterizedQuery(sql, params) {
+    return {
+      text: sql,
+      values: params.map((param) => this.sanitizeInput(param)),
+    };
+  }
+
+  static validateTableName(tableName) {
+    const validTableNameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!validTableNameRegex.test(tableName)) {
+      throw new Error('Invalid table name');
+    }
+    return tableName;
+  }
+}
+```
+
+### XSS Prevention
+
+```javascript
+const xss = require('xss');
+
+class XSSProtection {
+  static sanitizeHTML(html) {
+    return xss(html, {
+      whiteList: {}, // No tags allowed
+      stripIgnoreTag: true,
+      stripIgnoreTagBody: ['script'],
+    });
+  }
+
+  static sanitizeObject(obj) {
+    if (typeof obj !== 'object') {
+      return this.sanitizeValue(obj);
+    }
+
+    return Object.keys(obj).reduce((sanitized, key) => {
+      sanitized[key] = this.sanitizeValue(obj[key]);
+      return sanitized;
+    }, {});
+  }
+
+  static sanitizeValue(value) {
+    if (typeof value === 'string') {
+      return this.sanitizeHTML(value);
+    }
+    if (Array.isArray(value)) {
+      return value.map((item) => this.sanitizeValue(item));
+    }
+    if (typeof value === 'object' && value !== null) {
+      return this.sanitizeObject(value);
+    }
+    return value;
+  }
+}
+```
+
+## Related Topics
+
+- [Authentication](./authentication) - Detailed authentication strategies
+- [Authorization](./authorization) - Advanced authorization patterns
+- [Encryption](./encryption) - Data encryption techniques
+- [Security Headers](./security-headers) - HTTP security headers
+- [Vulnerability Prevention](./vulnerability-prevention) - Common vulnerability protections

@@ -1,0 +1,554 @@
+---
+description: A comprehensive guide to JavaScript Bundling and Optimization, including module bundlers, code splitting, tree shaking, and performance optimization techniques
+title: JavaScript Bundling and Optimization
+---
+
+# JavaScript Bundling and Optimization
+
+Modern JavaScript applications require efficient bundling and optimization techniques to ensure optimal performance. This guide covers various aspects of bundling and optimization.
+
+## Module Bundlers
+
+### Webpack Configuration
+
+```javascript
+// webpack.config.js
+const path = require('path');
+const TerserPlugin = require('terser-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+
+module.exports = {
+  entry: './src/index.js',
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: '[name].[contenthash].js',
+    clean: true,
+  },
+
+  optimization: {
+    minimizer: [new TerserPlugin()],
+    splitChunks: {
+      chunks: 'all',
+      minSize: 20000,
+      minChunks: 1,
+      maxAsyncRequests: 30,
+      maxInitialRequests: 30,
+      cacheGroups: {
+        vendors: {
+          test: /[\\/]node_modules[\\/]/,
+          priority: -10,
+          reuseExistingChunk: true,
+        },
+        default: {
+          minChunks: 2,
+          priority: -20,
+          reuseExistingChunk: true,
+        },
+      },
+    },
+  },
+
+  module: {
+    rules: [
+      {
+        test: /\.js$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: ['@babel/preset-env'],
+          },
+        },
+      },
+      {
+        test: /\.css$/,
+        use: [MiniCssExtractPlugin.loader, 'css-loader', 'postcss-loader'],
+      },
+    ],
+  },
+
+  plugins: [
+    new MiniCssExtractPlugin({
+      filename: '[name].[contenthash].css',
+    }),
+  ],
+};
+```
+
+### Rollup Configuration
+
+```javascript
+// rollup.config.js
+import resolve from '@rollup/plugin-node-resolve';
+import commonjs from '@rollup/plugin-commonjs';
+import babel from '@rollup/plugin-babel';
+import terser from '@rollup/plugin-terser';
+
+export default {
+  input: 'src/index.js',
+  output: {
+    dir: 'dist',
+    format: 'es',
+    entryFileNames: '[name].[hash].js',
+    chunkFileNames: '[name].[hash].js',
+  },
+
+  plugins: [
+    resolve(),
+    commonjs(),
+    babel({
+      babelHelpers: 'bundled',
+      presets: ['@babel/preset-env'],
+    }),
+    terser(),
+  ],
+
+  // Code splitting
+  manualChunks(id) {
+    if (id.includes('node_modules')) {
+      return 'vendor';
+    }
+  },
+};
+```
+
+## Code Splitting
+
+### Dynamic Imports
+
+```javascript
+// Route-based code splitting
+const routes = {
+  home: () => import('./pages/home'),
+  about: () => import('./pages/about'),
+  contact: () => import('./pages/contact'),
+};
+
+async function loadRoute(route) {
+  try {
+    const module = await routes[route]();
+    return module.default;
+  } catch (error) {
+    console.error(`Failed to load route ${route}:`, error);
+    throw error;
+  }
+}
+
+// Component-based code splitting
+class LazyComponent {
+  constructor(importFn) {
+    this.importFn = importFn;
+    this.component = null;
+  }
+
+  async load() {
+    if (!this.component) {
+      const module = await this.importFn();
+      this.component = module.default;
+    }
+    return this.component;
+  }
+}
+
+// Usage
+const HeavyComponent = new LazyComponent(() =>
+  import('./components/HeavyComponent')
+);
+```
+
+### Chunk Optimization
+
+```javascript
+// webpack.config.js
+module.exports = {
+  optimization: {
+    splitChunks: {
+      chunks: 'all',
+      maxInitialRequests: 25,
+      minSize: 20000,
+      cacheGroups: {
+        default: false,
+        vendors: false,
+
+        // Vendor chunk
+        vendor: {
+          name: 'vendor',
+          chunks: 'all',
+          test: /[\\/]node_modules[\\/]/,
+          priority: 20,
+        },
+
+        // Common chunk
+        common: {
+          name: 'common',
+          minChunks: 2,
+          chunks: 'all',
+          priority: 10,
+          reuseExistingChunk: true,
+          enforce: true,
+        },
+      },
+    },
+  },
+};
+
+// Dynamic imports with preload/prefetch
+const HomePage = {
+  component: () =>
+    import(
+      /* webpackChunkName: "home" */
+      /* webpackPreload: true */
+      './pages/Home'
+    ),
+  preload: () =>
+    import(
+      /* webpackChunkName: "home-data" */
+      /* webpackPrefetch: true */
+      './data/homeData'
+    ),
+};
+```
+
+## Tree Shaking
+
+### Module Exports
+
+```javascript
+// Good - tree-shakeable exports
+export function add(a, b) {
+  return a + b;
+}
+
+export function subtract(a, b) {
+  return a - b;
+}
+
+// Bad - not tree-shakeable
+const math = {
+  add: (a, b) => a + b,
+  subtract: (a, b) => a - b
+};
+export default math;
+
+// Package exports configuration
+// package.json
+{
+  "name": "my-library",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    },
+    "./utils": {
+      "import": "./dist/utils.mjs",
+      "require": "./dist/utils.cjs"
+    }
+  },
+  "sideEffects": false
+}
+```
+
+### Dead Code Elimination
+
+```javascript
+// webpack.config.js
+module.exports = {
+  mode: 'production',
+  optimization: {
+    usedExports: true,
+    minimize: true,
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          compress: {
+            dead_code: true,
+            unused: true
+          }
+        }
+      })
+    ]
+  }
+};
+
+// Marking side effects
+// utils.js
+// Side effect: modifies global object
+window.APP_VERSION = '1.0.0';
+
+export function pureFunction(x) {
+  return x * 2;
+}
+
+// package.json
+{
+  "sideEffects": [
+    "*.css",
+    "./src/utils.js"
+  ]
+}
+```
+
+## Performance Optimization
+
+### Bundle Analysis
+
+```javascript
+// webpack.config.js
+const BundleAnalyzerPlugin =
+  require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
+
+module.exports = {
+  plugins: [
+    new BundleAnalyzerPlugin({
+      analyzerMode: 'static',
+      reportFilename: 'bundle-report.html',
+      openAnalyzer: false,
+    }),
+  ],
+};
+
+// Bundle size monitoring
+const sizeLimit = {
+  main: 200 * 1024, // 200KB
+  vendor: 500 * 1024, // 500KB
+};
+
+function checkBundleSize(stats) {
+  const { assets } = stats.toJson();
+
+  assets.forEach((asset) => {
+    const limit = sizeLimit[asset.chunkNames[0]];
+    if (limit && asset.size > limit) {
+      console.warn(
+        `Bundle ${asset.name} size (${asset.size}) exceeds limit (${limit})`
+      );
+    }
+  });
+}
+```
+
+### Resource Hints
+
+```javascript
+// HTML template
+<head>
+  <!-- Preload critical resources -->
+  <link rel="preload" href="critical.js" as="script">
+  <link rel="preload" href="critical.css" as="style">
+
+  <!-- Prefetch future resources -->
+  <link rel="prefetch" href="lazy.js">
+
+  <!-- Preconnect to external domains -->
+  <link rel="preconnect" href="https://api.example.com">
+  <link rel="dns-prefetch" href="https://api.example.com">
+</head>
+
+// JavaScript resource hints
+function addResourceHint(type, url, as) {
+  const link = document.createElement('link');
+  link.rel = type;
+  link.href = url;
+  if (as) link.as = as;
+  document.head.appendChild(link);
+}
+
+// Usage
+addResourceHint('preload', 'critical.js', 'script');
+addResourceHint('prefetch', 'lazy.js', 'script');
+```
+
+### Compression
+
+```javascript
+// webpack.config.js
+const CompressionPlugin = require('compression-webpack-plugin');
+const zlib = require('zlib');
+
+module.exports = {
+  plugins: [
+    // Gzip compression
+    new CompressionPlugin({
+      test: /\.(js|css|html|svg)$/,
+      algorithm: 'gzip',
+    }),
+
+    // Brotli compression
+    new CompressionPlugin({
+      filename: '[path][base].br',
+      algorithm: 'brotliCompress',
+      test: /\.(js|css|html|svg)$/,
+      compressionOptions: {
+        params: {
+          [zlib.constants.BROTLI_PARAM_QUALITY]: 11,
+        },
+      },
+    }),
+  ],
+};
+
+// Server configuration (Express)
+const express = require('express');
+const compression = require('compression');
+
+const app = express();
+
+// Enable compression
+app.use(
+  compression({
+    filter: (req, res) => {
+      if (req.headers['x-no-compression']) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+    level: 6, // Default compression level
+  })
+);
+```
+
+### Caching
+
+```javascript
+// webpack.config.js
+module.exports = {
+  output: {
+    filename: '[name].[contenthash].js',
+    chunkFilename: '[name].[contenthash].chunk.js',
+  },
+
+  optimization: {
+    moduleIds: 'deterministic',
+    runtimeChunk: 'single',
+    splitChunks: {
+      cacheGroups: {
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendors',
+          chunks: 'all',
+        },
+      },
+    },
+  },
+};
+
+// Service Worker caching
+// sw.js
+const CACHE_NAME = 'app-cache-v1';
+const STATIC_ASSETS = ['/', '/index.html', '/main.js', '/styles.css'];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches
+      .match(event.request)
+      .then((response) => response || fetch(event.request))
+  );
+});
+```
+
+## Best Practices
+
+### Module Organization
+
+```javascript
+// Feature-based organization
+src/
+  features/
+    auth/
+      components/
+      services/
+      hooks/
+      index.js
+    products/
+      components/
+      services/
+      hooks/
+      index.js
+  shared/
+    components/
+    utils/
+    hooks/
+
+// Barrel exports
+// features/auth/index.js
+export { default as Login } from './components/Login';
+export { default as useAuth } from './hooks/useAuth';
+export * from './services/auth';
+
+// Async imports
+const routes = {
+  home: () => import(
+    /* webpackChunkName: "home" */
+    './features/home'
+  ),
+  products: () => import(
+    /* webpackChunkName: "products" */
+    './features/products'
+  )
+};
+```
+
+### Build Process
+
+```javascript
+// package.json
+{
+  "scripts": {
+    "build": "webpack --config webpack.prod.js",
+    "build:analyze": "ANALYZE=true webpack --config webpack.prod.js",
+    "build:stats": "webpack --config webpack.prod.js --json > stats.json"
+  }
+}
+
+// webpack.prod.js
+const { merge } = require('webpack-merge');
+const common = require('./webpack.common.js');
+
+module.exports = merge(common, {
+  mode: 'production',
+  devtool: 'source-map',
+
+  performance: {
+    hints: 'warning',
+    maxEntrypointSize: 250000,
+    maxAssetSize: 250000
+  },
+
+  optimization: {
+    minimize: true,
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          parse: {
+            ecma: 8
+          },
+          compress: {
+            ecma: 5,
+            warnings: false,
+            comparisons: false,
+            inline: 2
+          },
+          output: {
+            ecma: 5,
+            comments: false,
+            ascii_only: true
+          }
+        }
+      })
+    ]
+  }
+});
+```
+
+## Related Topics
+
+- [Module Systems](./module-systems) - JavaScript module systems
+- [Performance](./performance) - Performance optimization
+- [Service Workers](./service-workers) - Offline capabilities
+- [Build Tools](./build-tools) - JavaScript build tools

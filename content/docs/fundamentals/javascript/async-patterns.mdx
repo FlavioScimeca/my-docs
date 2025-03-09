@@ -1,0 +1,846 @@
+---
+title: 'Asynchronous JavaScript Patterns'
+description: 'Learn advanced asynchronous patterns in JavaScript beyond basic promises and async/await'
+---
+
+# Asynchronous JavaScript Patterns
+
+JavaScript offers various patterns for handling asynchronous operations. While promises and async/await provide a solid foundation, there are many advanced patterns that can help you manage complex asynchronous workflows more effectively.
+
+## Beyond Basic Promises
+
+### Promise Chaining
+
+Promise chaining allows you to perform a sequence of asynchronous operations:
+
+```javascript
+function getUserData(userId) {
+  return fetchUser(userId).then((user) => {
+    return fetchPosts(user.id).then((posts) => {
+      user.posts = posts;
+      return user;
+    });
+  });
+}
+
+// Better approach with proper chaining
+function getUserDataBetter(userId) {
+  return fetchUser(userId).then((user) => {
+    return fetchPosts(user.id).then((posts) => {
+      return { ...user, posts };
+    });
+  });
+}
+```
+
+### Promise Composition
+
+Combine multiple promises in different ways:
+
+```javascript
+// Execute promises in parallel and wait for all to complete
+function loadDashboard() {
+  return Promise.all([
+    fetchUserProfile(),
+    fetchUserPosts(),
+    fetchUserAnalytics(),
+  ]).then(([profile, posts, analytics]) => {
+    return {
+      profile,
+      posts,
+      analytics,
+    };
+  });
+}
+
+// Execute promises in parallel and get the first to resolve
+function fetchFromFastestMirror(url) {
+  return Promise.race([
+    fetch(`${mirror1}/${url}`),
+    fetch(`${mirror2}/${url}`),
+    fetch(`${mirror3}/${url}`),
+  ]);
+}
+
+// Wait for all promises to settle (resolve or reject)
+function attemptAllOperations(operations) {
+  return Promise.allSettled(operations.map((op) => op())).then((results) => {
+    const successful = results
+      .filter((r) => r.status === 'fulfilled')
+      .map((r) => r.value);
+
+    const failed = results
+      .filter((r) => r.status === 'rejected')
+      .map((r) => r.reason);
+
+    return { successful, failed };
+  });
+}
+
+// Get the first successfully resolved promise
+function tryUntilSuccess(operations) {
+  return Promise.any(operations.map((op) => op())).catch((error) => {
+    // AggregateError contains all the individual errors
+    console.error('All operations failed:', error);
+    throw new Error('All attempts failed');
+  });
+}
+```
+
+## Async/Await Patterns
+
+### Sequential Execution
+
+Execute async operations one after another:
+
+```javascript
+async function processItems(items) {
+  const results = [];
+
+  for (const item of items) {
+    // Each operation waits for the previous one to complete
+    const result = await processItem(item);
+    results.push(result);
+  }
+
+  return results;
+}
+```
+
+### Parallel Execution
+
+Execute async operations concurrently:
+
+```javascript
+async function processItemsInParallel(items) {
+  // Create an array of promises
+  const promises = items.map((item) => processItem(item));
+
+  // Wait for all promises to resolve
+  const results = await Promise.all(promises);
+
+  return results;
+}
+```
+
+### Controlled Concurrency
+
+Limit the number of concurrent operations:
+
+```javascript
+async function processItemsWithConcurrencyLimit(items, concurrencyLimit = 3) {
+  const results = [];
+  const inProgress = new Set();
+
+  for (const item of items) {
+    // Create a promise that removes itself from the in-progress set when done
+    const promise = processItem(item).then((result) => {
+      inProgress.delete(promise);
+      return result;
+    });
+
+    inProgress.add(promise);
+    results.push(promise);
+
+    // If we've reached the concurrency limit, wait for one to finish
+    if (inProgress.size >= concurrencyLimit) {
+      await Promise.race(inProgress);
+    }
+  }
+
+  // Wait for all remaining operations to complete
+  return Promise.all(results);
+}
+
+// Alternative implementation using a batch approach
+async function processBatches(items, batchSize = 3) {
+  const results = [];
+
+  // Process items in batches
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResults = await Promise.all(
+      batch.map((item) => processItem(item))
+    );
+    results.push(...batchResults);
+  }
+
+  return results;
+}
+```
+
+## Async Iterators and Generators
+
+### Async Iterators
+
+Async iterators allow you to iterate over asynchronous data sources:
+
+```javascript
+// Creating an async iterable
+const asyncNumberGenerator = {
+  start: 1,
+  end: 5,
+
+  // This makes the object iterable
+  [Symbol.asyncIterator]() {
+    return {
+      current: this.start,
+      last: this.end,
+
+      // The next() method is called for each iteration
+      async next() {
+        // Simulate async operation
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        if (this.current <= this.last) {
+          return { value: this.current++, done: false };
+        } else {
+          return { done: true };
+        }
+      },
+    };
+  },
+};
+
+// Using the async iterable with for-await-of
+async function iterateNumbers() {
+  for await (const num of asyncNumberGenerator) {
+    console.log(num); // 1, 2, 3, 4, 5 (with 100ms delay between each)
+  }
+}
+```
+
+### Async Generators
+
+Async generators simplify creating async iterables:
+
+```javascript
+// Async generator function
+async function* fetchPages(url, pageCount) {
+  for (let i = 1; i <= pageCount; i++) {
+    const response = await fetch(`${url}?page=${i}`);
+    const data = await response.json();
+    yield data;
+  }
+}
+
+// Using the async generator
+async function processAllPages() {
+  const pageIterator = fetchPages('https://api.example.com/posts', 5);
+
+  for await (const page of pageIterator) {
+    console.log(`Processing page with ${page.items.length} items`);
+    // Process each page
+    for (const item of page.items) {
+      await processItem(item);
+    }
+  }
+}
+```
+
+### Combining Async Generators
+
+You can compose and transform async generators:
+
+```javascript
+// Transform items from an async generator
+async function* mapAsync(asyncIterable, mapFn) {
+  for await (const item of asyncIterable) {
+    yield mapFn(item);
+  }
+}
+
+// Filter items from an async generator
+async function* filterAsync(asyncIterable, filterFn) {
+  for await (const item of asyncIterable) {
+    if (await filterFn(item)) {
+      yield item;
+    }
+  }
+}
+
+// Example usage
+async function processFilteredItems() {
+  const pages = fetchPages('https://api.example.com/posts', 10);
+
+  // Extract items from pages
+  const items = (async function* () {
+    for await (const page of pages) {
+      for (const item of page.items) {
+        yield item;
+      }
+    }
+  })();
+
+  // Filter and transform items
+  const processedItems = mapAsync(
+    filterAsync(items, async (item) => item.status === 'active'),
+    (item) => ({ id: item.id, title: item.title.toUpperCase() })
+  );
+
+  // Use the processed items
+  for await (const item of processedItems) {
+    console.log(item);
+  }
+}
+```
+
+## Managing Concurrent Operations
+
+### Task Queue
+
+Implement a task queue to control the execution of asynchronous tasks:
+
+```javascript
+class TaskQueue {
+  constructor(concurrency = 2) {
+    this.concurrency = concurrency;
+    this.running = 0;
+    this.queue = [];
+  }
+
+  async add(task) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({
+        task,
+        resolve,
+        reject,
+      });
+
+      this.runNext();
+    });
+  }
+
+  async runNext() {
+    if (this.running >= this.concurrency || this.queue.length === 0) {
+      return;
+    }
+
+    this.running++;
+    const { task, resolve, reject } = this.queue.shift();
+
+    try {
+      const result = await task();
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    } finally {
+      this.running--;
+      this.runNext();
+    }
+  }
+}
+
+// Usage
+const queue = new TaskQueue(3);
+
+async function downloadFile(url) {
+  console.log(`Starting download: ${url}`);
+  // Simulate download
+  await new Promise((resolve) =>
+    setTimeout(resolve, 1000 + Math.random() * 2000)
+  );
+  console.log(`Finished download: ${url}`);
+  return `Content of ${url}`;
+}
+
+async function downloadAll(urls) {
+  const downloads = urls.map((url) => {
+    return queue.add(() => downloadFile(url));
+  });
+
+  return Promise.all(downloads);
+}
+
+// Download 10 files with max 3 concurrent downloads
+downloadAll([
+  'file1.txt',
+  'file2.txt',
+  'file3.txt',
+  'file4.txt',
+  'file5.txt',
+  'file6.txt',
+  'file7.txt',
+  'file8.txt',
+  'file9.txt',
+  'file10.txt',
+]).then((results) => {
+  console.log('All downloads complete');
+});
+```
+
+### Rate Limiting
+
+Implement rate limiting for API calls:
+
+```javascript
+class RateLimiter {
+  constructor(maxRequests, timeWindow) {
+    this.maxRequests = maxRequests;
+    this.timeWindow = timeWindow;
+    this.timestamps = [];
+  }
+
+  async throttle() {
+    // Remove timestamps outside the time window
+    const now = Date.now();
+    this.timestamps = this.timestamps.filter(
+      (time) => now - time < this.timeWindow
+    );
+
+    // If we've reached the limit, wait until the oldest request expires
+    if (this.timestamps.length >= this.maxRequests) {
+      const oldestTime = this.timestamps[0];
+      const waitTime = this.timeWindow - (now - oldestTime);
+
+      if (waitTime > 0) {
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+        return this.throttle(); // Recheck after waiting
+      }
+    }
+
+    // Add current timestamp and proceed
+    this.timestamps.push(Date.now());
+  }
+
+  async execute(fn) {
+    await this.throttle();
+    return fn();
+  }
+}
+
+// Usage: Limit to 5 requests per 10 seconds
+const apiLimiter = new RateLimiter(5, 10000);
+
+async function fetchWithRateLimit(url) {
+  return apiLimiter.execute(() => fetch(url).then((res) => res.json()));
+}
+
+// Example: Make 20 API calls with rate limiting
+async function fetchAllData() {
+  const results = [];
+
+  for (let i = 1; i <= 20; i++) {
+    console.log(`Making request ${i}`);
+    const data = await fetchWithRateLimit(`https://api.example.com/data/${i}`);
+    results.push(data);
+  }
+
+  return results;
+}
+```
+
+## Retry and Timeout Patterns
+
+### Retry with Exponential Backoff
+
+Automatically retry failed operations with increasing delays:
+
+```javascript
+async function fetchWithRetry(url, options = {}) {
+  const {
+    retries = 3,
+    initialDelay = 1000,
+    maxDelay = 30000,
+    factor = 2,
+    statusCodesToRetry = [408, 429, 500, 502, 503, 504],
+  } = options;
+
+  let lastError;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url);
+
+      // Check if response status should trigger a retry
+      if (statusCodesToRetry.includes(response.status)) {
+        throw new Error(`Request failed with status ${response.status}`);
+      }
+
+      return response;
+    } catch (error) {
+      lastError = error;
+
+      if (attempt < retries) {
+        // Calculate delay with exponential backoff and jitter
+        const delay = Math.min(
+          initialDelay *
+            Math.pow(factor, attempt) *
+            (0.8 + Math.random() * 0.4),
+          maxDelay
+        );
+
+        console.log(`Attempt ${attempt + 1} failed. Retrying in ${delay}ms...`);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+// Usage
+async function fetchData() {
+  try {
+    const response = await fetchWithRetry('https://api.example.com/data');
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('All retry attempts failed:', error);
+    throw error;
+  }
+}
+```
+
+### Timeout Pattern
+
+Add timeouts to prevent operations from hanging indefinitely:
+
+```javascript
+function withTimeout(promise, timeoutMs, errorMessage = 'Operation timed out') {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(errorMessage));
+    }, timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    clearTimeout(timeoutId);
+  });
+}
+
+// Usage
+async function fetchWithTimeout(url, timeoutMs = 5000) {
+  return withTimeout(
+    fetch(url).then((res) => res.json()),
+    timeoutMs,
+    `Fetching ${url} timed out after ${timeoutMs}ms`
+  );
+}
+
+// Example
+async function loadData() {
+  try {
+    const data = await fetchWithTimeout('https://api.example.com/data', 3000);
+    console.log('Data loaded:', data);
+  } catch (error) {
+    console.error('Error loading data:', error.message);
+  }
+}
+```
+
+## Cancellation Patterns
+
+### Using AbortController
+
+Cancel fetch requests or other operations that support the AbortSignal interface:
+
+```javascript
+async function fetchWithCancellation(url) {
+  const controller = new AbortController();
+  const { signal } = controller;
+
+  // Return both the promise and a cancel function
+  return {
+    promise: fetch(url, { signal }).then((res) => res.json()),
+    cancel: () => controller.abort(),
+  };
+}
+
+// Usage
+async function loadDataWithCancellation() {
+  const { promise, cancel } = fetchWithCancellation(
+    'https://api.example.com/data'
+  );
+
+  // Set up a timeout to cancel the request after 5 seconds
+  const timeoutId = setTimeout(() => {
+    console.log('Cancelling request due to timeout');
+    cancel();
+  }, 5000);
+
+  try {
+    const data = await promise;
+    clearTimeout(timeoutId);
+    return data;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      console.log('Request was cancelled');
+    } else {
+      console.error('Request failed:', error);
+    }
+    throw error;
+  }
+}
+```
+
+### Custom Cancellable Promise
+
+Create a cancellable promise wrapper for operations that don't support AbortSignal:
+
+```javascript
+function cancellable(promise) {
+  let isCancelled = false;
+
+  const wrappedPromise = new Promise((resolve, reject) => {
+    promise.then(
+      (value) => {
+        if (!isCancelled) {
+          resolve(value);
+        }
+      },
+      (error) => {
+        if (!isCancelled) {
+          reject(error);
+        }
+      }
+    );
+  });
+
+  return {
+    promise: wrappedPromise,
+    cancel: () => {
+      isCancelled = true;
+    },
+  };
+}
+
+// Usage with any promise-based operation
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function longRunningOperation() {
+  await delay(1000);
+  console.log('Step 1 complete');
+
+  await delay(1000);
+  console.log('Step 2 complete');
+
+  await delay(1000);
+  console.log('Step 3 complete');
+
+  return 'Operation complete';
+}
+
+// Make it cancellable
+const { promise, cancel } = cancellable(longRunningOperation());
+
+// Cancel after 1.5 seconds
+setTimeout(() => {
+  console.log('Cancelling operation');
+  cancel();
+}, 1500);
+
+promise
+  .then((result) => console.log('Result:', result))
+  .catch((error) => console.error('Error:', error));
+```
+
+## State Management in Async Operations
+
+### Async State Machine
+
+Manage complex async workflows with a state machine:
+
+```javascript
+class AsyncStateMachine {
+  constructor(initialState) {
+    this.state = initialState;
+    this.transitions = {};
+    this.listeners = [];
+  }
+
+  addTransition(fromState, event, toState, action) {
+    if (!this.transitions[fromState]) {
+      this.transitions[fromState] = {};
+    }
+
+    this.transitions[fromState][event] = { toState, action };
+  }
+
+  addListener(listener) {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== listener);
+    };
+  }
+
+  async trigger(event, payload) {
+    const currentState = this.state;
+    const transition = this.transitions[currentState]?.[event];
+
+    if (!transition) {
+      throw new Error(
+        `No transition for event '${event}' in state '${currentState}'`
+      );
+    }
+
+    try {
+      // Execute the action if defined
+      let actionResult;
+      if (transition.action) {
+        actionResult = await transition.action(payload, this.state);
+      }
+
+      // Update state
+      this.state = transition.toState;
+
+      // Notify listeners
+      this.listeners.forEach((listener) => {
+        listener({
+          fromState: currentState,
+          toState: this.state,
+          event,
+          payload,
+          result: actionResult,
+        });
+      });
+
+      return actionResult;
+    } catch (error) {
+      console.error(
+        `Error in transition from '${currentState}' on event '${event}':`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  getState() {
+    return this.state;
+  }
+}
+
+// Example: File upload state machine
+async function createUploadStateMachine(file) {
+  const machine = new AsyncStateMachine('idle');
+
+  // Define transitions
+  machine.addTransition('idle', 'start', 'preparing', async () => {
+    // Validate file and prepare for upload
+    if (file.size > 100 * 1024 * 1024) {
+      throw new Error('File too large');
+    }
+    return { fileSize: file.size, fileName: file.name };
+  });
+
+  machine.addTransition(
+    'preparing',
+    'prepared',
+    'uploading',
+    async (_, state) => {
+      // Start the upload
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/upload');
+
+      // Track upload progress
+      const uploadPromise = new Promise((resolve, reject) => {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const progress = Math.round((event.loaded / event.total) * 100);
+            machine.trigger('progress', { progress });
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(JSON.parse(xhr.responseText));
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('Network error during upload'));
+      });
+
+      // Start the upload
+      const formData = new FormData();
+      formData.append('file', file);
+      xhr.send(formData);
+
+      return uploadPromise;
+    }
+  );
+
+  machine.addTransition(
+    'uploading',
+    'progress',
+    'uploading',
+    async (payload) => {
+      // Just update progress, stay in uploading state
+      return payload;
+    }
+  );
+
+  machine.addTransition('uploading', 'complete', 'success', async (result) => {
+    // Upload completed successfully
+    return result;
+  });
+
+  machine.addTransition('uploading', 'error', 'failed', async (error) => {
+    // Upload failed
+    return error;
+  });
+
+  machine.addTransition('failed', 'retry', 'preparing', async () => {
+    // Reset and try again
+    return { fileSize: file.size, fileName: file.name };
+  });
+
+  // Add a listener for logging
+  machine.addListener(({ fromState, toState, event }) => {
+    console.log(
+      `State changed from ${fromState} to ${toState} due to ${event}`
+    );
+  });
+
+  return machine;
+}
+
+// Usage
+async function uploadFile(file) {
+  const machine = await createUploadStateMachine(file);
+
+  try {
+    // Start the upload process
+    await machine.trigger('start');
+    await machine.trigger('prepared');
+
+    // Wait for completion
+    const result = await new Promise((resolve, reject) => {
+      const unsubscribe = machine.addListener(({ toState, result, event }) => {
+        if (toState === 'success') {
+          unsubscribe();
+          resolve(result);
+        } else if (toState === 'failed') {
+          unsubscribe();
+          reject(result);
+        }
+      });
+    });
+
+    console.log('Upload completed:', result);
+    return result;
+  } catch (error) {
+    console.error('Upload failed:', error);
+    throw error;
+  }
+}
+```
+
+## Conclusion
+
+Mastering these asynchronous JavaScript patterns will help you build more robust, efficient, and maintainable applications. Key takeaways include:
+
+1. **Use the right tool for the job**: Choose the appropriate async pattern based on your specific requirements
+2. **Control concurrency**: Limit parallel operations to avoid overwhelming resources
+3. **Handle errors properly**: Implement retry mechanisms and proper error handling
+4. **Manage state**: Use state machines for complex workflows
+5. **Consider cancellation**: Make long-running operations cancellable
+6. **Leverage async iterators**: Use them for processing streams of asynchronous data
+
+By combining these patterns, you can handle even the most complex asynchronous scenarios in your JavaScript applications.

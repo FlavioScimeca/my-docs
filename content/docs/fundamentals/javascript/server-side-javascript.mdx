@@ -1,0 +1,781 @@
+---
+title: 'Server-Side JavaScript'
+description: 'Learn how to use JavaScript in Node.js environments and understand the differences from browser JavaScript'
+---
+
+# Server-Side JavaScript
+
+JavaScript was originally designed for browsers, but with the advent of Node.js, it became a powerful language for server-side development as well. This guide explores how JavaScript works on the server and the key differences from browser-based JavaScript.
+
+## Browser vs. Server JavaScript
+
+JavaScript in browsers and on servers (Node.js) shares the same core language features but operates in different environments with different APIs and capabilities:
+
+| Feature               | Browser JavaScript                         | Server JavaScript (Node.js)         |
+| --------------------- | ------------------------------------------ | ----------------------------------- |
+| Global object         | `window`                                   | `global`                            |
+| DOM/BOM               | Available                                  | Not available                       |
+| File system access    | Limited (via File API)                     | Full access (via fs module)         |
+| Network capabilities  | Limited by CORS                            | Unrestricted                        |
+| Threading model       | Single-threaded with Web Workers           | Single-threaded with Worker Threads |
+| Module system         | ES Modules, older browsers use script tags | CommonJS and ES Modules             |
+| Package management    | CDNs, bundlers                             | npm, yarn, pnpm                     |
+| Environment variables | Limited access                             | Full access                         |
+
+## Setting Up a Node.js Environment
+
+```bash
+# Initialize a new Node.js project
+mkdir my-server-app
+cd my-server-app
+npm init -y
+
+# Install some common packages
+npm install express dotenv mongoose
+```
+
+## Creating a Simple HTTP Server
+
+```javascript
+// Basic HTTP server with Node.js built-in modules
+const http = require('http');
+
+const server = http.createServer((req, res) => {
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'text/plain');
+  res.end('Hello, Server-side JavaScript!');
+});
+
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}/`);
+});
+```
+
+## Express.js - A Popular Node.js Framework
+
+```javascript
+// server.js
+const express = require('express');
+const app = express();
+
+// Middleware for parsing JSON
+app.use(express.json());
+
+// Simple in-memory "database"
+const users = [
+  { id: 1, name: 'Alice', email: 'alice@example.com' },
+  { id: 2, name: 'Bob', email: 'bob@example.com' },
+];
+
+// Routes
+app.get('/', (req, res) => {
+  res.send('Welcome to our API');
+});
+
+// Get all users
+app.get('/api/users', (req, res) => {
+  res.json(users);
+});
+
+// Get user by ID
+app.get('/api/users/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const user = users.find((user) => user.id === id);
+
+  if (!user) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+
+  res.json(user);
+});
+
+// Create a new user
+app.post('/api/users', (req, res) => {
+  const { name, email } = req.body;
+
+  if (!name || !email) {
+    return res.status(400).json({ message: 'Name and email are required' });
+  }
+
+  const newUser = {
+    id: users.length + 1,
+    name,
+    email,
+  };
+
+  users.push(newUser);
+  res.status(201).json(newUser);
+});
+
+// Start server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+```
+
+## File System Operations
+
+Node.js provides the `fs` module for interacting with the file system:
+
+```javascript
+const fs = require('fs');
+const path = require('path');
+
+// Synchronous file operations (blocking)
+function readConfigSync() {
+  try {
+    const configPath = path.join(__dirname, 'config.json');
+    const configData = fs.readFileSync(configPath, 'utf8');
+    return JSON.parse(configData);
+  } catch (error) {
+    console.error('Error reading config:', error);
+    return {};
+  }
+}
+
+// Asynchronous file operations (non-blocking) with callbacks
+function readConfigAsync(callback) {
+  const configPath = path.join(__dirname, 'config.json');
+  fs.readFile(configPath, 'utf8', (err, data) => {
+    if (err) {
+      console.error('Error reading config:', err);
+      return callback({});
+    }
+    try {
+      const config = JSON.parse(data);
+      callback(config);
+    } catch (parseError) {
+      console.error('Error parsing config:', parseError);
+      callback({});
+    }
+  });
+}
+
+// Asynchronous file operations with promises
+async function readConfigPromise() {
+  try {
+    const configPath = path.join(__dirname, 'config.json');
+    const data = await fs.promises.readFile(configPath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Error reading config:', error);
+    return {};
+  }
+}
+
+// Writing to files
+async function saveUserData(userData) {
+  try {
+    const dataPath = path.join(__dirname, 'data', 'users.json');
+    // Ensure directory exists
+    await fs.promises.mkdir(path.dirname(dataPath), { recursive: true });
+    // Write data
+    await fs.promises.writeFile(dataPath, JSON.stringify(userData, null, 2));
+    console.log('User data saved successfully');
+    return true;
+  } catch (error) {
+    console.error('Error saving user data:', error);
+    return false;
+  }
+}
+```
+
+## Environment Variables
+
+Environment variables are crucial for configuration in server-side applications:
+
+```javascript
+// .env file
+// DB_CONNECTION=mongodb://localhost:27017/myapp
+// API_KEY=your-secret-api-key
+// NODE_ENV=development
+// PORT=3000
+
+// Load environment variables
+require('dotenv').config();
+
+// Access environment variables
+const dbConnection = process.env.DB_CONNECTION;
+const apiKey = process.env.API_KEY;
+const isDevelopment = process.env.NODE_ENV === 'development';
+const port = process.env.PORT || 3000;
+
+console.log(`Starting server in ${process.env.NODE_ENV} mode on port ${port}`);
+```
+
+## Working with Databases
+
+Node.js can connect to various databases. Here's an example with MongoDB using Mongoose:
+
+```javascript
+const mongoose = require('mongoose');
+
+// Connect to MongoDB
+mongoose
+  .connect(process.env.DB_CONNECTION, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log('Connected to MongoDB'))
+  .catch((err) => console.error('MongoDB connection error:', err));
+
+// Define a schema
+const userSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  createdAt: { type: Date, default: Date.now },
+});
+
+// Create a model
+const User = mongoose.model('User', userSchema);
+
+// CRUD operations
+async function createUser(userData) {
+  try {
+    const user = new User(userData);
+    await user.save();
+    return user;
+  } catch (error) {
+    console.error('Error creating user:', error);
+    throw error;
+  }
+}
+
+async function findUserByEmail(email) {
+  return User.findOne({ email });
+}
+
+async function updateUser(id, updates) {
+  return User.findByIdAndUpdate(id, updates, { new: true });
+}
+
+async function deleteUser(id) {
+  return User.findByIdAndDelete(id);
+}
+```
+
+## Handling Authentication
+
+A simple JWT authentication implementation:
+
+```javascript
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+
+// Hash a password
+async function hashPassword(password) {
+  const saltRounds = 10;
+  return bcrypt.hash(password, saltRounds);
+}
+
+// Verify a password
+async function verifyPassword(password, hashedPassword) {
+  return bcrypt.compare(password, hashedPassword);
+}
+
+// Generate a JWT token
+function generateToken(user) {
+  const payload = {
+    id: user._id,
+    email: user.email,
+    role: user.role || 'user',
+  };
+
+  return jwt.sign(payload, process.env.JWT_SECRET, {
+    expiresIn: '1d', // Token expires in 1 day
+  });
+}
+
+// Verify a JWT token
+function verifyToken(token) {
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    return null;
+  }
+}
+
+// Authentication middleware
+function authenticate(req, res, next) {
+  // Get token from Authorization header
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  const decoded = verifyToken(token);
+
+  if (!decoded) {
+    return res.status(401).json({ message: 'Invalid or expired token' });
+  }
+
+  // Attach user info to request
+  req.user = decoded;
+  next();
+}
+
+// Example login route
+app.post('/api/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Find user by email
+    const user = await findUserByEmail(email);
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Verify password
+    const isPasswordValid = await verifyPassword(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Generate token
+    const token = generateToken(user);
+
+    res.json({ token });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Protected route example
+app.get('/api/profile', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error('Profile error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+```
+
+## Handling File Uploads
+
+```javascript
+const multer = require('multer');
+const path = require('path');
+
+// Configure storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb) => {
+    cb(null, `${Date.now()}-${file.originalname}`);
+  },
+});
+
+// File filter
+const fileFilter = (req, file, cb) => {
+  // Accept images only
+  if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
+    return cb(new Error('Only image files are allowed!'), false);
+  }
+  cb(null, true);
+};
+
+// Initialize upload
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 1024 * 1024 * 5 }, // 5MB
+});
+
+// Single file upload route
+app.post('/api/upload', upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ message: 'No file uploaded' });
+  }
+
+  res.json({
+    message: 'File uploaded successfully',
+    file: {
+      filename: req.file.filename,
+      path: req.file.path,
+      size: req.file.size,
+    },
+  });
+});
+
+// Multiple file upload route
+app.post('/api/upload-multiple', upload.array('images', 5), (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({ message: 'No files uploaded' });
+  }
+
+  res.json({
+    message: `${req.files.length} files uploaded successfully`,
+    files: req.files.map((file) => ({
+      filename: file.filename,
+      path: file.path,
+      size: file.size,
+    })),
+  });
+});
+```
+
+## Background Tasks and Scheduling
+
+```javascript
+const cron = require('node-cron');
+
+// Schedule a task to run every day at midnight
+cron.schedule('0 0 * * *', async () => {
+  console.log('Running daily cleanup task...');
+  try {
+    // Example: Delete temporary files older than 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    // Find and delete old temp files
+    const oldFiles = await TempFile.find({ createdAt: { $lt: sevenDaysAgo } });
+
+    for (const file of oldFiles) {
+      // Delete from storage
+      await fs.promises.unlink(file.path);
+      // Delete from database
+      await file.remove();
+    }
+
+    console.log(`Deleted ${oldFiles.length} old temporary files`);
+  } catch (error) {
+    console.error('Error in cleanup task:', error);
+  }
+});
+
+// One-time delayed task
+function scheduleEmailReminder(userId, minutes) {
+  setTimeout(async () => {
+    try {
+      const user = await User.findById(userId);
+      if (user) {
+        // Send reminder email
+        await sendEmail(
+          user.email,
+          'Reminder',
+          'This is your scheduled reminder'
+        );
+        console.log(`Reminder email sent to ${user.email}`);
+      }
+    } catch (error) {
+      console.error('Error sending reminder:', error);
+    }
+  }, minutes * 60 * 1000);
+}
+```
+
+## Error Handling in Node.js
+
+```javascript
+// Global error handler for uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('UNCAUGHT EXCEPTION:', error);
+  // Log to error monitoring service
+  // logErrorToService(error);
+
+  // Gracefully shutdown
+  process.exit(1);
+});
+
+// Global error handler for unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION:', reason);
+  // Log to error monitoring service
+  // logErrorToService(reason);
+});
+
+// Express error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Express error:', err);
+
+  // Determine status code
+  const statusCode = err.statusCode || 500;
+
+  // Send error response
+  res.status(statusCode).json({
+    error: {
+      message: err.message || 'Internal Server Error',
+      ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+    },
+  });
+});
+
+// Custom error class
+class AppError extends Error {
+  constructor(message, statusCode) {
+    super(message);
+    this.statusCode = statusCode;
+    this.name = this.constructor.name;
+    Error.captureStackTrace(this, this.constructor);
+  }
+}
+
+// Usage in route handler
+app.get('/api/resource/:id', async (req, res, next) => {
+  try {
+    const resource = await Resource.findById(req.params.id);
+
+    if (!resource) {
+      throw new AppError('Resource not found', 404);
+    }
+
+    res.json(resource);
+  } catch (error) {
+    next(error); // Pass to error handling middleware
+  }
+});
+```
+
+## Working with Streams
+
+Streams are a powerful feature in Node.js for handling data efficiently:
+
+```javascript
+const fs = require('fs');
+const zlib = require('zlib');
+const http = require('http');
+
+// Reading a file as a stream
+function streamFileToResponse(filePath, res) {
+  const fileStream = fs.createReadStream(filePath);
+
+  fileStream.on('error', (error) => {
+    console.error('File stream error:', error);
+    res.statusCode = 500;
+    res.end('Internal Server Error');
+  });
+
+  // Pipe the file stream to the response
+  fileStream.pipe(res);
+}
+
+// Compressing a file on-the-fly
+function streamCompressedFile(filePath, res) {
+  const fileStream = fs.createReadStream(filePath);
+  const gzip = zlib.createGzip();
+
+  res.setHeader('Content-Encoding', 'gzip');
+
+  fileStream.pipe(gzip).pipe(res);
+}
+
+// HTTP server that streams files
+const server = http.createServer((req, res) => {
+  if (req.url === '/file') {
+    return streamFileToResponse('large-file.txt', res);
+  }
+
+  if (req.url === '/compressed-file') {
+    res.setHeader('Content-Type', 'text/plain');
+    return streamCompressedFile('large-file.txt', res);
+  }
+
+  res.statusCode = 404;
+  res.end('Not Found');
+});
+
+// Processing CSV data with streams
+function processLargeCsv(inputPath, outputPath) {
+  const readStream = fs.createReadStream(inputPath, { encoding: 'utf8' });
+  const writeStream = fs.createWriteStream(outputPath);
+
+  let header = null;
+  let buffer = '';
+
+  readStream.on('data', (chunk) => {
+    buffer += chunk;
+
+    const lines = buffer.split('\n');
+    buffer = lines.pop(); // Keep the last incomplete line in the buffer
+
+    if (!header) {
+      header = lines.shift();
+      writeStream.write(header + '\n');
+    }
+
+    // Process each complete line
+    lines.forEach((line) => {
+      // Example: Convert all values to uppercase
+      const processedLine = line.toUpperCase();
+      writeStream.write(processedLine + '\n');
+    });
+  });
+
+  readStream.on('end', () => {
+    // Process any remaining data in the buffer
+    if (buffer) {
+      writeStream.write(buffer.toUpperCase() + '\n');
+    }
+    writeStream.end();
+    console.log('CSV processing complete');
+  });
+
+  readStream.on('error', (error) => {
+    console.error('Read error:', error);
+    writeStream.end();
+  });
+
+  writeStream.on('error', (error) => {
+    console.error('Write error:', error);
+  });
+}
+```
+
+## Child Processes
+
+Node.js can spawn child processes to execute external commands:
+
+```javascript
+const { exec, spawn, fork } = require('child_process');
+
+// Simple command execution
+function runCommand(command) {
+  return new Promise((resolve, reject) => {
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`exec error: ${error}`);
+        return reject(error);
+      }
+
+      if (stderr) {
+        console.warn(`stderr: ${stderr}`);
+      }
+
+      resolve(stdout.trim());
+    });
+  });
+}
+
+// Example usage
+async function getDiskSpace() {
+  try {
+    // Unix command to get disk space
+    const output = await runCommand('df -h');
+    return output;
+  } catch (error) {
+    console.error('Failed to get disk space:', error);
+    throw error;
+  }
+}
+
+// Spawn a long-running process
+function convertVideo(inputPath, outputPath) {
+  return new Promise((resolve, reject) => {
+    // Using ffmpeg to convert video
+    const ffmpeg = spawn('ffmpeg', [
+      '-i',
+      inputPath,
+      '-vcodec',
+      'h264',
+      '-acodec',
+      'aac',
+      outputPath,
+    ]);
+
+    let outputLog = '';
+
+    ffmpeg.stdout.on('data', (data) => {
+      outputLog += data;
+    });
+
+    ffmpeg.stderr.on('data', (data) => {
+      // ffmpeg outputs progress to stderr
+      console.log(`ffmpeg: ${data}`);
+    });
+
+    ffmpeg.on('close', (code) => {
+      if (code === 0) {
+        resolve(outputLog);
+      } else {
+        reject(new Error(`ffmpeg process exited with code ${code}`));
+      }
+    });
+
+    ffmpeg.on('error', (error) => {
+      reject(error);
+    });
+  });
+}
+
+// Fork a Node.js process
+function runCpuIntensiveTask(data) {
+  return new Promise((resolve, reject) => {
+    // Fork a new Node.js process
+    const child = fork('./cpu-task.js');
+
+    // Listen for messages from the child process
+    child.on('message', (result) => {
+      resolve(result);
+    });
+
+    // Handle errors
+    child.on('error', (error) => {
+      reject(error);
+    });
+
+    // Handle child process exit
+    child.on('exit', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Child process exited with code ${code}`));
+      }
+    });
+
+    // Send data to the child process
+    child.send(data);
+  });
+}
+
+// Example cpu-task.js file
+/*
+process.on('message', (data) => {
+  // Perform CPU-intensive calculation
+  const result = performComplexCalculation(data);
+  
+  // Send result back to parent process
+  process.send(result);
+  
+  // Exit the process
+  process.exit(0);
+});
+
+function performComplexCalculation(data) {
+  // Simulate CPU-intensive work
+  let result = 0;
+  for (let i = 0; i < 1000000000; i++) {
+    result += i;
+  }
+  return { input: data, result };
+}
+*/
+```
+
+## Conclusion
+
+Server-side JavaScript with Node.js offers a powerful environment for building backend applications. The key advantages include:
+
+1. **JavaScript Everywhere**: Use the same language on both frontend and backend
+2. **Non-blocking I/O**: Efficiently handle many concurrent connections
+3. **Rich Ecosystem**: Access thousands of npm packages
+4. **Fast Execution**: V8 JavaScript engine provides excellent performance
+5. **Scalability**: Easy to scale horizontally with tools like PM2 or Docker
+
+When working with server-side JavaScript, remember these best practices:
+
+- Handle errors properly at all levels
+- Use async/await for cleaner asynchronous code
+- Leverage streams for efficient data processing
+- Keep sensitive information in environment variables
+- Use middleware for cross-cutting concerns
+- Implement proper logging for debugging and monitoring
+- Consider security implications in all aspects of your application

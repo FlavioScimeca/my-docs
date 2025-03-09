@@ -1,0 +1,1246 @@
+---
+title: 'JavaScript Build Tools and Bundlers'
+description: 'Learn about modern JavaScript build tools, bundlers, and how to configure them for optimal development'
+---
+
+# JavaScript Build Tools and Bundlers
+
+Modern JavaScript development relies on build tools and bundlers to transform, optimize, and package code for production. This guide explores the most popular tools and how to use them effectively.
+
+## Why Use Build Tools?
+
+Build tools solve several key challenges in JavaScript development:
+
+1. **Module bundling**: Combine multiple files into optimized bundles
+2. **Transpilation**: Convert modern JavaScript to compatible versions
+3. **Optimization**: Minify and compress code for production
+4. **Asset processing**: Handle CSS, images, and other assets
+5. **Development experience**: Provide fast feedback with hot reloading
+6. **Code splitting**: Load code only when needed
+
+## Popular Bundlers
+
+### Webpack
+
+Webpack is a powerful and highly configurable bundler that has been the industry standard for years.
+
+#### Basic Webpack Setup
+
+```bash
+# Install webpack
+npm install --save-dev webpack webpack-cli webpack-dev-server
+
+# Install loaders and plugins
+npm install --save-dev babel-loader @babel/core @babel/preset-env css-loader style-loader html-webpack-plugin
+```
+
+Create a `webpack.config.js` file:
+
+```javascript
+const path = require('path');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
+
+module.exports = {
+  // Entry point of your application
+  entry: './src/index.js',
+
+  // Output configuration
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: '[name].[contenthash].js',
+    clean: true, // Clean the output directory before build
+  },
+
+  // Development server configuration
+  devServer: {
+    static: './dist',
+    hot: true,
+    port: 3000,
+  },
+
+  // Module rules for different file types
+  module: {
+    rules: [
+      // JavaScript files
+      {
+        test: /\.js$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: ['@babel/preset-env'],
+          },
+        },
+      },
+      // CSS files
+      {
+        test: /\.css$/,
+        use: ['style-loader', 'css-loader'],
+      },
+      // Image files
+      {
+        test: /\.(png|svg|jpg|jpeg|gif)$/i,
+        type: 'asset/resource',
+      },
+    ],
+  },
+
+  // Plugins
+  plugins: [
+    new HtmlWebpackPlugin({
+      template: './src/index.html',
+      title: 'My App',
+    }),
+  ],
+
+  // Optimization
+  optimization: {
+    splitChunks: {
+      chunks: 'all',
+    },
+  },
+
+  // Source maps for debugging
+  devtool: 'source-map',
+};
+```
+
+Add scripts to `package.json`:
+
+```json
+{
+  "scripts": {
+    "start": "webpack serve --mode development",
+    "build": "webpack --mode production",
+    "build:dev": "webpack --mode development"
+  }
+}
+```
+
+#### Code Splitting with Webpack
+
+```javascript
+// Dynamic import for code splitting
+const button = document.getElementById('load-module');
+
+button.addEventListener('click', async () => {
+  try {
+    // This will create a separate chunk
+    const { default: module } = await import('./heavy-module.js');
+    module.initialize();
+  } catch (error) {
+    console.error('Failed to load module:', error);
+  }
+});
+```
+
+Configure Webpack for code splitting:
+
+```javascript
+module.exports = {
+  // ... other config
+  optimization: {
+    splitChunks: {
+      chunks: 'all',
+      minSize: 20000,
+      maxSize: 70000,
+      cacheGroups: {
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendors',
+          chunks: 'all',
+        },
+      },
+    },
+  },
+};
+```
+
+### Rollup
+
+Rollup is focused on ES modules and is excellent for libraries.
+
+#### Basic Rollup Setup
+
+```bash
+# Install rollup
+npm install --save-dev rollup @rollup/plugin-node-resolve @rollup/plugin-commonjs @rollup/plugin-babel @rollup/plugin-terser rollup-plugin-livereload rollup-plugin-serve
+```
+
+Create a `rollup.config.js` file:
+
+```javascript
+import resolve from '@rollup/plugin-node-resolve';
+import commonjs from '@rollup/plugin-commonjs';
+import babel from '@rollup/plugin-babel';
+import terser from '@rollup/plugin-terser';
+import serve from 'rollup-plugin-serve';
+import livereload from 'rollup-plugin-livereload';
+
+const production = !process.env.ROLLUP_WATCH;
+
+export default {
+  input: 'src/main.js',
+  output: {
+    file: 'dist/bundle.js',
+    format: 'iife', // Immediately-Invoked Function Expression
+    sourcemap: !production,
+  },
+  plugins: [
+    // Resolve node_modules
+    resolve({ browser: true }),
+
+    // Convert CommonJS modules to ES6
+    commonjs(),
+
+    // Transpile with Babel
+    babel({
+      babelHelpers: 'bundled',
+      exclude: 'node_modules/**',
+      presets: ['@babel/preset-env'],
+    }),
+
+    // Minify in production
+    production && terser(),
+
+    // Development server
+    !production &&
+      serve({
+        contentBase: ['dist', 'public'],
+        port: 3000,
+      }),
+
+    // Live reload
+    !production && livereload('dist'),
+  ],
+  watch: {
+    clearScreen: false,
+  },
+};
+```
+
+Add scripts to `package.json`:
+
+```json
+{
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c -w",
+    "start": "npm run dev"
+  }
+}
+```
+
+#### Library Build with Rollup
+
+For building libraries with multiple formats:
+
+```javascript
+// rollup.config.js for a library
+export default {
+  input: 'src/index.js',
+  output: [
+    {
+      file: 'dist/library.js',
+      format: 'cjs',
+      exports: 'named',
+    },
+    {
+      file: 'dist/library.esm.js',
+      format: 'es',
+    },
+    {
+      file: 'dist/library.umd.js',
+      format: 'umd',
+      name: 'MyLibrary',
+      globals: {
+        react: 'React',
+      },
+    },
+  ],
+  external: ['react'],
+  plugins: [
+    // ... plugins
+  ],
+};
+```
+
+### Vite
+
+Vite is a newer build tool that leverages native ES modules for extremely fast development.
+
+#### Basic Vite Setup
+
+```bash
+# Create a new Vite project
+npm create vite@latest my-vite-app -- --template vanilla
+
+# Or install manually
+npm install --save-dev vite
+```
+
+Vite doesn't require a configuration file to start, but you can create a `vite.config.js` for customization:
+
+```javascript
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  server: {
+    port: 3000,
+    open: true,
+  },
+  build: {
+    outDir: 'dist',
+    minify: 'terser',
+    sourcemap: true,
+  },
+});
+```
+
+Add scripts to `package.json`:
+
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  }
+}
+```
+
+#### Using Vite with React
+
+```bash
+# Create a React project with Vite
+npm create vite@latest my-react-app -- --template react
+```
+
+The generated `vite.config.js` will include React-specific configuration:
+
+```javascript
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3000,
+  },
+});
+```
+
+### esbuild
+
+esbuild is an extremely fast JavaScript bundler written in Go.
+
+#### Basic esbuild Setup
+
+```bash
+# Install esbuild
+npm install --save-dev esbuild
+```
+
+Create a simple build script:
+
+```javascript
+// build.js
+const esbuild = require('esbuild');
+
+esbuild
+  .build({
+    entryPoints: ['src/index.js'],
+    bundle: true,
+    minify: true,
+    sourcemap: true,
+    outfile: 'dist/bundle.js',
+    platform: 'browser',
+    target: ['es2020'],
+  })
+  .catch(() => process.exit(1));
+```
+
+Add scripts to `package.json`:
+
+```json
+{
+  "scripts": {
+    "build": "node build.js"
+  }
+}
+```
+
+#### esbuild with Watch Mode
+
+```javascript
+// dev.js
+const esbuild = require('esbuild');
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+// Start esbuild's server
+const clients = [];
+esbuild
+  .serve(
+    {
+      servedir: 'public',
+      port: 8000,
+    },
+    {
+      entryPoints: ['src/index.js'],
+      bundle: true,
+      outfile: 'public/bundle.js',
+      sourcemap: true,
+      banner: {
+        js: '(() => new EventSource("/esbuild").onmessage = () => location.reload())();',
+      },
+    }
+  )
+  .then((server) => {
+    // Create a proxy server
+    http
+      .createServer((req, res) => {
+        const { url, method, headers } = req;
+
+        // Implement live reload
+        if (url === '/esbuild') {
+          return clients.push(
+            res.writeHead(200, {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              Connection: 'keep-alive',
+            })
+          );
+        }
+
+        // Forward request to esbuild
+        const options = {
+          hostname: 'localhost',
+          port: server.port,
+          path: url,
+          method,
+          headers,
+        };
+
+        const proxyReq = http.request(options, (proxyRes) => {
+          res.writeHead(proxyRes.statusCode, proxyRes.headers);
+          proxyRes.pipe(res, { end: true });
+        });
+
+        req.pipe(proxyReq, { end: true });
+      })
+      .listen(3000);
+
+    // Watch for file changes
+    fs.watch('src', { recursive: true }, () => {
+      clients.forEach((res) => res.write('data: update\n\n'));
+      clients.length = 0;
+    });
+
+    console.log('Development server running at http://localhost:3000');
+  });
+```
+
+## Transpilers
+
+### Babel
+
+Babel transpiles modern JavaScript to older versions for better browser compatibility.
+
+#### Basic Babel Setup
+
+```bash
+# Install Babel
+npm install --save-dev @babel/core @babel/cli @babel/preset-env
+```
+
+Create a `.babelrc` file:
+
+```json
+{
+  "presets": [
+    [
+      "@babel/preset-env",
+      {
+        "targets": "> 0.25%, not dead",
+        "useBuiltIns": "usage",
+        "corejs": 3
+      }
+    ]
+  ]
+}
+```
+
+Add scripts to `package.json`:
+
+```json
+{
+  "scripts": {
+    "build": "babel src -d dist"
+  }
+}
+```
+
+#### Babel with TypeScript
+
+```bash
+# Install TypeScript support
+npm install --save-dev @babel/preset-typescript
+```
+
+Update `.babelrc`:
+
+```json
+{
+  "presets": ["@babel/preset-env", "@babel/preset-typescript"]
+}
+```
+
+#### Babel Plugins
+
+```bash
+# Install some useful plugins
+npm install --save-dev @babel/plugin-proposal-class-properties @babel/plugin-transform-runtime
+```
+
+Update `.babelrc`:
+
+```json
+{
+  "presets": ["@babel/preset-env"],
+  "plugins": [
+    "@babel/plugin-proposal-class-properties",
+    [
+      "@babel/plugin-transform-runtime",
+      {
+        "regenerator": true
+      }
+    ]
+  ]
+}
+```
+
+### SWC
+
+SWC is a super-fast JavaScript/TypeScript compiler written in Rust.
+
+#### Basic SWC Setup
+
+```bash
+# Install SWC
+npm install --save-dev @swc/cli @swc/core
+```
+
+Create a `.swcrc` file:
+
+```json
+{
+  "jsc": {
+    "parser": {
+      "syntax": "ecmascript",
+      "jsx": false,
+      "dynamicImport": true,
+      "privateMethod": true,
+      "functionBind": true,
+      "exportDefaultFrom": true,
+      "exportNamespaceFrom": true,
+      "decorators": false,
+      "decoratorsBeforeExport": false,
+      "topLevelAwait": false,
+      "importMeta": false
+    },
+    "transform": {
+      "legacyDecorator": true,
+      "decoratorMetadata": false
+    },
+    "target": "es2015",
+    "loose": false,
+    "externalHelpers": false,
+    "keepClassNames": false
+  },
+  "minify": false
+}
+```
+
+Add scripts to `package.json`:
+
+```json
+{
+  "scripts": {
+    "build": "swc src -d dist"
+  }
+}
+```
+
+## Task Runners
+
+### npm scripts
+
+npm scripts are a simple way to define and run tasks.
+
+```json
+{
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "lint": "eslint src",
+    "format": "prettier --write \"src/**/*.{js,jsx}\"",
+    "test": "jest",
+    "prepare": "husky install"
+  }
+}
+```
+
+Run scripts with:
+
+```bash
+npm run build
+```
+
+### Composing npm scripts
+
+```json
+{
+  "scripts": {
+    "clean": "rimraf dist",
+    "lint": "eslint src",
+    "prebuild": "npm run clean && npm run lint",
+    "build": "vite build",
+    "postbuild": "node scripts/notify-deploy.js"
+  }
+}
+```
+
+## Module Resolution and Path Aliases
+
+### Webpack Path Aliases
+
+```javascript
+// webpack.config.js
+module.exports = {
+  // ... other config
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+      '@components': path.resolve(__dirname, 'src/components'),
+      '@utils': path.resolve(__dirname, 'src/utils'),
+    },
+    extensions: ['.js', '.jsx', '.ts', '.tsx'],
+  },
+};
+```
+
+Usage:
+
+```javascript
+// Instead of
+import Button from '../../../components/Button';
+
+// You can write
+import Button from '@components/Button';
+```
+
+### Vite Path Aliases
+
+```javascript
+// vite.config.js
+import { defineConfig } from 'vite';
+import path from 'path';
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      '@components': path.resolve(__dirname, './src/components'),
+      '@utils': path.resolve(__dirname, './src/utils'),
+    },
+  },
+});
+```
+
+### TypeScript Path Aliases
+
+For TypeScript projects, also update `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@components/*": ["src/components/*"],
+      "@utils/*": ["src/utils/*"]
+    }
+  }
+}
+```
+
+## Development Server Features
+
+### Hot Module Replacement (HMR)
+
+HMR allows modules to be updated without a full page refresh.
+
+#### Webpack HMR
+
+```javascript
+// webpack.config.js
+module.exports = {
+  // ... other config
+  devServer: {
+    hot: true,
+  },
+  plugins: [new webpack.HotModuleReplacementPlugin()],
+};
+```
+
+Using HMR in your code:
+
+```javascript
+// index.js
+if (module.hot) {
+  module.hot.accept('./app.js', function () {
+    console.log('Accepting the updated app module!');
+    // Re-render your application
+  });
+}
+```
+
+#### Vite HMR
+
+Vite has built-in HMR support:
+
+```javascript
+// main.js
+if (import.meta.hot) {
+  import.meta.hot.accept('./app.js', (newModule) => {
+    // Code to handle hot update
+  });
+}
+```
+
+### Proxy Configuration
+
+#### Webpack Dev Server Proxy
+
+```javascript
+// webpack.config.js
+module.exports = {
+  // ... other config
+  devServer: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        pathRewrite: { '^/api': '' },
+      },
+    },
+  },
+};
+```
+
+#### Vite Proxy
+
+```javascript
+// vite.config.js
+export default defineConfig({
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+      },
+    },
+  },
+});
+```
+
+## Optimization Techniques
+
+### Tree Shaking
+
+Tree shaking removes unused code from your bundle.
+
+#### Webpack Tree Shaking
+
+```javascript
+// webpack.config.js
+module.exports = {
+  // ... other config
+  mode: 'production', // Enables tree shaking
+  optimization: {
+    usedExports: true,
+    minimize: true,
+  },
+};
+```
+
+#### Rollup Tree Shaking
+
+Rollup performs tree shaking by default when using ES modules.
+
+### Code Splitting Strategies
+
+#### Entry Point Splitting
+
+```javascript
+// webpack.config.js
+module.exports = {
+  entry: {
+    main: './src/index.js',
+    admin: './src/admin.js',
+  },
+  // ... other config
+};
+```
+
+#### Dynamic Imports
+
+```javascript
+// Lazy load a component
+const LazyComponent = () => {
+  const [Component, setComponent] = useState(null);
+
+  useEffect(() => {
+    import('./HeavyComponent')
+      .then((module) => {
+        setComponent(() => module.default);
+      })
+      .catch((error) => {
+        console.error('Failed to load component:', error);
+      });
+  }, []);
+
+  if (!Component) {
+    return <div>Loading...</div>;
+  }
+
+  return <Component />;
+};
+```
+
+#### Split Chunks
+
+```javascript
+// webpack.config.js
+module.exports = {
+  // ... other config
+  optimization: {
+    splitChunks: {
+      chunks: 'all',
+      maxInitialRequests: Infinity,
+      minSize: 0,
+      cacheGroups: {
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name(module) {
+            // Get the package name
+            const packageName = module.context.match(
+              /[\\/]node_modules[\\/](.*?)([\\/]|$)/
+            )[1];
+            return `npm.${packageName.replace('@', '')}`;
+          },
+        },
+      },
+    },
+  },
+};
+```
+
+### Bundle Analysis
+
+#### Webpack Bundle Analyzer
+
+```bash
+npm install --save-dev webpack-bundle-analyzer
+```
+
+```javascript
+// webpack.config.js
+const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
+
+module.exports = {
+  // ... other config
+  plugins: [
+    new BundleAnalyzerPlugin({
+      analyzerMode: process.env.ANALYZE ? 'server' : 'disabled',
+    }),
+  ],
+};
+```
+
+Run with:
+
+```bash
+ANALYZE=true npm run build
+```
+
+#### Rollup Bundle Analyzer
+
+```bash
+npm install --save-dev rollup-plugin-visualizer
+```
+
+```javascript
+// rollup.config.js
+import { visualizer } from 'rollup-plugin-visualizer';
+
+export default {
+  // ... other config
+  plugins: [
+    visualizer({
+      filename: 'stats.html',
+      open: true,
+    }),
+  ],
+};
+```
+
+## Environment-Specific Configuration
+
+### Environment Variables
+
+#### Using dotenv
+
+```bash
+npm install --save-dev dotenv
+```
+
+Create `.env` files:
+
+```
+# .env
+API_URL=http://localhost:8000/api
+
+# .env.production
+API_URL=https://api.example.com
+```
+
+#### Webpack Environment Variables
+
+```javascript
+// webpack.config.js
+const Dotenv = require('dotenv-webpack');
+
+module.exports = {
+  // ... other config
+  plugins: [
+    new Dotenv({
+      path: `./.env.${process.env.NODE_ENV || 'development'}`,
+    }),
+    new webpack.DefinePlugin({
+      'process.env.NODE_ENV': JSON.stringify(
+        process.env.NODE_ENV || 'development'
+      ),
+    }),
+  ],
+};
+```
+
+#### Vite Environment Variables
+
+Vite has built-in support for `.env` files:
+
+```javascript
+// vite.config.js
+export default defineConfig({
+  // Define will be replaced during build time
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version),
+  },
+});
+```
+
+Access in code:
+
+```javascript
+console.log(import.meta.env.VITE_API_URL);
+console.log(__APP_VERSION__);
+```
+
+### Mode-Specific Configurations
+
+#### Webpack Mode Configuration
+
+```javascript
+// webpack.common.js
+const path = require('path');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
+
+module.exports = {
+  entry: './src/index.js',
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: '[name].[contenthash].js',
+  },
+  plugins: [
+    new HtmlWebpackPlugin({
+      template: './src/index.html',
+    }),
+  ],
+};
+```
+
+```javascript
+// webpack.dev.js
+const { merge } = require('webpack-merge');
+const common = require('./webpack.common.js');
+
+module.exports = merge(common, {
+  mode: 'development',
+  devtool: 'inline-source-map',
+  devServer: {
+    static: './dist',
+    hot: true,
+  },
+});
+```
+
+```javascript
+// webpack.prod.js
+const { merge } = require('webpack-merge');
+const common = require('./webpack.common.js');
+const TerserPlugin = require('terser-webpack-plugin');
+const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
+
+module.exports = merge(common, {
+  mode: 'production',
+  devtool: 'source-map',
+  optimization: {
+    minimizer: [new TerserPlugin(), new CssMinimizerPlugin()],
+  },
+});
+```
+
+Update `package.json`:
+
+```json
+{
+  "scripts": {
+    "start": "webpack serve --config webpack.dev.js",
+    "build": "webpack --config webpack.prod.js"
+  }
+}
+```
+
+## Practical Examples
+
+### Complete Webpack Configuration for React
+
+```javascript
+const path = require('path');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
+const MiniCssExtractPlugin = require('mini-css-extract-plugin');
+const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
+const { CleanWebpackPlugin } = require('clean-webpack-plugin');
+const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
+
+const isProduction = process.env.NODE_ENV === 'production';
+
+module.exports = {
+  entry: './src/index.jsx',
+  output: {
+    path: path.resolve(__dirname, 'dist'),
+    filename: isProduction ? '[name].[contenthash].js' : '[name].js',
+    publicPath: '/',
+  },
+  resolve: {
+    extensions: ['.js', '.jsx', '.ts', '.tsx'],
+    alias: {
+      '@': path.resolve(__dirname, 'src'),
+      '@components': path.resolve(__dirname, 'src/components'),
+      '@hooks': path.resolve(__dirname, 'src/hooks'),
+      '@utils': path.resolve(__dirname, 'src/utils'),
+    },
+  },
+  module: {
+    rules: [
+      {
+        test: /\.(js|jsx|ts|tsx)$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'babel-loader',
+          options: {
+            presets: [
+              '@babel/preset-env',
+              ['@babel/preset-react', { runtime: 'automatic' }],
+              '@babel/preset-typescript',
+            ],
+            plugins: ['@babel/plugin-transform-runtime'],
+          },
+        },
+      },
+      {
+        test: /\.css$/,
+        use: [
+          isProduction ? MiniCssExtractPlugin.loader : 'style-loader',
+          'css-loader',
+          'postcss-loader',
+        ],
+      },
+      {
+        test: /\.(png|svg|jpg|jpeg|gif)$/i,
+        type: 'asset/resource',
+        generator: {
+          filename: 'images/[hash][ext][query]',
+        },
+      },
+      {
+        test: /\.(woff|woff2|eot|ttf|otf)$/i,
+        type: 'asset/resource',
+        generator: {
+          filename: 'fonts/[hash][ext][query]',
+        },
+      },
+    ],
+  },
+  plugins: [
+    new CleanWebpackPlugin(),
+    new HtmlWebpackPlugin({
+      template: './public/index.html',
+      favicon: './public/favicon.ico',
+    }),
+    isProduction &&
+      new MiniCssExtractPlugin({
+        filename: '[name].[contenthash].css',
+      }),
+    process.env.ANALYZE && new BundleAnalyzerPlugin(),
+  ].filter(Boolean),
+  optimization: {
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          compress: {
+            drop_console: isProduction,
+          },
+        },
+      }),
+      new CssMinimizerPlugin(),
+    ],
+    splitChunks: {
+      chunks: 'all',
+      name: false,
+      cacheGroups: {
+        vendor: {
+          test: /[\\/]node_modules[\\/]/,
+          name: 'vendors',
+          chunks: 'all',
+        },
+      },
+    },
+    runtimeChunk: 'single',
+  },
+  devServer: {
+    static: {
+      directory: path.join(__dirname, 'public'),
+    },
+    historyApiFallback: true,
+    hot: true,
+    port: 3000,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      },
+    },
+  },
+  devtool: isProduction ? 'source-map' : 'eval-source-map',
+  mode: isProduction ? 'production' : 'development',
+};
+```
+
+### Complete Vite Configuration for React
+
+```javascript
+// vite.config.js
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
+import path from 'path';
+import { visualizer } from 'rollup-plugin-visualizer';
+
+export default defineConfig(({ mode }) => {
+  // Load env file based on `mode`
+  const env = loadEnv(mode, process.cwd());
+
+  return {
+    plugins: [
+      react(),
+      env.VITE_ANALYZE === 'true' &&
+        visualizer({
+          filename: 'stats.html',
+          open: true,
+          gzipSize: true,
+        }),
+    ],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, './src'),
+        '@components': path.resolve(__dirname, './src/components'),
+        '@hooks': path.resolve(__dirname, './src/hooks'),
+        '@utils': path.resolve(__dirname, './src/utils'),
+      },
+    },
+    server: {
+      port: 3000,
+      open: true,
+      proxy: {
+        '/api': {
+          target: env.VITE_API_URL || 'http://localhost:8000',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/api/, ''),
+        },
+      },
+    },
+    build: {
+      outDir: 'dist',
+      sourcemap: mode !== 'production',
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom', 'react-router-dom'],
+            ui: ['@mui/material', '@emotion/react', '@emotion/styled'],
+          },
+        },
+      },
+      chunkSizeWarningLimit: 1000,
+    },
+    css: {
+      devSourcemap: true,
+      preprocessorOptions: {
+        scss: {
+          additionalData: `@import "@/styles/variables.scss";`,
+        },
+      },
+    },
+  };
+});
+```
+
+## Conclusion
+
+Modern JavaScript build tools and bundlers are essential for efficient development workflows. Key takeaways:
+
+1. **Choose the right tool for your project**:
+
+   - Webpack for complex applications with many assets
+   - Rollup for libraries and smaller applications
+   - Vite for fast development experience
+   - esbuild for speed and simplicity
+
+2. **Optimize your builds**:
+
+   - Enable tree shaking
+   - Implement code splitting
+   - Analyze your bundles
+   - Configure environment-specific settings
+
+3. **Improve developer experience**:
+   - Set up hot module replacement
+   - Configure path aliases
+   - Use proxy for API requests
+   - Implement fast feedback loops
+
+By mastering these tools, you can create optimized JavaScript applications with excellent developer experience.
